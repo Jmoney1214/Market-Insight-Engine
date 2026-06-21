@@ -1,0 +1,1 @@
+- [FinDesk static serving](findesk-static-serving.md) — frontend is served as a built bundle from the API server (port 8080), not via a Vite dev server

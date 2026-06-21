@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "FinDesk — AI Analyst"
+version = "1.0.0"
+id = "artifacts/findesk"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/__findesk__" ]
+localPort = 3000
+
+[services.development]
+run = "node serve-static.cjs"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/findesk", "run", "build" ]
+publicDir = "artifacts/findesk/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"

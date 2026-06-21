@@ -3,13 +3,18 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: FinDesk AI Analyst API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: analysis
+    description: Ticker analysis and reports
+  - name: watchlist
+    description: Watchlist management
+
 paths:
   /healthz:
     get:
@@ -24,6 +29,133 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /analyze:
+    post:
+      operationId: analyzeTicker
+      tags: [analysis]
+      summary: Run AI analysis on a ticker
+      description: Triggers a full analyst report for the given ticker (returns mock data in MVP)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnalyzeInput"
+      responses:
+        "201":
+          description: Report created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "400":
+          description: Invalid ticker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /reports:
+    get:
+      operationId: listReports
+      tags: [analysis]
+      summary: List past analyses
+      responses:
+        "200":
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportSummary"
+
+  /reports/{id}:
+    get:
+      operationId: getReport
+      tags: [analysis]
+      summary: Get a specific report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Full report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Report"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+    delete:
+      operationId: deleteReport
+      tags: [analysis]
+      summary: Delete a report
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /watchlist:
+    get:
+      operationId: getWatchlist
+      tags: [watchlist]
+      summary: Get watchlist tickers
+      responses:
+        "200":
+          description: Watchlist entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WatchlistEntry"
+    post:
+      operationId: addToWatchlist
+      tags: [watchlist]
+      summary: Add ticker to watchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WatchlistInput"
+      responses:
+        "201":
+          description: Added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WatchlistEntry"
+
+  /watchlist/{ticker}:
+    delete:
+      operationId: removeFromWatchlist
+      tags: [watchlist]
+      summary: Remove ticker from watchlist
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Removed
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +166,360 @@ components:
       required:
         - status
 
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    AnalyzeInput:
+      type: object
+      required: [ticker]
+      properties:
+        ticker:
+          type: string
+          description: Stock ticker symbol (e.g. AAPL, NVDA)
+
+    ReportSummary:
+      type: object
+      required: [id, ticker, companyName, sector, generatedAt, overallRating]
+      properties:
+        id:
+          type: integer
+        ticker:
+          type: string
+        companyName:
+          type: string
+        sector:
+          type: string
+        generatedAt:
+          type: string
+        overallRating:
+          type: string
+          description: "BUY | HOLD | SELL | WATCH"
+
+    Report:
+      type: object
+      required: [id, ticker, companyName, sector, industry, generatedAt, snapshot, catalysts, news, filings, financials, valuation, technical, risks, thesis, actionPlan, overallRating, disclaimer]
+      properties:
+        id:
+          type: integer
+        ticker:
+          type: string
+        companyName:
+          type: string
+        sector:
+          type: string
+        industry:
+          type: string
+        generatedAt:
+          type: string
+        overallRating:
+          type: string
+          description: "BUY | HOLD | SELL | WATCH"
+        disclaimer:
+          type: string
+        snapshot:
+          $ref: "#/components/schemas/CompanySnapshot"
+        catalysts:
+          $ref: "#/components/schemas/CatalystSummary"
+        news:
+          $ref: "#/components/schemas/NewsSummary"
+        filings:
+          $ref: "#/components/schemas/FilingsSummary"
+        financials:
+          $ref: "#/components/schemas/FinancialOverview"
+        valuation:
+          $ref: "#/components/schemas/ValuationFramework"
+        technical:
+          $ref: "#/components/schemas/TechnicalTrend"
+        risks:
+          $ref: "#/components/schemas/RiskChecklist"
+        thesis:
+          $ref: "#/components/schemas/Thesis"
+        actionPlan:
+          $ref: "#/components/schemas/ActionPlan"
+
+    CompanySnapshot:
+      type: object
+      required: [description, marketCap, price, change1d, change52w, peRatio, eps, revenue, employees, headquarters, founded, exchange]
+      properties:
+        description:
+          type: string
+        marketCap:
+          type: string
+        price:
+          type: number
+        change1d:
+          type: number
+        change52w:
+          type: number
+        peRatio:
+          type: ["number", "null"]
+        eps:
+          type: ["number", "null"]
+        revenue:
+          type: string
+        employees:
+          type: string
+        headquarters:
+          type: string
+        founded:
+          type: string
+        exchange:
+          type: string
+
+    CatalystSummary:
+      type: object
+      required: [positive, negative, upcoming]
+      properties:
+        positive:
+          type: array
+          items:
+            type: string
+        negative:
+          type: array
+          items:
+            type: string
+        upcoming:
+          type: array
+          items:
+            type: string
+
+    NewsSummary:
+      type: object
+      required: [isPlaceholder, headlines, sentiment]
+      properties:
+        isPlaceholder:
+          type: boolean
+        sentiment:
+          type: string
+          description: "Bullish | Neutral | Bearish"
+        headlines:
+          type: array
+          items:
+            $ref: "#/components/schemas/NewsItem"
+
+    NewsItem:
+      type: object
+      required: [title, source, date, sentiment]
+      properties:
+        title:
+          type: string
+        source:
+          type: string
+        date:
+          type: string
+        sentiment:
+          type: string
+
+    FilingsSummary:
+      type: object
+      required: [isPlaceholder, lastForm10K, lastForm10Q, keyHighlights]
+      properties:
+        isPlaceholder:
+          type: boolean
+        lastForm10K:
+          type: string
+        lastForm10Q:
+          type: string
+        keyHighlights:
+          type: array
+          items:
+            type: string
+
+    FinancialOverview:
+      type: object
+      required: [isPlaceholder, revenueGrowthYoY, grossMargin, operatingMargin, netMargin, debtToEquity, currentRatio, freeCashFlow, revenueHistory]
+      properties:
+        isPlaceholder:
+          type: boolean
+        revenueGrowthYoY:
+          type: ["number", "null"]
+        grossMargin:
+          type: ["number", "null"]
+        operatingMargin:
+          type: ["number", "null"]
+        netMargin:
+          type: ["number", "null"]
+        debtToEquity:
+          type: ["number", "null"]
+        currentRatio:
+          type: ["number", "null"]
+        freeCashFlow:
+          type: string
+        revenueHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueDataPoint"
+
+    RevenueDataPoint:
+      type: object
+      required: [period, revenue]
+      properties:
+        period:
+          type: string
+        revenue:
+          type: number
+
+    ValuationFramework:
+      type: object
+      required: [isPlaceholder, currentPrice, intrinsicValueLow, intrinsicValueHigh, peComparison, evEbitda, priceToBook, priceToSales, dcfNotes, comparables]
+      properties:
+        isPlaceholder:
+          type: boolean
+        currentPrice:
+          type: number
+        intrinsicValueLow:
+          type: number
+        intrinsicValueHigh:
+          type: number
+        peComparison:
+          type: string
+        evEbitda:
+          type: ["number", "null"]
+        priceToBook:
+          type: ["number", "null"]
+        priceToSales:
+          type: ["number", "null"]
+        dcfNotes:
+          type: string
+        comparables:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comparable"
+
+    Comparable:
+      type: object
+      required: [ticker, pe, evEbitda]
+      properties:
+        ticker:
+          type: string
+        pe:
+          type: ["number", "null"]
+        evEbitda:
+          type: ["number", "null"]
+
+    TechnicalTrend:
+      type: object
+      required: [isPlaceholder, trend, rsi, macd, supportLevel, resistanceLevel, ma50, ma200, goldenCross, notes]
+      properties:
+        isPlaceholder:
+          type: boolean
+        trend:
+          type: string
+          description: "Bullish | Bearish | Neutral | Mixed"
+        rsi:
+          type: ["number", "null"]
+        macd:
+          type: string
+        supportLevel:
+          type: ["number", "null"]
+        resistanceLevel:
+          type: ["number", "null"]
+        ma50:
+          type: ["number", "null"]
+        ma200:
+          type: ["number", "null"]
+        goldenCross:
+          type: ["boolean", "null"]
+        notes:
+          type: string
+
+    RiskChecklist:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskItem"
+
+    RiskItem:
+      type: object
+      required: [category, description, severity]
+      properties:
+        category:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+          description: "High | Medium | Low"
+
+    Thesis:
+      type: object
+      required: [bull, base, bear]
+      properties:
+        bull:
+          $ref: "#/components/schemas/ThesisCase"
+        base:
+          $ref: "#/components/schemas/ThesisCase"
+        bear:
+          $ref: "#/components/schemas/ThesisCase"
+
+    ThesisCase:
+      type: object
+      required: [targetPrice, probability, summary, points]
+      properties:
+        targetPrice:
+          type: number
+        probability:
+          type: integer
+          description: Percentage probability (0-100)
+        summary:
+          type: string
+        points:
+          type: array
+          items:
+            type: string
+
+    ActionPlan:
+      type: object
+      required: [rating, rationale, positionSizing, entryZone, stopLoss, profitTarget, timeHorizon, keyMonitors, disclaimer]
+      properties:
+        rating:
+          type: string
+          description: "BUY | HOLD | SELL | WATCH"
+        rationale:
+          type: string
+        positionSizing:
+          type: string
+        entryZone:
+          type: string
+        stopLoss:
+          type: string
+        profitTarget:
+          type: string
+        timeHorizon:
+          type: string
+        keyMonitors:
+          type: array
+          items:
+            type: string
+        disclaimer:
+          type: string
+
+    WatchlistEntry:
+      type: object
+      required: [id, ticker, addedAt]
+      properties:
+        id:
+          type: integer
+        ticker:
+          type: string
+        addedAt:
+          type: string
+        notes:
+          type: ["string", "null"]
+
+    WatchlistInput:
+      type: object
+      required: [ticker]
+      properties:
+        ticker:
+          type: string
+        notes:
+          type: string
