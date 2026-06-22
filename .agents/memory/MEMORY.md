@@ -1,1 +1,1 @@
-- [FinDesk static serving](findesk-static-serving.md) — frontend is served as a built bundle from the API server (port 8080), not via a Vite dev server
+- [FinDesk architecture](findesk-architecture.md) — two artifacts: findesk (web, serves `/`) + api-server (serves `/api`); both workflows must run

@@ -37,27 +37,35 @@ function serveIndex(res) {
   }
 }
 
+function isInside(dir, target) {
+  const rel = path.relative(dir, target);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
 const server = http.createServer((req, res) => {
-  const urlPath = req.url.split("?")[0].split("#")[0];
-  const filePath = path.join(DIST, urlPath);
+  let urlPath;
+  try {
+    urlPath = decodeURIComponent(req.url.split("?")[0].split("#")[0]);
+  } catch {
+    urlPath = "/";
+  }
+  let resolved = path.join(DIST, urlPath);
 
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("X-Content-Type-Options", "nosniff");
 
-  let resolved = filePath;
+  // Path traversal guard: reject anything resolving outside DIST before touching the fs
+  if (!isInside(DIST, resolved)) {
+    serveIndex(res);
+    return;
+  }
+
   try {
     const stat = fs.statSync(resolved);
     if (stat.isDirectory()) resolved = path.join(resolved, "index.html");
   } catch {
     // File doesn't exist — SPA fallback
     serveIndex(res);
-    return;
-  }
-
-  // Ensure file is inside DIST (path traversal guard)
-  if (!resolved.startsWith(DIST)) {
-    res.writeHead(403);
-    res.end("Forbidden");
     return;
   }
 
