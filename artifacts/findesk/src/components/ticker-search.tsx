@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Search, Loader2, ArrowRight } from "lucide-react";
+import { Search, Loader2 } from "lucide-react";
 import { useAnalyzeTicker } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,32 @@ export function TickerSearch({ variant = "compact", autoFocus, className, exampl
 
   const hero = variant === "hero";
 
+  if (!hero) {
+    return (
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          runAnalyze(ticker);
+        }}
+        className={cn("relative", className)}
+        data-testid="form-ticker-search"
+      >
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Input
+          value={ticker}
+          onChange={(e) => setTicker(e.target.value.toUpperCase().slice(0, 5))}
+          placeholder="Search ticker"
+          aria-label="Ticker symbol"
+          autoFocus={autoFocus}
+          disabled={analyze.isPending}
+          maxLength={5}
+          data-testid="input-ticker"
+          className="font-mono-numbers uppercase bg-card/80 border-border focus-visible:ring-primary h-9 text-sm pl-9 pr-3"
+        />
+      </form>
+    );
+  }
+
   return (
     <div className={cn("w-full", className)}>
       <form
@@ -38,59 +64,40 @@ export function TickerSearch({ variant = "compact", autoFocus, className, exampl
           e.preventDefault();
           runAnalyze(ticker);
         }}
-        className="relative"
+        className="flex gap-2"
         data-testid="form-ticker-search"
       >
-        <Search
-          className={cn(
-            "absolute top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none",
-            hero ? "left-4 w-5 h-5" : "left-3 w-4 h-4"
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+          <Input
+            value={ticker}
+            onChange={(e) => setTicker(e.target.value.toUpperCase().slice(0, 5))}
+            placeholder="Enter a ticker — e.g. AAPL"
+            aria-label="Ticker symbol"
+            autoFocus={autoFocus}
+            disabled={analyze.isPending}
+            maxLength={5}
+            data-testid="input-ticker"
+            className="w-full font-mono-numbers uppercase bg-card/80 border-border focus-visible:ring-primary h-14 text-lg pl-12 pr-4"
+          />
+        </div>
+        <Button
+          type="submit"
+          disabled={!ticker || analyze.isPending}
+          data-testid="button-analyze"
+          className="h-14 px-7 text-base font-semibold shrink-0"
+        >
+          {analyze.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" /> Analyzing
+            </>
+          ) : (
+            "Analyze"
           )}
-        />
-        <Input
-          value={ticker}
-          onChange={(e) => setTicker(e.target.value.toUpperCase().slice(0, 5))}
-          placeholder={hero ? "Enter a ticker — e.g. AAPL" : "Search ticker"}
-          aria-label="Ticker symbol"
-          autoFocus={autoFocus}
-          disabled={analyze.isPending}
-          maxLength={5}
-          data-testid="input-ticker"
-          className={cn(
-            "font-mono-numbers uppercase bg-card/80 border-border focus-visible:ring-primary",
-            hero ? "h-14 text-lg pl-12 pr-36" : "h-9 text-sm pl-9 pr-9"
-          )}
-        />
-        {hero ? (
-          <Button
-            type="submit"
-            disabled={!ticker || analyze.isPending}
-            data-testid="button-analyze"
-            className="absolute right-2 top-1/2 -translate-y-1/2 h-10 px-6 font-semibold"
-          >
-            {analyze.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" /> Analyzing
-              </>
-            ) : (
-              "Analyze"
-            )}
-          </Button>
-        ) : (
-          <Button
-            type="submit"
-            size="icon"
-            variant="ghost"
-            disabled={!ticker || analyze.isPending}
-            data-testid="button-analyze"
-            className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-primary"
-          >
-            {analyze.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-          </Button>
-        )}
+        </Button>
       </form>
 
-      {hero && examples && examples.length > 0 ? (
+      {examples && examples.length > 0 ? (
         <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
           <span className="text-xs text-muted-foreground uppercase tracking-wider">Try</span>
           {examples.map((ex) => (
@@ -108,13 +115,13 @@ export function TickerSearch({ variant = "compact", autoFocus, className, exampl
         </div>
       ) : null}
 
-      {hero && analyze.isPending ? (
+      {analyze.isPending ? (
         <p className="mt-4 text-center text-sm text-primary font-mono-numbers animate-pulse" data-testid="text-analyzing">
           Generating analyst report for {pendingTicker}…
         </p>
       ) : null}
 
-      {hero && analyze.isError ? (
+      {analyze.isError ? (
         <p className="mt-3 text-center text-sm text-bearish" data-testid="text-analyze-error">
           Could not generate a report. Check the ticker and try again.
         </p>

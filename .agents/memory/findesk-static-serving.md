@@ -1,33 +1,20 @@
 ---
-name: FinDesk static file serving
-description: How the FinDesk frontend is served in the dev environment
+name: FinDesk dev serves a static build
+description: Why source edits to artifacts/findesk don't show until you rebuild, and the layout gotcha with shadcn Button absolute positioning
 ---
 
-# FinDesk Static File Serving
+# FinDesk dev preview serves a STATIC build
 
-The `artifacts/findesk: web` workflow consistently fails to start on Replit because the new-artifact Nix environment rebuild takes longer than the workflow system's port check timeout (~60–120s). The environment rebuilds successfully (confirmed by logs showing the server starts), but the port check window expires before the process binds.
+The `findesk` artifact's dev workflow runs `node serve-static.cjs`, which serves the pre-built bundle from `artifacts/findesk/dist/public`. It is NOT a Vite dev server.
 
-**Solution implemented:** The Express API server (port 8080, `artifacts/api-server`) serves the pre-built React frontend as static files.
+**Why:** source edits are invisible in the preview until the bundle is rebuilt. A confusing symptom is "my change did nothing / the page looks unchanged or broken."
 
-## Key files changed
+**How to apply:** after editing any `artifacts/findesk` source, run `pnpm --filter @workspace/findesk run build` then `restart_workflow("artifacts/findesk: web")`, then screenshot to verify. Base path defaults to `/` (matches previewPath), so a plain build is fine.
 
-- `artifacts/api-server/src/app.ts`: added `express.static(STATIC_DIR)` and `app.get("/{*path}", ...)` SPA fallback after the `/api` router
-- `artifacts/api-server/.replit-artifact/artifact.toml`: `paths = ["/api", "/"]` so the proxy routes root to port 8080
-- `artifacts/findesk/.replit-artifact/artifact.toml`: `paths = ["/__findesk__"]` (placeholder, no longer claims "/") 
-- `artifacts/findesk/vite.config.ts`: removed `throw` on missing PORT/BASE_PATH, now uses defaults (5173/"/")
-- `artifacts/findesk/serve-static.cjs`: lightweight Node.js static server (zero npm deps) for the findesk workflow if it ever needs to serve independently
+# shadcn Button + absolute positioning gotcha
 
-## Path calculation
+Absolutely positioning a shadcn `Button` (e.g. `absolute right-2 top-1/2`) over an input did NOT take effect here — the button (it's `inline-flex`) fell into normal flow and got centered by a parent `text-center`, even though the same `absolute` classes worked fine on a plain `<svg>` icon.
 
-STATIC_DIR in app.ts:
-```
-path.resolve(__dirname, "..", "..", "..", "artifacts", "findesk", "dist", "public")
-```
-where `__dirname = path.dirname(fileURLToPath(import.meta.url))` = the `dist/` dir of the compiled API server bundle.
-Three `..` from `dist/` reach the workspace root; then `artifacts/findesk/dist/public`.
+**Why:** caused a visible bug where a hero "Analyze" button rendered centered below the search input instead of right-aligned inside it.
 
-## Rebuild workflow
-
-When frontend code changes: run `pnpm --filter @workspace/findesk run build` from bash, then restart the API server workflow.
-
-**Why:** The artifact.toml `localPort` system requires the dev server to bind its port within the workflow system's timeout. A new artifact's Nix environment takes >60s to rebuild on first run. Pre-built static files served from the already-running API server avoids this entirely.
+**How to apply:** for input + adjacent button, use a flex row (input in a `flex-1` wrapper, button as a `shrink-0` sibling) instead of absolutely positioning the button over the input.

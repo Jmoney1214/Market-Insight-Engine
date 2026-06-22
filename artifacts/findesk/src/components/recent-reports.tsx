@@ -1,12 +1,14 @@
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-import { Clock, TrendingUp, TrendingDown, Minus, Trash2 } from "lucide-react";
+import { Clock, Trash2 } from "lucide-react";
 import { useListReports, useDeleteReport, getListReportsQueryKey } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
+import { cn } from "@/lib/utils";
+import { ratingTone, toneBadge } from "@/lib/finance";
 
 export function RecentReports() {
   const [, setLocation] = useLocation();
@@ -21,67 +23,62 @@ export function RecentReports() {
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListReportsQueryKey() });
-        }
+        },
       }
     );
   };
 
-  const getRatingColor = (rating: string) => {
-    switch (rating.toUpperCase()) {
-      case "BUY": return "bg-green-500/10 text-green-500 border-green-500/20";
-      case "SELL": return "bg-red-500/10 text-red-500 border-red-500/20";
-      case "HOLD": return "bg-blue-500/10 text-blue-500 border-blue-500/20";
-      default: return "bg-gray-500/10 text-gray-500 border-gray-500/20";
-    }
-  };
-
   return (
-    <Card className="bg-card border-card-border h-full">
+    <Card className="h-full">
       <CardHeader>
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Clock className="w-5 h-5 text-primary" />
+        <CardTitle className="text-base font-semibold flex items-center gap-2">
+          <Clock className="w-4 h-4 text-primary" />
           Recent Analyses
         </CardTitle>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full bg-muted/50" />)}
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-[68px] w-full" />
+            ))}
           </div>
         ) : !reports || reports.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
-            No recent reports found. Enter a ticker above to start.
+          <div className="text-center py-10 text-muted-foreground text-sm border border-dashed border-border rounded-lg">
+            No reports yet. Enter a ticker above to generate one.
           </div>
         ) : (
-          <div className="space-y-3">
-            {reports.map(report => (
-              <div 
+          <div className="space-y-2">
+            {reports.map((report) => (
+              <div
                 key={report.id}
                 onClick={() => setLocation(`/report/${report.id}`)}
-                className="group flex items-center justify-between p-4 rounded-lg border border-border bg-background/50 hover:bg-accent/20 hover:border-primary/30 cursor-pointer transition-all"
+                className="group flex items-center justify-between p-4 rounded-lg border border-border bg-background/40 hover-elevate cursor-pointer"
+                data-testid={`card-report-${report.id}`}
               >
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-lg font-mono-numbers">{report.ticker}</span>
-                    <span className="text-sm text-muted-foreground">{report.companyName}</span>
+                    <span className="font-bold text-base font-mono-numbers">{report.ticker}</span>
+                    <span className="text-sm text-muted-foreground truncate">{report.companyName}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
-                    <span>{report.sector}</span>
+                    <span className="truncate">{report.sector}</span>
                     <span>•</span>
-                    <span>{format(new Date(report.generatedAt), "MMM d, yyyy")}</span>
+                    <span className="font-mono-numbers shrink-0">{format(new Date(report.generatedAt), "MMM d, yyyy")}</span>
                   </div>
                 </div>
-                
-                <div className="flex items-center gap-4">
-                  <Badge variant="outline" className={`font-mono-numbers tracking-wider ${getRatingColor(report.overallRating)}`}>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge className={cn("font-mono-numbers tracking-wider", toneBadge[ratingTone(report.overallRating)])}>
                     {report.overallRating}
                   </Badge>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-bearish transition-opacity"
                     onClick={(e) => handleDelete(e, report.id)}
                     disabled={deleteReport.isPending}
+                    data-testid={`button-delete-${report.id}`}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

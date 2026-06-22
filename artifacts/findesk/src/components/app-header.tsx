@@ -1,8 +1,11 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Activity } from "lucide-react";
 import { TickerSearch } from "@/components/ticker-search";
 
 export function AppHeader() {
+  const [location] = useLocation();
+  const isHome = location === "/";
+
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur supports-[backdrop-filter]:bg-background/70">
       <div className="container mx-auto max-w-7xl px-4 h-14 flex items-center gap-4">
@@ -14,9 +17,11 @@ export function AppHeader() {
             Fin<span className="text-primary">Desk</span>
           </span>
         </Link>
-        <div className="ml-auto w-full max-w-[260px]">
-          <TickerSearch variant="compact" />
-        </div>
+        {!isHome ? (
+          <div className="ml-auto w-full max-w-[260px]">
+            <TickerSearch variant="compact" />
+          </div>
+        ) : null}
       </div>
     </header>
   );
