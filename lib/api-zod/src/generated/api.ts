@@ -329,6 +329,53 @@ export const GetCopilotEventResponse = zod.object({
 
 
 /**
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value.
+ * @summary Explain a deterministic copilot event with the read-only analyst committee
+ */
+export const explainCopilotEventQuerySourceDefault = `fixture`;
+
+export const ExplainCopilotEventQueryParams = zod.object({
+  "symbol": zod.coerce.string(),
+  "source": zod.enum(['fixture', 'yahoo_delayed']).default(explainCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys'),
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
+})
+
+export const ExplainCopilotEventResponse = zod.object({
+  "status": zod.enum(['OK', 'FALLBACK', 'ERROR']),
+  "source": zod.enum(['multi_agent_committee', 'deterministic_fallback']),
+  "eventId": zod.string(),
+  "symbol": zod.string(),
+  "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullable(),
+  "l5Blocked": zod.boolean(),
+  "provider": zod.string(),
+  "degraded": zod.boolean(),
+  "agents": zod.array(zod.object({
+  "agent": zod.enum(['technical', 'pattern', 'regime', 'order_flow', 'catalyst', 'position', 'memory', 'bull_case', 'bear_case', 'risk_critic']),
+  "status": zod.enum(['OK', 'DEGRADED', 'UNAVAILABLE']),
+  "bias": zod.enum(['BULLISH', 'BEARISH', 'NEUTRAL', 'MIXED', 'UNKNOWN']),
+  "confidence": zod.number().describe('Clamped to [0,1]'),
+  "headline": zod.string(),
+  "supportingFactors": zod.array(zod.string()),
+  "warnings": zod.array(zod.string()),
+  "riskVerdict": zod.union([zod.literal('PASS'),zod.literal('WARN'),zod.literal('BLOCK'),zod.literal(null)]).nullable().describe('Risk critic verdict; null for every other agent'),
+  "maxRecommendation": zod.union([zod.literal('WATCH'),zod.literal('WAIT'),zod.literal('AVOID'),zod.literal('POSSIBLE_LONG_ZONE'),zod.literal('POSSIBLE_SHORT_ZONE'),zod.literal('THESIS_VALID'),zod.literal('THESIS_WEAKENING'),zod.literal('TRAIL_STOP'),zod.literal('TAKE_PARTIALS'),zod.literal('EXIT_WARNING'),zod.literal('THESIS_INVALIDATED'),zod.literal('DO_NOT_ADD'),zod.literal(null)]).nullable().describe('Risk critic recommendation ceiling; null for every other agent')
+}).describe('One specialist analyst\'s read. Explanatory only; never an instruction to transact.')),
+  "dashboardRead": zod.object({
+  "oneSentenceRead": zod.string(),
+  "recommendation": zod.enum(['WATCH', 'WAIT', 'AVOID', 'POSSIBLE_LONG_ZONE', 'POSSIBLE_SHORT_ZONE', 'THESIS_VALID', 'THESIS_WEAKENING', 'TRAIL_STOP', 'TAKE_PARTIALS', 'EXIT_WARNING', 'THESIS_INVALIDATED', 'DO_NOT_ADD']),
+  "confidence": zod.number().describe('Clamped to [0,1]'),
+  "whatSupports": zod.array(zod.string()),
+  "whatArguesAgainst": zod.array(zod.string()),
+  "whatConfirms": zod.array(zod.string()),
+  "whatInvalidates": zod.array(zod.string()),
+  "positionGuidance": zod.array(zod.string()),
+  "riskNotes": zod.array(zod.string())
+}).describe('The single synthesized, dashboard-safe read. Research\/helper output only.'),
+  "warnings": zod.array(zod.string())
+}).describe('Full read-only analyst committee response for one deterministic event.')
+
+
+/**
  * @summary List journal entries
  */
 export const ListJournalEntriesResponseItem = zod.object({

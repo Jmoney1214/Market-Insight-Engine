@@ -22,8 +22,10 @@ import type {
 import type {
   AnalyzeInput,
   ApiError,
+  CommitteeRead,
   CopilotEvent,
   CopilotHealth,
+  ExplainCopilotEventParams,
   GetCopilotEventParams,
   HealthStatus,
   HistoryEvent,
@@ -792,6 +794,91 @@ export function useGetCopilotEvent<TData = Awaited<ReturnType<typeof getCopilotE
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCopilotEventQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getExplainCopilotEventUrl = (params: ExplainCopilotEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/explain?${stringifiedParams}` : `/api/copilot/explain`
+}
+
+/**
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value.
+ * @summary Explain a deterministic copilot event with the read-only analyst committee
+ */
+export const explainCopilotEvent = async (params: ExplainCopilotEventParams, options?: RequestInit): Promise<CommitteeRead> => {
+
+  return customFetch<CommitteeRead>(getExplainCopilotEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExplainCopilotEventQueryKey = (params?: ExplainCopilotEventParams,) => {
+    return [
+    `/api/copilot/explain`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExplainCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError>>(params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExplainCopilotEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof explainCopilotEvent>>> = ({ signal }) => explainCopilotEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExplainCopilotEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainCopilotEvent>>>
+export type ExplainCopilotEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Explain a deterministic copilot event with the read-only analyst committee
+ */
+
+export function useExplainCopilotEvent<TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError>>(
+ params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExplainCopilotEventQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

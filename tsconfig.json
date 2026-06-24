@@ -7,6 +7,9 @@
       "path": "./lib/copilot-core"
     },
     {
+      "path": "./lib/copilot-committee"
+    },
+    {
       "path": "./lib/db"
     },
     {

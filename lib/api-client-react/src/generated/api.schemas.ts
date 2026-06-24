@@ -469,6 +469,184 @@ export interface CopilotEvent {
   warnings: string[];
 }
 
+export type AgentReadAgent = typeof AgentReadAgent[keyof typeof AgentReadAgent];
+
+
+export const AgentReadAgent = {
+  technical: 'technical',
+  pattern: 'pattern',
+  regime: 'regime',
+  order_flow: 'order_flow',
+  catalyst: 'catalyst',
+  position: 'position',
+  memory: 'memory',
+  bull_case: 'bull_case',
+  bear_case: 'bear_case',
+  risk_critic: 'risk_critic',
+} as const;
+
+export type AgentReadStatus = typeof AgentReadStatus[keyof typeof AgentReadStatus];
+
+
+export const AgentReadStatus = {
+  OK: 'OK',
+  DEGRADED: 'DEGRADED',
+  UNAVAILABLE: 'UNAVAILABLE',
+} as const;
+
+export type AgentReadBias = typeof AgentReadBias[keyof typeof AgentReadBias];
+
+
+export const AgentReadBias = {
+  BULLISH: 'BULLISH',
+  BEARISH: 'BEARISH',
+  NEUTRAL: 'NEUTRAL',
+  MIXED: 'MIXED',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+/**
+ * Risk critic verdict; null for every other agent
+ * @nullable
+ */
+export type AgentReadRiskVerdict = typeof AgentReadRiskVerdict[keyof typeof AgentReadRiskVerdict] | null;
+
+
+export const AgentReadRiskVerdict = {
+  PASS: 'PASS',
+  WARN: 'WARN',
+  BLOCK: 'BLOCK',
+} as const;
+
+/**
+ * Risk critic recommendation ceiling; null for every other agent
+ * @nullable
+ */
+export type AgentReadMaxRecommendation = typeof AgentReadMaxRecommendation[keyof typeof AgentReadMaxRecommendation] | null;
+
+
+export const AgentReadMaxRecommendation = {
+  WATCH: 'WATCH',
+  WAIT: 'WAIT',
+  AVOID: 'AVOID',
+  POSSIBLE_LONG_ZONE: 'POSSIBLE_LONG_ZONE',
+  POSSIBLE_SHORT_ZONE: 'POSSIBLE_SHORT_ZONE',
+  THESIS_VALID: 'THESIS_VALID',
+  THESIS_WEAKENING: 'THESIS_WEAKENING',
+  TRAIL_STOP: 'TRAIL_STOP',
+  TAKE_PARTIALS: 'TAKE_PARTIALS',
+  EXIT_WARNING: 'EXIT_WARNING',
+  THESIS_INVALIDATED: 'THESIS_INVALIDATED',
+  DO_NOT_ADD: 'DO_NOT_ADD',
+} as const;
+
+/**
+ * One specialist analyst's read. Explanatory only; never an instruction to transact.
+ */
+export interface AgentRead {
+  agent: AgentReadAgent;
+  status: AgentReadStatus;
+  bias: AgentReadBias;
+  /** Clamped to [0,1] */
+  confidence: number;
+  headline: string;
+  supportingFactors: string[];
+  warnings: string[];
+  /**
+     * Risk critic verdict; null for every other agent
+     * @nullable
+     */
+  riskVerdict: AgentReadRiskVerdict;
+  /**
+     * Risk critic recommendation ceiling; null for every other agent
+     * @nullable
+     */
+  maxRecommendation: AgentReadMaxRecommendation;
+}
+
+export type DashboardReadRecommendation = typeof DashboardReadRecommendation[keyof typeof DashboardReadRecommendation];
+
+
+export const DashboardReadRecommendation = {
+  WATCH: 'WATCH',
+  WAIT: 'WAIT',
+  AVOID: 'AVOID',
+  POSSIBLE_LONG_ZONE: 'POSSIBLE_LONG_ZONE',
+  POSSIBLE_SHORT_ZONE: 'POSSIBLE_SHORT_ZONE',
+  THESIS_VALID: 'THESIS_VALID',
+  THESIS_WEAKENING: 'THESIS_WEAKENING',
+  TRAIL_STOP: 'TRAIL_STOP',
+  TAKE_PARTIALS: 'TAKE_PARTIALS',
+  EXIT_WARNING: 'EXIT_WARNING',
+  THESIS_INVALIDATED: 'THESIS_INVALIDATED',
+  DO_NOT_ADD: 'DO_NOT_ADD',
+} as const;
+
+/**
+ * The single synthesized, dashboard-safe read. Research/helper output only.
+ */
+export interface DashboardRead {
+  oneSentenceRead: string;
+  recommendation: DashboardReadRecommendation;
+  /** Clamped to [0,1] */
+  confidence: number;
+  whatSupports: string[];
+  whatArguesAgainst: string[];
+  whatConfirms: string[];
+  whatInvalidates: string[];
+  positionGuidance: string[];
+  riskNotes: string[];
+}
+
+export type CommitteeReadStatus = typeof CommitteeReadStatus[keyof typeof CommitteeReadStatus];
+
+
+export const CommitteeReadStatus = {
+  OK: 'OK',
+  FALLBACK: 'FALLBACK',
+  ERROR: 'ERROR',
+} as const;
+
+export type CommitteeReadSource = typeof CommitteeReadSource[keyof typeof CommitteeReadSource];
+
+
+export const CommitteeReadSource = {
+  multi_agent_committee: 'multi_agent_committee',
+  deterministic_fallback: 'deterministic_fallback',
+} as const;
+
+/**
+ * @nullable
+ */
+export type CommitteeReadAlertLevel = typeof CommitteeReadAlertLevel[keyof typeof CommitteeReadAlertLevel] | null;
+
+
+export const CommitteeReadAlertLevel = {
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+/**
+ * Full read-only analyst committee response for one deterministic event.
+ */
+export interface CommitteeRead {
+  status: CommitteeReadStatus;
+  source: CommitteeReadSource;
+  eventId: string;
+  symbol: string;
+  /** @nullable */
+  alertLevel: CommitteeReadAlertLevel;
+  l5Blocked: boolean;
+  provider: string;
+  degraded: boolean;
+  agents: AgentRead[];
+  dashboardRead: DashboardRead;
+  warnings: string[];
+}
+
 /**
  * LIVE | REPLAY | RESEARCH
  */
@@ -644,6 +822,32 @@ export type GetCopilotEventMode = typeof GetCopilotEventMode[keyof typeof GetCop
 
 
 export const GetCopilotEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+export type ExplainCopilotEventParams = {
+symbol: string;
+/**
+ * Data source; fixtures require no API keys
+ */
+source?: ExplainCopilotEventSource;
+mode?: ExplainCopilotEventMode;
+};
+
+export type ExplainCopilotEventSource = typeof ExplainCopilotEventSource[keyof typeof ExplainCopilotEventSource];
+
+
+export const ExplainCopilotEventSource = {
+  fixture: 'fixture',
+  yahoo_delayed: 'yahoo_delayed',
+} as const;
+
+export type ExplainCopilotEventMode = typeof ExplainCopilotEventMode[keyof typeof ExplainCopilotEventMode];
+
+
+export const ExplainCopilotEventMode = {
   LIVE: 'LIVE',
   REPLAY: 'REPLAY',
   RESEARCH: 'RESEARCH',

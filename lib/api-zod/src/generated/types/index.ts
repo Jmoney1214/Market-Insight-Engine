@@ -7,9 +7,19 @@
  */
 
 export * from './actionPlan';
+export * from './agentRead';
+export * from './agentReadAgent';
+export * from './agentReadBias';
+export * from './agentReadMaxRecommendation';
+export * from './agentReadRiskVerdict';
+export * from './agentReadStatus';
 export * from './analyzeInput';
 export * from './apiError';
 export * from './catalystSummary';
+export * from './committeeRead';
+export * from './committeeReadAlertLevel';
+export * from './committeeReadSource';
+export * from './committeeReadStatus';
 export * from './companySnapshot';
 export * from './comparable';
 export * from './copilotEvent';
@@ -18,6 +28,11 @@ export * from './copilotEventMode';
 export * from './copilotHealth';
 export * from './copilotTrigger';
 export * from './copilotTriggerCategory';
+export * from './dashboardRead';
+export * from './dashboardReadRecommendation';
+export * from './explainCopilotEventMode';
+export * from './explainCopilotEventParams';
+export * from './explainCopilotEventSource';
 export * from './feedQuality';
 export * from './feedQualityVerdict';
 export * from './filingsSummary';

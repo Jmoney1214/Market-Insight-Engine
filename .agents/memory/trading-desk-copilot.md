@@ -31,5 +31,13 @@ The deterministic engine is its OWN composite lib `@workspace/copilot-core`: it 
 **Why:** safety must be structural — later LLM/agent phases must never raise the ceiling or downgrade an L5.
 **How to apply:** never let a downstream layer recompute or lower alertLevel; agents may only explain an existing event. Keep hard-block production centralized in gates.
 
+## Agent committee = prose-only enrichment, defense-in-depth (lib `@workspace/copilot-committee`)
+The committee explains an existing deterministic event; it never decides. An optional LLM provider may return ONLY three prose fields (`oneSentenceRead`, `positionGuidance`, `riskNotes`) — structured decision fields are never LLM-writable, and any provider failure falls back to the deterministic read.
+**Why:** prompting is not an enforceable guardrail; safety must be code-enforced after the model speaks.
+**How to apply (ordered gates, all in `orchestrator.finalize` / `guardrails`):**
+- `enforceHardBlock` is the idempotent absolute final gate — applied in `synthesize` AND re-applied in `finalize`; blocked events can only ever be AVOID / DO_NOT_ADD / EXIT_WARNING / THESIS_INVALIDATED.
+- "Never invent data" needs MORE than forbidden-phrase scanning: a numeric-grounding guardrail (`ungroundedNumbers`) rejects provider prose containing any number token absent from the deterministic context (read+agents), because safe-looking invented figures (fake prices/levels/dates) pass phrase scans. On a hit → fall back to deterministic prose. Conservative by design (may reject valid prose; safe direction).
+- The final `scanForbiddenDeep` sweep must sanitize the WHOLE payload — replace `dashboardRead` with the safety-net read AND scrub `agents` + filter top-level `warnings` — not just `dashboardRead`, or event-derived forbidden text leaks.
+
 ## Gotcha: new workspace-lib dependency needs an explicit `pnpm install`
 After adding `@workspace/<lib>` to an artifact's package.json, that artifact's typecheck fails with TS2307 (cannot find module) until you re-run `pnpm install` to create the node_modules symlink — even when the lockfile reports "Already up to date".

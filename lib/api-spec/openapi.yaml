@@ -214,6 +214,51 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /copilot/explain:
+    get:
+      operationId: explainCopilotEvent
+      tags: [copilot]
+      summary: Explain a deterministic copilot event with the read-only analyst committee
+      description: >-
+        Runs the multi-agent analyst committee over the deterministic copilot
+        event for a symbol. The committee only explains, critiques, and
+        summarizes the deterministic read: it never creates signals, approves
+        trades, overrides hard blocks, or invents data. When the event is
+        hard-blocked the recommendation can only be a defensive value.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [fixture, yahoo_delayed]
+            default: fixture
+          description: "Data source; fixtures require no API keys"
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [LIVE, REPLAY, RESEARCH]
+      responses:
+        "200":
+          description: Read-only analyst committee explanation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitteeRead"
+        "404":
+          description: Unknown fixture symbol
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /copilot/journal:
     get:
       operationId: listJournalEntries
@@ -755,6 +800,179 @@ components:
           $ref: "#/components/schemas/PositionRead"
         feedQuality:
           $ref: "#/components/schemas/FeedQuality"
+        warnings:
+          type: array
+          items:
+            type: string
+
+    AgentRead:
+      type: object
+      description: One specialist analyst's read. Explanatory only; never an instruction to transact.
+      required:
+        - agent
+        - status
+        - bias
+        - confidence
+        - headline
+        - supportingFactors
+        - warnings
+        - riskVerdict
+        - maxRecommendation
+      properties:
+        agent:
+          type: string
+          enum:
+            - technical
+            - pattern
+            - regime
+            - order_flow
+            - catalyst
+            - position
+            - memory
+            - bull_case
+            - bear_case
+            - risk_critic
+        status:
+          type: string
+          enum: [OK, DEGRADED, UNAVAILABLE]
+        bias:
+          type: string
+          enum: [BULLISH, BEARISH, NEUTRAL, MIXED, UNKNOWN]
+        confidence:
+          type: number
+          description: "Clamped to [0,1]"
+        headline:
+          type: string
+        supportingFactors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        riskVerdict:
+          type: ["string", "null"]
+          enum: [PASS, WARN, BLOCK, null]
+          description: "Risk critic verdict; null for every other agent"
+        maxRecommendation:
+          type: ["string", "null"]
+          enum:
+            - WATCH
+            - WAIT
+            - AVOID
+            - POSSIBLE_LONG_ZONE
+            - POSSIBLE_SHORT_ZONE
+            - THESIS_VALID
+            - THESIS_WEAKENING
+            - TRAIL_STOP
+            - TAKE_PARTIALS
+            - EXIT_WARNING
+            - THESIS_INVALIDATED
+            - DO_NOT_ADD
+            - null
+          description: "Risk critic recommendation ceiling; null for every other agent"
+
+    DashboardRead:
+      type: object
+      description: The single synthesized, dashboard-safe read. Research/helper output only.
+      required:
+        - oneSentenceRead
+        - recommendation
+        - confidence
+        - whatSupports
+        - whatArguesAgainst
+        - whatConfirms
+        - whatInvalidates
+        - positionGuidance
+        - riskNotes
+      properties:
+        oneSentenceRead:
+          type: string
+        recommendation:
+          type: string
+          enum:
+            - WATCH
+            - WAIT
+            - AVOID
+            - POSSIBLE_LONG_ZONE
+            - POSSIBLE_SHORT_ZONE
+            - THESIS_VALID
+            - THESIS_WEAKENING
+            - TRAIL_STOP
+            - TAKE_PARTIALS
+            - EXIT_WARNING
+            - THESIS_INVALIDATED
+            - DO_NOT_ADD
+        confidence:
+          type: number
+          description: "Clamped to [0,1]"
+        whatSupports:
+          type: array
+          items:
+            type: string
+        whatArguesAgainst:
+          type: array
+          items:
+            type: string
+        whatConfirms:
+          type: array
+          items:
+            type: string
+        whatInvalidates:
+          type: array
+          items:
+            type: string
+        positionGuidance:
+          type: array
+          items:
+            type: string
+        riskNotes:
+          type: array
+          items:
+            type: string
+
+    CommitteeRead:
+      type: object
+      description: Full read-only analyst committee response for one deterministic event.
+      required:
+        - status
+        - source
+        - eventId
+        - symbol
+        - alertLevel
+        - l5Blocked
+        - provider
+        - degraded
+        - agents
+        - dashboardRead
+        - warnings
+      properties:
+        status:
+          type: string
+          enum: [OK, FALLBACK, ERROR]
+        source:
+          type: string
+          enum: [multi_agent_committee, deterministic_fallback]
+        eventId:
+          type: string
+        symbol:
+          type: string
+        alertLevel:
+          type: ["string", "null"]
+          enum: ["L1", "L2", "L3", "L4", "L5", null]
+        l5Blocked:
+          type: boolean
+        provider:
+          type: string
+        degraded:
+          type: boolean
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentRead"
+        dashboardRead:
+          $ref: "#/components/schemas/DashboardRead"
         warnings:
           type: array
           items:
