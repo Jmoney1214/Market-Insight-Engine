@@ -485,6 +485,7 @@ components:
       required:
         - symbol
         - date
+        - availableDates
         - dataSource
         - totalSteps
         - barSeconds
@@ -496,6 +497,11 @@ components:
         date:
           type: string
           description: "ISO date (YYYY-MM-DD) of the replayable session"
+        availableDates:
+          type: array
+          items:
+            type: string
+          description: "Every ISO date this symbol can be replayed for (for the date picker)"
         dataSource:
           type: string
         totalSteps:

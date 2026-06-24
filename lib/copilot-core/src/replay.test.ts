@@ -15,6 +15,7 @@ describe("getReplaySession", () => {
     expect(s).not.toBeNull();
     expect(s!.symbol).toBe("AAPL");
     expect(s!.date).toBe(DATE);
+    expect(s!.availableDates).toEqual([DATE]);
     expect(s!.dataSource).toBe(REPLAY_DATA_SOURCE);
     expect(s!.totalSteps).toBe(getFixture("AAPL")!.bars.length);
     expect(s!.barSeconds).toBe(300);

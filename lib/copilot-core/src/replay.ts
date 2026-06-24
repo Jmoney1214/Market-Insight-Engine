@@ -18,6 +18,11 @@ export interface ReplaySession {
   symbol: string;
   /** ISO date (YYYY-MM-DD) of the replayable session. */
   date: string;
+  /**
+   * Every ISO date this symbol can be replayed for, so the UI can offer a date
+   * picker. The current fixtures expose a single session day per symbol.
+   */
+  availableDates: string[];
   dataSource: string;
   /** Total replayable steps. Valid steps are 0-based: 0 .. totalSteps - 1. */
   totalSteps: number;
@@ -54,6 +59,7 @@ export function getReplaySession(
   return {
     symbol: fixture.symbol,
     date: sessionDateStr,
+    availableDates: [sessionDateStr],
     dataSource: REPLAY_DATA_SOURCE,
     totalSteps: bars.length,
     barSeconds: inferBarSeconds(bars),

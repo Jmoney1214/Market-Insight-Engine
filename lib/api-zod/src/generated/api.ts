@@ -563,6 +563,7 @@ export const GetReplaySessionQueryParams = zod.object({
 export const GetReplaySessionResponse = zod.object({
   "symbol": zod.string(),
   "date": zod.string().describe('ISO date (YYYY-MM-DD) of the replayable session'),
+  "availableDates": zod.array(zod.string()).describe('Every ISO date this symbol can be replayed for (for the date picker)'),
   "dataSource": zod.string(),
   "totalSteps": zod.number().describe('Valid replay steps are 0-based: 0 .. totalSteps-1'),
   "barSeconds": zod.number(),

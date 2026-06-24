@@ -38,6 +38,7 @@ export default function Terminal() {
   const {
     mode: deskMode,
     date,
+    availableDates,
     step,
     totalSteps,
     playing,
@@ -45,6 +46,7 @@ export default function Terminal() {
     enterReplay,
     exitReplay,
     loadSession,
+    setDate,
     clearSession,
     stepForward,
   } = useReplayStore();
@@ -73,6 +75,7 @@ export default function Terminal() {
       loadSession({
         date: replaySession.date,
         totalSteps: replaySession.totalSteps,
+        availableDates: replaySession.availableDates,
       });
     } else if (replaySessionError) {
       clearSession();
@@ -171,9 +174,9 @@ export default function Terminal() {
     ? explain.provider.toUpperCase()
     : "READY";
 
-  const toggleMode = () => {
-    if (isReplay) exitReplay();
-    else enterReplay();
+  const selectMode = (m: (typeof MODES)[number]) => {
+    if (m === "REPLAY") enterReplay();
+    else if (m === "RESEARCH") exitReplay();
   };
 
   return (
@@ -195,7 +198,7 @@ export default function Terminal() {
                   key={m}
                   type="button"
                   disabled={!clickable}
-                  onClick={clickable ? toggleMode : undefined}
+                  onClick={clickable ? () => selectMode(m) : undefined}
                   title={
                     available
                       ? `${m} mode`
@@ -236,21 +239,41 @@ export default function Terminal() {
               <option value="NODATA">NODATA</option>
             </select>
 
-            <select
-              className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-              value={source}
-              onChange={(e) => setSource(e.target.value as any)}
-              aria-label="Data source"
-              disabled={isReplay}
-              title={
-                isReplay
-                  ? "Data source is fixed to replay in REPLAY mode"
-                  : "Data source"
-              }
-            >
-              <option value="fixture">FIXTURE</option>
-              <option value="yahoo_delayed">DELAYED</option>
-            </select>
+            {isReplay ? (
+              <select
+                className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
+                value={date ?? ""}
+                onChange={(e) => setDate(e.target.value)}
+                aria-label="Replay date"
+                disabled={availableDates.length === 0}
+                title={
+                  availableDates.length === 0
+                    ? "No replayable sessions for this symbol"
+                    : "Historical session date to replay"
+                }
+              >
+                {availableDates.length === 0 ? (
+                  <option value="">NO SESSION</option>
+                ) : (
+                  availableDates.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))
+                )}
+              </select>
+            ) : (
+              <select
+                className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
+                value={source}
+                onChange={(e) => setSource(e.target.value as any)}
+                aria-label="Data source"
+                title="Data source"
+              >
+                <option value="fixture">FIXTURE</option>
+                <option value="yahoo_delayed">DELAYED</option>
+              </select>
+            )}
           </div>
 
           {/* Timestamp + source badge */}

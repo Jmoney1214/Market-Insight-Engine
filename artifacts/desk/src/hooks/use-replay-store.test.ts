@@ -37,6 +37,29 @@ describe("replay transport store", () => {
     expect(get().playing).toBe(false);
   });
 
+  it("records the selectable dates from the loaded session", () => {
+    get().loadSession({
+      date: "2024-06-03",
+      totalSteps: 80,
+      availableDates: ["2024-06-03", "2024-06-04"],
+    });
+    expect(get().availableDates).toEqual(["2024-06-03", "2024-06-04"]);
+  });
+
+  it("setDate selects a date and restarts at step 0, paused", () => {
+    get().loadSession({
+      date: "2024-06-03",
+      totalSteps: 80,
+      availableDates: ["2024-06-03", "2024-06-04"],
+    });
+    get().setStep(20);
+    get().play();
+    get().setDate("2024-06-04");
+    expect(get().date).toBe("2024-06-04");
+    expect(get().step).toBe(0);
+    expect(get().playing).toBe(false);
+  });
+
   it("steps forward and back within bounds", () => {
     get().loadSession({ date: "2024-06-03", totalSteps: 80 });
     get().stepForward();

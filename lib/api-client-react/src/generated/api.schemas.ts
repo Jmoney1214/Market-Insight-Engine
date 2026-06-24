@@ -12,6 +12,8 @@ export interface ReplaySession {
   symbol: string;
   /** ISO date (YYYY-MM-DD) of the replayable session */
   date: string;
+  /** Every ISO date this symbol can be replayed for (for the date picker) */
+  availableDates: string[];
   dataSource: string;
   /** Valid replay steps are 0-based: 0 .. totalSteps-1 */
   totalSteps: number;

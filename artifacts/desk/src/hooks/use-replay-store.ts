@@ -15,6 +15,8 @@ export interface ReplayState {
   mode: DeskMode;
   /** ISO date of the loaded session, or null when none is loaded. */
   date: string | null;
+  /** Every ISO date the current symbol can be replayed for (date picker). */
+  availableDates: string[];
   /** 0-based current step (0 .. totalSteps-1). */
   step: number;
   /** Total replayable steps; 0 means no replayable session loaded. */
@@ -24,7 +26,13 @@ export interface ReplayState {
 
   enterReplay: () => void;
   exitReplay: () => void;
-  loadSession: (session: { date: string; totalSteps: number }) => void;
+  loadSession: (session: {
+    date: string;
+    totalSteps: number;
+    availableDates?: string[];
+  }) => void;
+  /** User picks a different historical date; restarts the session at step 0. */
+  setDate: (date: string) => void;
   clearSession: () => void;
   play: () => void;
   pause: () => void;
@@ -39,6 +47,7 @@ export interface ReplayState {
 export const replayInitialState = {
   mode: "RESEARCH" as DeskMode,
   date: null as string | null,
+  availableDates: [] as string[],
   step: 0,
   totalSteps: 0,
   playing: false,
@@ -52,11 +61,25 @@ export const useReplayStore = create<ReplayState>()((set) => ({
 
   exitReplay: () => set({ mode: "RESEARCH", playing: false }),
 
-  loadSession: ({ date, totalSteps }) =>
-    set({ date, totalSteps, step: 0, playing: false }),
+  loadSession: ({ date, totalSteps, availableDates }) =>
+    set((s) => ({
+      date,
+      totalSteps,
+      availableDates: availableDates ?? s.availableDates,
+      step: 0,
+      playing: false,
+    })),
+
+  setDate: (date) => set({ date, step: 0, playing: false }),
 
   clearSession: () =>
-    set({ date: null, totalSteps: 0, step: 0, playing: false }),
+    set({
+      date: null,
+      availableDates: [],
+      totalSteps: 0,
+      step: 0,
+      playing: false,
+    }),
 
   play: () =>
     set((s) => {
