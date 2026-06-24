@@ -31,3 +31,10 @@ export { atr, mean, sum, round, trueRange, highest, lowest } from "./detectors";
 
 export { FIXTURES, getFixture, listFixtures } from "./fixtures";
 export type { Fixture } from "./fixtures";
+
+export {
+  REPLAY_DATA_SOURCE,
+  getReplaySession,
+  buildReplayInput,
+} from "./replay";
+export type { ReplaySession } from "./replay";

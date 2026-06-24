@@ -357,8 +357,158 @@ paths:
                 items:
                   $ref: "#/components/schemas/HistoryEvent"
 
+  /copilot/replay/session:
+    get:
+      operationId: getReplaySession
+      tags: [copilot]
+      summary: Load replay session metadata for a symbol/date
+      description: >-
+        Returns metadata for a fixture-backed replay session (total steps, bar
+        interval, session bounds). Research/practice only: replay never executes,
+        simulates, routes, or paper-trades. Real paid historical feeds are out of
+        scope (adapter hooks only).
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "ISO date (YYYY-MM-DD); defaults to the symbol's available session"
+      responses:
+        "200":
+          description: Replay session metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplaySession"
+        "404":
+          description: No replayable session for this symbol/date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/replay/event:
+    get:
+      operationId: getReplayEvent
+      tags: [copilot]
+      summary: Build the deterministic copilot event at a replay step
+      description: >-
+        Computes one deterministic copilot event for a single replay step by
+        replaying bars[0..step] through the SAME pipeline used for live reads.
+        Returns the canonical CopilotEvent shape with mode REPLAY. Never returns
+        order intent or any execution signal.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "ISO date (YYYY-MM-DD) of the replay session"
+        - name: step
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+          description: "0-based replay step (0 .. totalSteps-1)"
+      responses:
+        "200":
+          description: Canonical copilot event for the replay step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopilotEvent"
+        "404":
+          description: Invalid replay symbol/date/step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/replay/explain:
+    get:
+      operationId: explainReplayEvent
+      tags: [copilot]
+      summary: Explain the replay-step event with the read-only analyst committee
+      description: >-
+        Runs the same multi-agent analyst committee over the deterministic
+        replay-step event. The committee only explains, critiques, and
+        summarizes: it never creates signals, approves trades, overrides hard
+        blocks, or invents data.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: step
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Read-only analyst committee explanation for the replay step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitteeRead"
+        "404":
+          description: Invalid replay symbol/date/step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
+    ReplaySession:
+      type: object
+      description: Fixture-backed replay session metadata. Research/practice only; never executes, simulates, or paper-trades.
+      required:
+        - symbol
+        - date
+        - dataSource
+        - totalSteps
+        - barSeconds
+        - startTime
+        - endTime
+      properties:
+        symbol:
+          type: string
+        date:
+          type: string
+          description: "ISO date (YYYY-MM-DD) of the replayable session"
+        dataSource:
+          type: string
+        totalSteps:
+          type: integer
+          description: "Valid replay steps are 0-based: 0 .. totalSteps-1"
+        barSeconds:
+          type: integer
+        startTime:
+          type: integer
+          description: "Epoch seconds of the first bar"
+        endTime:
+          type: integer
+          description: "Epoch seconds of the last bar"
     HealthStatus:
       type: object
       properties:

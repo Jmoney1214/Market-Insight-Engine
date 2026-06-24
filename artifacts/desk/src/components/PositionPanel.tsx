@@ -2,6 +2,15 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useCreateJournalEntry,
+  type CopilotEvent,
+} from "@workspace/api-client-react";
+
+interface PositionPanelProps {
+  /** The active copilot event, used to tag archived tracking notes. */
+  event?: CopilotEvent;
+}
 
 interface PositionState {
   status: "FLAT" | "IN_POSITION";
@@ -23,9 +32,10 @@ const defaultState: PositionState = {
   thesisStatus: "UNKNOWN"
 };
 
-export function PositionPanel() {
+export function PositionPanel({ event }: PositionPanelProps) {
   const [pos, setPos] = useState<PositionState>(defaultState);
   const { toast } = useToast();
+  const createJournal = useCreateJournalEntry();
 
   useEffect(() => {
     const saved = localStorage.getItem("desk-position");
@@ -45,12 +55,48 @@ export function PositionPanel() {
     save({ ...pos, [field]: value });
   };
 
-  const handleJournal = () => {
-    toast({
-      title: "Coming Soon",
-      description: "Journaling is slated for a later phase.",
-      duration: 3000,
-    });
+  const handleJournal = async () => {
+    if (!event) {
+      toast({
+        title: "Nothing to archive",
+        description: "No active read is loaded yet.",
+        duration: 3000,
+      });
+      return;
+    }
+    try {
+      await createJournal.mutateAsync({
+        data: {
+          mode: event.mode,
+          symbol: event.symbol,
+          eventTimestamp: event.timestamp,
+          eventSnapshot: {
+            alertLevel: event.alertLevel ?? null,
+            l5Blocked: event.l5Blocked,
+            dataSource: event.dataSource,
+            marketQuality: event.marketQuality,
+            hardBlocks: event.hardBlocks,
+          },
+          manualOutcome: { ...pos },
+        },
+      });
+      toast({
+        title: "Tracking note archived",
+        description: `${event.symbol} • ${event.mode} • ${
+          event.timestamp
+            ? new Date(event.timestamp).toLocaleTimeString()
+            : "—"
+        }`,
+        duration: 3000,
+      });
+    } catch {
+      toast({
+        title: "Could not archive note",
+        description: "Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
   };
 
   const handleClear = () => {
@@ -157,8 +203,10 @@ export function PositionPanel() {
                 size="sm" 
                 className="w-full text-xs font-mono border-primary text-primary hover:bg-primary/10"
                 onClick={handleJournal}
+                disabled={!event || createJournal.isPending}
+                title={event ? `Archive a ${event.mode} tracking note` : "No active read loaded"}
               >
-                ARCHIVE TRACKING NOTE
+                {createJournal.isPending ? "ARCHIVING…" : "ARCHIVE TRACKING NOTE"}
               </Button>
               <Button 
                 variant="ghost" 

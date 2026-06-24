@@ -5,6 +5,23 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * Fixture-backed replay session metadata. Research/practice only; never executes, simulates, or paper-trades.
+ */
+export interface ReplaySession {
+  symbol: string;
+  /** ISO date (YYYY-MM-DD) of the replayable session */
+  date: string;
+  dataSource: string;
+  /** Valid replay steps are 0-based: 0 .. totalSteps-1 */
+  totalSteps: number;
+  barSeconds: number;
+  /** Epoch seconds of the first bar */
+  startTime: number;
+  /** Epoch seconds of the last bar */
+  endTime: number;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -852,4 +869,34 @@ export const ExplainCopilotEventMode = {
   REPLAY: 'REPLAY',
   RESEARCH: 'RESEARCH',
 } as const;
+
+export type GetReplaySessionParams = {
+symbol: string;
+/**
+ * ISO date (YYYY-MM-DD); defaults to the symbol's available session
+ */
+date?: string;
+};
+
+export type GetReplayEventParams = {
+symbol: string;
+/**
+ * ISO date (YYYY-MM-DD) of the replay session
+ */
+date: string;
+/**
+ * 0-based replay step (0 .. totalSteps-1)
+ * @minimum 0
+ */
+step: number;
+};
+
+export type ExplainReplayEventParams = {
+symbol: string;
+date: string;
+/**
+ * @minimum 0
+ */
+step: number;
+};
 

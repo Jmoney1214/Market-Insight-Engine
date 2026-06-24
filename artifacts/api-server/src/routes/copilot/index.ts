@@ -5,6 +5,7 @@ import explainRouter from "./explain";
 import journalRouter from "./journal";
 import registryRouter from "./registry";
 import historyRouter from "./history";
+import replayRouter from "./replay";
 
 const router: IRouter = Router();
 
@@ -14,5 +15,6 @@ router.use(explainRouter);
 router.use(journalRouter);
 router.use(registryRouter);
 router.use(historyRouter);
+router.use(replayRouter);
 
 export default router;

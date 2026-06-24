@@ -1,12 +1,21 @@
+import { useEffect, useRef } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import {
   useGetCopilotEvent,
   useExplainCopilotEvent,
+  useGetReplaySession,
+  useGetReplayEvent,
+  useExplainReplayEvent,
   useCopilotHealthCheck,
   getGetCopilotEventQueryKey,
   getExplainCopilotEventQueryKey,
+  getGetReplaySessionQueryKey,
+  getGetReplayEventQueryKey,
+  getExplainReplayEventQueryKey,
   getCopilotHealthCheckQueryKey,
 } from "@workspace/api-client-react";
 import { useTerminalStore } from "@/hooks/use-terminal-store";
+import { useReplayStore } from "@/hooks/use-replay-store";
 
 import { LiveBoardPanel } from "@/components/LiveBoardPanel";
 import { FinalReadPanel } from "@/components/FinalReadPanel";
@@ -15,38 +24,142 @@ import { FeedQualityPanel } from "@/components/FeedQualityPanel";
 import { PositionPanel } from "@/components/PositionPanel";
 import { HistoryLogPanel } from "@/components/HistoryLogPanel";
 import { ChartPanel } from "@/components/ChartPanel";
+import { ReplayBar } from "@/components/ReplayBar";
 
 const MODES = ["LIVE", "REPLAY", "RESEARCH"] as const;
-// Only RESEARCH mode is shipped today. LIVE is intentionally never built
-// (permanent no-trading constraint); REPLAY arrives in a later phase.
-const AVAILABLE_MODES = new Set(["RESEARCH"]);
+// LIVE is intentionally never built (permanent no-trading constraint). REPLAY
+// and RESEARCH are the two interactive, research-only modes.
+const AVAILABLE_MODES = new Set(["REPLAY", "RESEARCH"]);
 
 const PHASE6_PANELS = ["STRATEGY LAB", "EDGE SCOREBOARD", "JOURNAL"] as const;
 
 export default function Terminal() {
   const { symbol, source, setSymbol, setSource } = useTerminalStore();
+  const {
+    mode: deskMode,
+    date,
+    step,
+    totalSteps,
+    playing,
+    speed,
+    enterReplay,
+    exitReplay,
+    loadSession,
+    clearSession,
+    stepForward,
+  } = useReplayStore();
 
-  const eventParams = { symbol, source, mode: "RESEARCH" as const };
+  const isReplay = deskMode === "REPLAY";
 
-  const { data: event, isLoading: eventLoading, error: eventError } = useGetCopilotEvent(
-    eventParams,
-    { query: { enabled: !!symbol, queryKey: getGetCopilotEventQueryKey(eventParams), refetchInterval: 10000 } }
-  );
+  // --- Replay session: load metadata for the active symbol when in REPLAY. ---
+  const replaySessionParams = { symbol };
+  const { data: replaySession, error: replaySessionError } =
+    useGetReplaySession(replaySessionParams, {
+      query: {
+        enabled: isReplay && !!symbol,
+        queryKey: getGetReplaySessionQueryKey(replaySessionParams),
+        // Fixtures are immutable, so the session metadata never changes. Pin it
+        // as permanently fresh and skip focus refetches; otherwise a refetch
+        // would hand back a new object identity and the effect below would
+        // rewind an in-progress replay back to step 0.
+        staleTime: Infinity,
+        refetchOnWindowFocus: false,
+      },
+    });
 
-  const { data: explain, isLoading: explainLoading, error: explainError } = useExplainCopilotEvent(
-    eventParams,
-    { query: { enabled: !!symbol, queryKey: getExplainCopilotEventQueryKey(eventParams), staleTime: 5 * 60 * 1000, gcTime: 10 * 60 * 1000 } }
-  );
+  useEffect(() => {
+    if (!isReplay) return;
+    if (replaySession) {
+      loadSession({
+        date: replaySession.date,
+        totalSteps: replaySession.totalSteps,
+      });
+    } else if (replaySessionError) {
+      clearSession();
+    }
+  }, [isReplay, replaySession, replaySessionError, loadSession, clearSession]);
+
+  const replayReady = isReplay && totalSteps > 0 && !!date;
+
+  // --- Event + explain: switch between RESEARCH (live fixture) and REPLAY. ---
+  const researchParams = { symbol, source, mode: "RESEARCH" as const };
+  const replayParams = { symbol, date: date ?? "", step };
+
+  const researchEvent = useGetCopilotEvent(researchParams, {
+    query: {
+      enabled: !isReplay && !!symbol,
+      queryKey: getGetCopilotEventQueryKey(researchParams),
+      refetchInterval: !isReplay ? 10000 : false,
+    },
+  });
+  const replayEvent = useGetReplayEvent(replayParams, {
+    query: {
+      enabled: replayReady,
+      queryKey: getGetReplayEventQueryKey(replayParams),
+      // Keep the prior bar's read on screen while the next step loads so the
+      // deterministic panels update smoothly instead of blanking each step.
+      placeholderData: keepPreviousData,
+    },
+  });
+
+  const researchExplain = useExplainCopilotEvent(researchParams, {
+    query: {
+      enabled: !isReplay && !!symbol,
+      queryKey: getExplainCopilotEventQueryKey(researchParams),
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    },
+  });
+  const replayExplain = useExplainReplayEvent(replayParams, {
+    query: {
+      // The committee read is a real (~10s) AI call. Suspend it during active
+      // playback so we don't spawn one abandoned request per bar; it resumes
+      // for the settled step the moment playback pauses.
+      enabled: replayReady && !playing,
+      queryKey: getExplainReplayEventQueryKey(replayParams),
+      placeholderData: keepPreviousData,
+      staleTime: 5 * 60 * 1000,
+      gcTime: 10 * 60 * 1000,
+    },
+  });
+
+  const event = isReplay ? replayEvent.data : researchEvent.data;
+  const eventLoading = isReplay ? replayEvent.isLoading : researchEvent.isLoading;
+  const eventError = isReplay ? replayEvent.error : researchEvent.error;
+
+  const explain = isReplay ? replayExplain.data : researchExplain.data;
+  const explainLoading = isReplay
+    ? replayExplain.isLoading
+    : researchExplain.isLoading;
+  const explainError = isReplay ? replayExplain.error : researchExplain.error;
+
+  // --- Transport clock: advance one bar per tick while playing. ---
+  const stepForwardRef = useRef(stepForward);
+  stepForwardRef.current = stepForward;
+  useEffect(() => {
+    if (!isReplay || !playing || totalSteps === 0) return;
+    const id = window.setInterval(
+      () => stepForwardRef.current(),
+      Math.max(50, 1000 / speed),
+    );
+    return () => window.clearInterval(id);
+  }, [isReplay, playing, speed, totalSteps]);
 
   const { data: health } = useCopilotHealthCheck({
     query: { queryKey: getCopilotHealthCheckQueryKey(), refetchInterval: 30000 },
   });
 
-  const currentMode = event?.mode ?? "RESEARCH";
+  const currentMode = event?.mode ?? (isReplay ? "REPLAY" : "RESEARCH");
+  const replayUnavailable = isReplay && !!replaySessionError;
 
   const headerDate = event?.timestamp ? new Date(event.timestamp) : null;
   const headerTime =
-    headerDate && !isNaN(headerDate.getTime()) ? headerDate.toLocaleTimeString() : "--:--:--";
+    headerDate && !isNaN(headerDate.getTime())
+      ? headerDate.toLocaleTimeString()
+      : "--:--:--";
+  const currentBarTime = replaySession
+    ? replaySession.startTime + step * replaySession.barSeconds
+    : null;
 
   const aiStatus = explainLoading
     ? "THINKING"
@@ -58,6 +171,11 @@ export default function Terminal() {
     ? explain.provider.toUpperCase()
     : "READY";
 
+  const toggleMode = () => {
+    if (isReplay) exitReplay();
+    else enterReplay();
+  };
+
   return (
     <div className="h-screen w-full bg-background text-foreground flex flex-col overflow-hidden font-sans">
       <header className="h-12 border-b border-border bg-card/50 flex items-center px-4 justify-between shrink-0 gap-4">
@@ -66,25 +184,35 @@ export default function Terminal() {
             TRADING DESK COPILOT
           </div>
 
-          {/* Mode context: LIVE / REPLAY / RESEARCH. Only RESEARCH is active. */}
+          {/* Mode context: LIVE / REPLAY / RESEARCH. REPLAY + RESEARCH toggle. */}
           <div className="flex items-center rounded border border-border overflow-hidden font-mono text-[10px]">
             {MODES.map((m, i) => {
               const active = m === currentMode;
               const available = AVAILABLE_MODES.has(m);
+              const clickable = m === "REPLAY" || m === "RESEARCH";
               return (
-                <span
+                <button
                   key={m}
-                  title={available ? `${m} mode` : `${m} mode — coming in a later phase`}
-                  className={`px-2 py-0.5 ${i < MODES.length - 1 ? "border-r border-border" : ""} ${
+                  type="button"
+                  disabled={!clickable}
+                  onClick={clickable ? toggleMode : undefined}
+                  title={
+                    available
+                      ? `${m} mode`
+                      : `${m} mode — never built (no-trading constraint)`
+                  }
+                  className={`px-2 py-0.5 ${
+                    i < MODES.length - 1 ? "border-r border-border" : ""
+                  } ${
                     active
                       ? "bg-primary/20 text-primary font-medium"
                       : available
-                      ? "text-muted-foreground"
-                      : "text-muted-foreground/40"
+                      ? "text-muted-foreground hover:bg-muted/40"
+                      : "text-muted-foreground/40 cursor-not-allowed"
                   }`}
                 >
                   {m}
-                </span>
+                </button>
               );
             })}
           </div>
@@ -109,10 +237,16 @@ export default function Terminal() {
             </select>
 
             <select
-              className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
               value={source}
               onChange={(e) => setSource(e.target.value as any)}
               aria-label="Data source"
+              disabled={isReplay}
+              title={
+                isReplay
+                  ? "Data source is fixed to replay in REPLAY mode"
+                  : "Data source"
+              }
             >
               <option value="fixture">FIXTURE</option>
               <option value="yahoo_delayed">DELAYED</option>
@@ -125,7 +259,7 @@ export default function Terminal() {
               {headerTime}
             </span>
             <span className="border border-border px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground uppercase">
-              SRC · {(event?.dataSource ?? source).toString().replace(/_/g, " ")}
+              SRC · {(event?.dataSource ?? (isReplay ? "fixture replay" : source)).toString().replace(/_/g, " ")}
             </span>
           </div>
 
@@ -151,12 +285,20 @@ export default function Terminal() {
             </span>
           </div>
 
-          {/* Replay placeholder badge */}
+          {/* Replay status badge */}
           <span
-            className="font-mono text-[10px] border border-dashed border-border px-1.5 py-0.5 rounded text-muted-foreground/50"
-            title="Replay mode — coming in a later phase"
+            className={`font-mono text-[10px] border px-1.5 py-0.5 rounded ${
+              isReplay
+                ? "border-primary/40 text-primary bg-primary/10"
+                : "border-dashed border-border text-muted-foreground/50"
+            }`}
+            title={
+              isReplay
+                ? "Replay mode active — research/practice only"
+                : "Replay mode off — click REPLAY to enable"
+            }
           >
-            ⏵ REPLAY · OFF
+            ⏵ REPLAY · {isReplay ? "ON" : "OFF"}
           </span>
         </div>
       </header>
@@ -206,7 +348,7 @@ export default function Terminal() {
           <div className="h-72 terminal-panel shrink-0">
             <div className="terminal-panel-header">POSITION</div>
             <div className="terminal-panel-content p-0">
-              <PositionPanel />
+              <PositionPanel event={event} />
             </div>
           </div>
           <div className="flex-1 terminal-panel min-h-0">
@@ -218,19 +360,33 @@ export default function Terminal() {
         </div>
       </main>
 
-      {/* Footer: out-of-scope placeholders, clearly marked (Phase 5 / Phase 6) */}
-      <footer className="h-9 border-t border-border bg-card/50 flex items-center px-4 justify-between shrink-0 font-mono text-[10px]">
-        <div className="flex items-center gap-2 text-muted-foreground/60" title="Replay controls — coming in a later phase">
-          <span className="uppercase tracking-wider">Replay</span>
-          <div className="flex items-center gap-0.5 opacity-50 pointer-events-none select-none" aria-hidden="true">
-            <span className="border border-border rounded px-1 py-0.5">⏮</span>
-            <span className="border border-border rounded px-1 py-0.5">⏵</span>
-            <span className="border border-border rounded px-1 py-0.5">⏭</span>
-          </div>
-          <span className="border border-dashed border-border rounded px-1.5 py-0.5">PHASE 5 · COMING SOON</span>
-        </div>
+      {/* Footer: replay transport (Phase 5) + Phase 6 placeholders. */}
+      <footer className="h-9 border-t border-border bg-card/50 flex items-center px-4 justify-between shrink-0 font-mono text-[10px] gap-4">
+        {isReplay ? (
+          <ReplayBar
+            sessionDate={date}
+            currentBarTime={currentBarTime}
+            isLoading={eventLoading}
+            unavailable={replayUnavailable}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={enterReplay}
+            className="flex items-center gap-2 text-muted-foreground/70 hover:text-foreground transition-colors"
+            title="Enter replay mode"
+          >
+            <span className="uppercase tracking-wider">Replay</span>
+            <span className="flex items-center gap-0.5">
+              <span className="border border-border rounded px-1 py-0.5">⏮</span>
+              <span className="border border-border rounded px-1 py-0.5">⏵</span>
+              <span className="border border-border rounded px-1 py-0.5">⏭</span>
+            </span>
+            <span className="border border-border rounded px-1.5 py-0.5">ENTER REPLAY</span>
+          </button>
+        )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {PHASE6_PANELS.map((label) => (
             <span
               key={label}

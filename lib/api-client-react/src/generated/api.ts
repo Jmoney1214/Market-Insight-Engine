@@ -26,11 +26,15 @@ import type {
   CopilotEvent,
   CopilotHealth,
   ExplainCopilotEventParams,
+  ExplainReplayEventParams,
   GetCopilotEventParams,
+  GetReplayEventParams,
+  GetReplaySessionParams,
   HealthStatus,
   HistoryEvent,
   JournalEntry,
   JournalEntryInput,
+  ReplaySession,
   Report,
   ReportSummary,
   StrategyRegistryEntry,
@@ -1328,6 +1332,261 @@ export function useListHistoryEvents<TData = Awaited<ReturnType<typeof listHisto
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListHistoryEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetReplaySessionUrl = (params: GetReplaySessionParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/replay/session?${stringifiedParams}` : `/api/copilot/replay/session`
+}
+
+/**
+ * Returns metadata for a fixture-backed replay session (total steps, bar interval, session bounds). Research/practice only: replay never executes, simulates, routes, or paper-trades. Real paid historical feeds are out of scope (adapter hooks only).
+ * @summary Load replay session metadata for a symbol/date
+ */
+export const getReplaySession = async (params: GetReplaySessionParams, options?: RequestInit): Promise<ReplaySession> => {
+
+  return customFetch<ReplaySession>(getGetReplaySessionUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReplaySessionQueryKey = (params?: GetReplaySessionParams,) => {
+    return [
+    `/api/copilot/replay/session`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReplaySessionQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReplaySession>>> = ({ signal }) => getReplaySession(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReplaySessionQueryResult = NonNullable<Awaited<ReturnType<typeof getReplaySession>>>
+export type GetReplaySessionQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Load replay session metadata for a symbol/date
+ */
+
+export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(
+ params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReplaySessionQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetReplayEventUrl = (params: GetReplayEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/replay/event?${stringifiedParams}` : `/api/copilot/replay/event`
+}
+
+/**
+ * Computes one deterministic copilot event for a single replay step by replaying bars[0..step] through the SAME pipeline used for live reads. Returns the canonical CopilotEvent shape with mode REPLAY. Never returns order intent or any execution signal.
+ * @summary Build the deterministic copilot event at a replay step
+ */
+export const getReplayEvent = async (params: GetReplayEventParams, options?: RequestInit): Promise<CopilotEvent> => {
+
+  return customFetch<CopilotEvent>(getGetReplayEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReplayEventQueryKey = (params?: GetReplayEventParams,) => {
+    return [
+    `/api/copilot/replay/event`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReplayEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReplayEvent>>> = ({ signal }) => getReplayEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof getReplayEvent>>>
+export type GetReplayEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Build the deterministic copilot event at a replay step
+ */
+
+export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(
+ params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReplayEventQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getExplainReplayEventUrl = (params: ExplainReplayEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/replay/explain?${stringifiedParams}` : `/api/copilot/replay/explain`
+}
+
+/**
+ * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data.
+ * @summary Explain the replay-step event with the read-only analyst committee
+ */
+export const explainReplayEvent = async (params: ExplainReplayEventParams, options?: RequestInit): Promise<CommitteeRead> => {
+
+  return customFetch<CommitteeRead>(getExplainReplayEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExplainReplayEventQueryKey = (params?: ExplainReplayEventParams,) => {
+    return [
+    `/api/copilot/replay/explain`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExplainReplayEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof explainReplayEvent>>> = ({ signal }) => explainReplayEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExplainReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainReplayEvent>>>
+export type ExplainReplayEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Explain the replay-step event with the read-only analyst committee
+ */
+
+export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(
+ params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExplainReplayEventQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
