@@ -1,5 +1,6 @@
 - [FinDesk architecture](findesk-architecture.md) — two artifacts: findesk (web, serves `/`) + api-server (serves `/api`); both workflows must run
 - [FinDesk data sourcing](findesk-data-sourcing.md) — analyze uses keyless Yahoo v8 chart + OpenAI; type reports with api-zod's `Report` interface (z.infer→unknown)
+- [Desk committee testing](desk-committee-testing.md) — force deterministic committee in tests via `COPILOT_LLM_PROVIDER=none` (can't blank AI_INTEGRATIONS_*; client throws at import); api-server vitest needs `.js`→`.ts` extensionAlias
 - [CopilotEvent contract chain](copilot-event-contract.md) — adding a CopilotEvent field needs 4 edits incl. the api-server boundary mapper (explicit allowlist), or it's silently dropped / zod 500s
 - [Desk measurement integrity](desk-measurement-integrity.md) — edge scoreboard: only MANUAL_CONFIRMED + whitelisted action + promotable primary edge can validate; folklore never; enforce in core not UI; no "paper" in UI
 - [Desk terminal](desk-architecture.md) — read-only research terminal (slug desk, `/desk/`); no-trading guardrail; uncached ~12s explain; fixture-backed REPLAY reuses the live pipeline
