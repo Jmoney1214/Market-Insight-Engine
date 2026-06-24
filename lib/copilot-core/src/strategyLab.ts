@@ -244,6 +244,25 @@ export function getStrategy(name: string): StrategyDefinition | undefined {
   return REGISTRY_BY_NAME.get(name);
 }
 
+/**
+ * Map a (possibly directionalized) detector trigger name to its canonical
+ * registry hypothesis name. Detectors emit directional variants such as
+ * GAP_FADE_LONG or VOLATILITY_COMPRESSION_BREAKOUT_SHORT, but the registry,
+ * scoreboard, and journaling all key off the directionless hypothesis
+ * (GAP_FADE, VOLATILITY_COMPRESSION_BREAKOUT). Without this normalization a
+ * journaled directional trigger would never match a registry entry and its
+ * measured outcome would be silently dropped from the scoreboard.
+ *
+ * Returns the input unchanged when it already names a registry entry or when
+ * stripping the direction suffix does not resolve to a known hypothesis.
+ */
+export function canonicalHypothesisName(name: string): string {
+  if (REGISTRY_BY_NAME.has(name)) return name;
+  const base = name.replace(/_(LONG|SHORT)$/, "");
+  if (base !== name && REGISTRY_BY_NAME.has(base)) return base;
+  return name;
+}
+
 export function isPrimaryEdge(name: string): boolean {
   return getStrategy(name)?.category === "primary_edge";
 }

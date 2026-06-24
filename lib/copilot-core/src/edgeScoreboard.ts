@@ -17,6 +17,7 @@
 import { sanitizeNumber } from "./sanitize";
 import {
   PRIMARY_EDGE_HYPOTHESES,
+  canonicalHypothesisName,
   getStrategy,
   type StrategyDefinition,
 } from "./strategyLab";
@@ -139,8 +140,12 @@ export function journalOutcomeToSample(entry: JournalLike): TradeSample | null {
   if (!outcome || typeof outcome !== "object") return null;
   const o = outcome as Record<string, unknown>;
 
-  const strategyName = nonEmptyString(o.strategyName);
-  if (!strategyName) return null;
+  const rawStrategyName = nonEmptyString(o.strategyName);
+  if (!rawStrategyName) return null;
+  // Normalize directional detector names (GAP_FADE_LONG) to their registry
+  // hypothesis (GAP_FADE) so the outcome matches a scoreboard row instead of
+  // being silently dropped.
+  const strategyName = canonicalHypothesisName(rawStrategyName);
 
   // Only promotable primary-edge hypotheses can ever produce a sample. This is
   // the structural guard that keeps entry-refinement folklore unprovable.

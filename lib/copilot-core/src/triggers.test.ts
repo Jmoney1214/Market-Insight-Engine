@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { buildCopilotEvent } from "./event";
 import { computeFeatures } from "./features";
-import { detectTriggers, inferDirection, newlyFiredTriggers } from "./triggers";
+import {
+  buildTriggerStack,
+  detectTriggers,
+  inferDirection,
+  newlyFiredTriggers,
+} from "./triggers";
 import type { Bar, Features, Trigger } from "./types";
 
 const bar = (
@@ -263,6 +268,34 @@ describe("gap detectors (gated on prior-session close)", () => {
     const names = detectedNames(triggers);
     expect(names).toContain("GAP_FADE_LONG");
     expect(inferDirection(triggers)).toBe("LONG");
+  });
+});
+
+describe("buildTriggerStack", () => {
+  const trig = (
+    name: string,
+    category: Trigger["category"],
+    detected: boolean,
+  ): Trigger => ({ name, category, detected, detail: detected ? "x" : null });
+
+  it("reports the canonical registry hypothesis as the stack name", () => {
+    // A directional primary trigger fires; the stack name must be the
+    // directionless hypothesis so journaling and the scoreboard align, while the
+    // directional name is preserved in detectedTriggers.
+    const stack = buildTriggerStack([
+      trig("GAP_FADE_LONG", "primary_edge", true),
+      trig("FVG", "entry_refinement", true),
+    ]);
+    expect(stack.stackName).toBe("GAP_FADE");
+    expect(stack.category).toBe("primary_edge");
+    expect(stack.detectedTriggers).toContain("GAP_FADE_LONG");
+  });
+
+  it("leaves an already-canonical primary name unchanged", () => {
+    const stack = buildTriggerStack([
+      trig("OPENING_RANGE_BREAKOUT", "primary_edge", true),
+    ]);
+    expect(stack.stackName).toBe("OPENING_RANGE_BREAKOUT");
   });
 });
 

@@ -20,10 +20,10 @@ only fires in the unblocked tail of a replay run — never in the first steps.
 **How to apply / verify:** to exercise an alertLevel-gated feature in replay, do NOT
 step one bar at a time from the open (you stay inside the L5 window). Jump the replay
 position slider (`aria-label="Replay position"`, range 0..totalSteps-1) toward the far
-right to land on an unblocked step, then look for a fresh trigger transition. For the
-AAPL fixture the only false→true transition that happens *while unblocked* is near the
-final steps (OPENING_RANGE_BREAKOUT + VOLUME_EXPANSION), so jumping the slider to the
-end is the reliable way to see the banner.
+right to land on an unblocked step, then look for a fresh trigger transition. The
+durable rule: a transition is only observable once the session is past the completeness
+gate, so the reliable place to see any first-fire is the unblocked tail (jump the slider
+near the end) — not the early steps, regardless of which fixture or trigger is involved.
 
 **Note:** REPLAY also differs from the live FIXTURE read, which normalizes bars to
 "now" and reports completeness 100% (L3, unblocked). So "works in live fixture" does

@@ -4,6 +4,7 @@ import {
   ENTRY_REFINEMENT_FEATURES,
   STRATEGY_REGISTRY,
   getStrategy,
+  canonicalHypothesisName,
   isPrimaryEdge,
   isEntryRefinement,
   isPromotable,
@@ -49,5 +50,23 @@ describe("strategy lab registry", () => {
     expect(getStrategy("FVG")?.promotable).toBe(false);
     expect(getStrategy("DEFINITELY_NOT_A_STRATEGY")).toBeUndefined();
     expect(isPromotable("DEFINITELY_NOT_A_STRATEGY")).toBe(false);
+  });
+
+  it("canonicalizes directional detector names to registry hypotheses", () => {
+    // Directional variants resolve to the directionless registry hypothesis so
+    // journaling and the scoreboard line up.
+    expect(canonicalHypothesisName("GAP_CONTINUATION_LONG")).toBe("GAP_CONTINUATION");
+    expect(canonicalHypothesisName("GAP_CONTINUATION_SHORT")).toBe("GAP_CONTINUATION");
+    expect(canonicalHypothesisName("GAP_FADE_LONG")).toBe("GAP_FADE");
+    expect(canonicalHypothesisName("GAP_FADE_SHORT")).toBe("GAP_FADE");
+    expect(canonicalHypothesisName("VOLATILITY_COMPRESSION_BREAKOUT_LONG")).toBe(
+      "VOLATILITY_COMPRESSION_BREAKOUT",
+    );
+    // Names already matching a registry entry are returned unchanged.
+    expect(canonicalHypothesisName("OPENING_RANGE_BREAKOUT")).toBe("OPENING_RANGE_BREAKOUT");
+    expect(canonicalHypothesisName("GAP_FADE")).toBe("GAP_FADE");
+    // A stripped base that is not a known hypothesis falls back to the original.
+    expect(canonicalHypothesisName("TREND_CONTINUATION_LONG")).toBe("TREND_CONTINUATION_LONG");
+    expect(canonicalHypothesisName("NONE")).toBe("NONE");
   });
 });

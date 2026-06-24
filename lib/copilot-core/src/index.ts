@@ -58,6 +58,7 @@ export {
   ENTRY_REFINEMENT_FEATURES,
   STRATEGY_REGISTRY,
   getStrategy,
+  canonicalHypothesisName,
   isPrimaryEdge,
   isEntryRefinement,
   isPromotable,

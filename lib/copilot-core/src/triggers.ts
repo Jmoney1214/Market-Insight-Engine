@@ -29,6 +29,7 @@ import {
   swingHighs,
   swingLows,
 } from "./detectors";
+import { canonicalHypothesisName } from "./strategyLab";
 import type {
   Bar,
   Direction,
@@ -524,7 +525,13 @@ export function buildTriggerStack(triggers: Trigger[]): TriggerStack {
   if (primary.length > 0) category = "primary_edge";
   else if (refinement.length > 0) category = "entry_refinement";
 
-  const stackName = primary[0]?.name ?? refinement[0]?.name ?? "NONE";
+  // The stack name is the *hypothesis identity* used for journaling and
+  // scoreboard matching, so it must be the directionless registry name even
+  // when the firing trigger is a directional variant (e.g. GAP_FADE_LONG). The
+  // directional trigger names are still preserved in detectedTriggers.
+  const stackName = canonicalHypothesisName(
+    primary[0]?.name ?? refinement[0]?.name ?? "NONE",
+  );
 
   return { stackName, category, credibility, detectedTriggers };
 }

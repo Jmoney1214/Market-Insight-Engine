@@ -114,6 +114,32 @@ describe("journalOutcomeToSample (whitelist extraction)", () => {
     expect(journalOutcomeToSample({ mode: "REPLAY" })).toBeNull();
   });
 
+  it("normalizes a directional detector name to its registry hypothesis", () => {
+    // A live/replay journal records the firing trigger name (GAP_CONTINUATION_LONG),
+    // but the scoreboard keys off the directionless registry hypothesis. The
+    // sample must survive and attribute to GAP_CONTINUATION, not be dropped.
+    for (const [fired, canonical] of [
+      ["GAP_CONTINUATION_LONG", "GAP_CONTINUATION"],
+      ["GAP_FADE_SHORT", "GAP_FADE"],
+      ["VOLATILITY_COMPRESSION_BREAKOUT_LONG", "VOLATILITY_COMPRESSION_BREAKOUT"],
+    ] as const) {
+      const s = journalOutcomeToSample({
+        mode: "REPLAY",
+        manualOutcome: {
+          strategyName: fired,
+          outcomeConfidence: "MANUAL_CONFIRMED",
+          rMultiple: 1.2,
+          action: "closed",
+        },
+      });
+      expect(s).not.toBeNull();
+      expect(s!.strategyName).toBe(canonical);
+      // And it scores under the canonical hypothesis row.
+      const score = computeEdgeScore(getStrategy(canonical)!, [s!], THRESHOLDS);
+      expect(score.sampleCount).toBe(1);
+    }
+  });
+
   it("rejects a confirmed, finite-R, valid-strategy payload that omits a scoreable action", () => {
     // Integrity guard: a malformed or legacy API payload that looks otherwise
     // scoreable but carries no explicit close/tracked action must never count.
