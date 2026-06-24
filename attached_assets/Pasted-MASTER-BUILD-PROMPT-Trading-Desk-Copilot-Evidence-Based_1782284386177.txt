@@ -1,0 +1,1521 @@
+MASTER BUILD PROMPT — Trading Desk Copilot: Evidence-Based AI Day-Trading Research Terminal
+
+Role
+
+You are a senior AI systems engineer, Python architect, trading-systems designer, and reliability-focused developer working inside the existing trading-desk-copilot project.
+
+Your task is to build the full next-generation version of this project:
+
+An evidence-based, replay-capable, journal-validated, multi-agent AI day-trading copilot and research terminal.
+
+This is not an auto-trading bot.
+
+The core rule is:
+
+Deterministic code is the source of truth. LLM agents may analyze, debate, critique, explain, and summarize only. They must never place trades, approve trades, submit orders, simulate exchange execution, or override hard risk blocks.
+
+Use TauricResearch/TradingAgents only as an architectural reference for multi-agent role separation, bull/bear debate, risk criticism, final synthesis, memory, provider abstraction, and future checkpointing.
+
+Do not import TradingAgents as a dependency.
+Do not copy the repo wholesale.
+Do not add broker execution.
+Do not add simulated exchange execution.
+
+⸻
+
+1. Product Definition
+
+Build:
+
+Trading Desk Copilot — Evidence-Based AI Trading Research Terminal
+
+The system should support:
+
+1. Live Mode
+    * Monitors live market data.
+    * Detects deterministic trigger stacks.
+    * Shows dashboard alerts.
+    * Runs analyst committee.
+    * Tracks manual positions.
+    * Journals manual outcomes.
+2. Replay Mode
+    * Loads a historical trading day.
+    * Replays it through the same copilot pipeline as if it were live.
+    * Allows manual practice and journaling.
+    * Marks all results as REPLAY.
+3. Strategy Lab
+    * Separates primary edge hypotheses from entry-refinement features.
+    * Measures whether trigger stacks have positive expectancy.
+    * Prevents folklore concepts from being treated as proven alpha.
+4. Multi-Agent Analyst Committee
+    * TradingAgents-inspired analyst layer.
+    * Technical, Pattern, Regime, Order-Flow, Catalyst, Position, Memory, Bull Case, Bear Case, Risk Critic, Final Synthesizer.
+    * Reads structured copilot events only.
+    * Produces dashboard-safe recommendations.
+5. Journal + Validation Loop
+    * Records manual decisions and outcomes.
+    * Tracks result in R.
+    * Feeds results back into validation.
+    * Promotes only measured edges.
+    * Prevents fake confidence from thin samples.
+6. Dashboard
+    * Live Board.
+    * Replay Panel.
+    * Position Panel.
+    * Analyst Committee Panel.
+    * Risk Gate Panel.
+    * Edge Scoreboard.
+    * Journal Panel.
+    * Feed Quality Panel.
+    * History Log.
+
+⸻
+
+2. Current Project Context
+
+Known existing components:
+
+* copilot.py
+    * Emits the single structured copilot event.
+    * This event is the canonical input for the analyst layer.
+* day_triggers.py
+    * Detects deterministic intraday trigger stacks.
+* detectors.py
+    * Should remain primitive geometry/indicator helper logic.
+* position.py
+    * Evaluates manually tracked positions.
+* journal.py
+    * Records outcomes, validation feedback, and post-trade learning.
+* risk_reward.py
+    * Creates entry / invalidation / target preview.
+* gates/quote_spread_gate.py
+    * Handles market-quality blocking.
+* analyst.py
+    * Currently creates analyst read.
+    * Should be wrapped/refactored by the new multi-agent layer.
+* /api/copilot
+    * Feeds dashboard with deterministic copilot event.
+* /api/explain
+    * Should use new agent_orchestrator.py.
+* Existing dashboard
+    * Should be preserved and upgraded, not rewritten blindly.
+* L5 blocks
+    * Must never be overridden, softened, bypassed, reframed, or reduced by any LLM or agent.
+
+⸻
+
+3. Implementation Discipline
+
+Before editing, inspect the existing file structure and identify the smallest safe integration points.
+
+Rules:
+
+* Do not rewrite unrelated systems.
+* Do not replace the dashboard wholesale unless necessary.
+* Do not add new third-party dependencies unless the project already uses them.
+* Do not require live LLM API calls in tests.
+* Prefer deterministic mock providers and pure functions.
+* Preserve current passing tests.
+* If an existing file already provides part of this functionality, extend it instead of duplicating it.
+* Build in safe phases.
+* Keep backward compatibility with existing /api/copilot and /api/explain consumers.
+* If the current project structure differs from this prompt, make the smallest safe adaptation and explain why.
+
+⸻
+
+4. Safety Constraints
+
+This project must remain a copilot, not an execution system.
+
+Do not add:
+
+* broker execution clients
+* order-capable code paths
+* submit_order
+* place_order
+* execute_trade
+* simulated exchange
+* exchange simulator
+* paper order execution
+* transaction approval
+* portfolio-manager order authority
+* LLM-generated trade orders
+* auto-trading
+
+Read-only market-data adapters are allowed if already present or explicitly needed.
+
+The analyst layer may read structured market data already included in the copilot event. It must not place, approve, simulate, route, or prepare orders.
+
+⸻
+
+5. System Architecture
+
+Target flow:
+
+LIVE / REPLAY / RESEARCH DATA
+        ↓
+data adapters / replay data loader
+        ↓
+deterministic feature engine
+        ↓
+day_triggers.py
+        ↓
+credibility + validation + market-quality gates
+        ↓
+risk_reward.py
+        ↓
+position.py
+        ↓
+copilot.py emits ONE structured event
+        ↓
+agent_orchestrator.py
+        ↓
+multi-agent analyst committee
+        ↓
+risk_critic.py
+        ↓
+final_synthesizer.py
+        ↓
+dashboard-safe read
+        ↓
+manual user decision
+        ↓
+journal.py
+        ↓
+validation_state.json / edge scoreboard
+
+The deterministic event remains the authority.
+
+LLM agents can:
+
+* explain
+* debate
+* critique
+* summarize
+* downgrade
+* warn
+* identify missing confirmation
+* identify thesis weakening
+
+LLM agents cannot:
+
+* create trades
+* approve trades
+* override hard blocks
+* promote edges without measured data
+* invent missing data
+* treat folklore as proven alpha
+
+⸻
+
+6. Modes
+
+6.1 Live Mode
+
+Purpose:
+
+* Monitor current market.
+* Generate deterministic copilot events.
+* Show live alerts.
+* Allow manual position tracking.
+* Allow manual journaling.
+
+Live journal entries should include:
+
+{
+  "mode": "LIVE",
+  "symbol": "...",
+  "timestamp": "...",
+  "event_snapshot": {},
+  "manual_outcome": {}
+}
+
+6.2 Replay Mode
+
+Purpose:
+
+* Replay a historical trading day through the same pipeline.
+* Practice and test the system without live risk.
+* Journal replay decisions separately from live results.
+
+Replay must support:
+
+* symbol input
+* date input
+* load
+* start
+* pause
+* step
+* speed control
+* stop
+* replay timestamp
+* replay mode badge
+* data source badge
+
+Replay journal entries should include:
+
+{
+  "mode": "REPLAY",
+  "replay_symbol": "...",
+  "replay_date": "...",
+  "replay_timestamp": "...",
+  "replay_speed": "...",
+  "data_source": "...",
+  "event_snapshot": {},
+  "manual_outcome": {}
+}
+
+Replay must never be mixed with live mode unless explicitly selected.
+
+6.3 Research / Strategy Lab Mode
+
+Purpose:
+
+* Prove or disprove edge hypotheses.
+* Separate primary edge from entry-refinement features.
+* Generate deterministic research reports.
+* Prevent fake confidence.
+
+Research mode should classify strategies as:
+
+* unproven
+* paper_pending
+* backtested_only
+* backtested_pending_forward
+* paper_validated
+* no_edge
+* insufficient_sample
+
+⸻
+
+7. Files to Build or Refactor
+
+Create or update:
+
+agent_schema.py
+agent_orchestrator.py
+agents/__init__.py
+agents/technical_agent.py
+agents/pattern_agent.py
+agents/regime_agent.py
+agents/order_flow_agent.py
+agents/catalyst_agent.py
+agents/position_agent.py
+agents/memory_agent.py
+agents/bull_case_agent.py
+agents/bear_case_agent.py
+agents/risk_critic.py
+agents/final_synthesizer.py
+replay.py
+replay_data.py
+replay_session.py
+strategy_lab.py
+strategy_registry.json
+edge_scoreboard.py
+validation_rules.py
+optional:
+data_adapters.py
+feed_quality.py
+
+Preserve existing files where possible.
+
+⸻
+
+8. Multi-Agent Analyst Committee
+
+8.1 Approved Final Recommendation Enum
+
+All final recommendations must be one of:
+
+WATCH
+WAIT
+AVOID
+POSSIBLE_LONG_ZONE
+POSSIBLE_SHORT_ZONE
+THESIS_VALID
+THESIS_WEAKENING
+TRAIL_STOP
+TAKE_PARTIALS
+EXIT_WARNING
+THESIS_INVALIDATED
+DO_NOT_ADD
+
+No other final recommendation is allowed.
+
+8.2 Forbidden Language
+
+No production UI output, final dashboard output, final synthesizer output, or agent-rendered text may render:
+
+buy now
+sell now
+execute
+place order
+submit order
+must enter
+must exit
+guaranteed
+sure win
+load up
+dump it
+
+Also block close variants that imply direct trade execution or certainty.
+
+Test fixtures may contain forbidden phrases only when clearly marked as banned-word tests.
+
+Do not rely only on raw grep. Add tests that pass every final synthesizer output and dashboard-rendered analyst read through the forbidden-language scanner.
+
+⸻
+
+9. Agent Schema Layer
+
+Create agent_schema.py.
+
+Include:
+
+* approved recommendation enum
+* allowed bias enums
+* allowed status enums
+* forbidden language list
+* confidence clamping helper
+* safe warning insertion helper
+* forbidden text scanner
+* agent output validators
+* final output validator
+* L5 enforcement helper
+* risk critic maximum recommendation enforcement helper
+* missing-data helpers
+* deterministic fallback response shape
+
+Use Pydantic only if already used by the project. Otherwise use lightweight dictionaries and validation functions.
+
+⸻
+
+10. Agent Responsibilities
+
+10.1 Technical Agent
+
+File:
+
+agents/technical_agent.py
+
+Reads:
+
+* VWAP
+* RVOL
+* opening range
+* ATR
+* volume expansion
+* price location
+* spread
+* market-quality fields
+
+Output:
+
+{
+  "agent": "technical",
+  "status": "OK",
+  "technical_bias": "BULLISH | BEARISH | NEUTRAL | MIXED | UNKNOWN",
+  "confidence": 0.0,
+  "supporting_factors": [],
+  "warnings": []
+}
+
+Rules:
+
+* Do not invent indicators.
+* If fields are missing, lower confidence and warn.
+* Wide spread, stale quote, poor liquidity, or bad market-quality fields must be warnings.
+
+10.2 Pattern / Structure Agent
+
+File:
+
+agents/pattern_agent.py
+
+Reads:
+
+* liquidity sweep
+* BOS
+* CHOCH
+* higher-low / lower-high
+* failed breakout
+* FVG
+* opening range retest
+
+Output:
+
+{
+  "agent": "pattern_structure",
+  "status": "OK",
+  "pattern_type": "string",
+  "structural_bias": "BULLISH | BEARISH | NEUTRAL | MIXED | UNKNOWN",
+  "confidence": 0.0,
+  "supporting_factors": [],
+  "warnings": []
+}
+
+Rules:
+
+* ICT/FVG/liquidity-sweep concepts are entry-refinement context, not proven alpha.
+* Never overstate them as guaranteed edge.
+* Treat structure as context, not authority.
+
+10.3 Regime Agent
+
+File:
+
+agents/regime_agent.py
+
+Reads:
+
+* regime labels
+* volatility
+* trend/chop classification
+* time of day
+* market index context if available
+
+Output:
+
+{
+  "agent": "regime",
+  "status": "OK",
+  "regime": "string",
+  "regime_friendliness": "FAVORABLE | MIXED | UNFAVORABLE | UNKNOWN",
+  "confidence": 0.0,
+  "warnings": []
+}
+
+Rules:
+
+* Penalize low-quality chop.
+* Penalize dangerous time-of-day if present.
+* Do not invent market index context.
+
+10.4 Order-Flow Agent
+
+File:
+
+agents/order_flow_agent.py
+
+Reads only if available:
+
+* signed volume
+* buy volume
+* sell volume
+* imbalance ratio
+* aggression score
+* absorption tags
+* exhaustion tags
+
+If unavailable:
+
+{
+  "agent": "order_flow",
+  "status": "UNAVAILABLE",
+  "order_flow_bias": "UNKNOWN",
+  "confidence": 0.0,
+  "supporting_factors": [],
+  "warnings": ["Order-flow data unavailable; no OFI inference made."]
+}
+
+Rules:
+
+* Do not invent order-flow data.
+* Do not infer tape behavior from price alone unless explicitly marked as low-confidence inference.
+
+10.5 Catalyst Agent
+
+File:
+
+agents/catalyst_agent.py
+
+Reads catalyst_context if available:
+
+* news label
+* source count
+* latest headline age
+* earnings flags
+* filing flags
+* analyst flags
+* macro flags
+* social momentum flags
+
+If unavailable:
+
+{
+  "agent": "catalyst",
+  "status": "NO_CATALYST_DATA",
+  "catalyst_bias": "UNKNOWN",
+  "confidence": 0.0,
+  "supporting_factors": [],
+  "warnings": ["No catalyst context available."]
+}
+
+Rules:
+
+* Do not invent headlines.
+* Do not invent filings.
+* Do not invent analyst actions.
+* Treat stale headlines as risk.
+
+10.6 Position Agent
+
+File:
+
+agents/position_agent.py
+
+Reads:
+
+* position_context
+
+If flat:
+
+{
+  "agent": "position",
+  "status": "FLAT",
+  "mode": "SETUP_REVIEW",
+  "thesis_status": "NO_ACTIVE_THESIS",
+  "unrealized_R": null,
+  "supports_thesis": [],
+  "weakens_thesis": [],
+  "invalidates_thesis": []
+}
+
+If in position:
+
+{
+  "agent": "position",
+  "status": "IN_POSITION",
+  "mode": "POSITION_REVIEW",
+  "thesis_status": "VALID | WEAKENING | INVALIDATED | UNKNOWN",
+  "unrealized_R": 0.0,
+  "supports_thesis": [],
+  "weakens_thesis": [],
+  "invalidates_thesis": [],
+  "position_safe_guidance": []
+}
+
+Rules:
+
+* Use only position-safe language.
+* Do not tell the user to enter or exit.
+* May say thesis valid, thesis weakening, trail stop, take partials, exit warning, thesis invalidated, or do not add when supported by event.
+
+10.7 Memory Agent
+
+File:
+
+agents/memory_agent.py
+
+Reads:
+
+* journal stats
+* validation stats
+* same ticker history
+* same setup stack history
+* same regime history
+
+Output:
+
+{
+  "agent": "memory",
+  "status": "OK | INSUFFICIENT_SAMPLE",
+  "same_ticker_edge": null,
+  "same_stack_edge": null,
+  "same_regime_edge": null,
+  "sample_count": 0,
+  "expectancy_R": null,
+  "profit_factor": null,
+  "best_regime": null,
+  "worst_regime": null,
+  "warnings": []
+}
+
+Rules:
+
+* If sample size is thin, return INSUFFICIENT_SAMPLE.
+* Do not invent edge.
+* If edge is weak, flag it clearly.
+* Low sample size must reduce confidence.
+
+10.8 Bull Case Agent
+
+File:
+
+agents/bull_case_agent.py
+
+Builds strongest bullish interpretation from structured subreads only.
+
+Output:
+
+{
+  "agent": "bull_case",
+  "status": "OK",
+  "bullish_thesis": [],
+  "supporting_factors": [],
+  "weaknesses": [],
+  "confidence": 0.0
+}
+
+Rules:
+
+* Cite only structured factors already present.
+* Must include weaknesses.
+* Cannot invent facts.
+* Cannot use forbidden language.
+
+10.9 Bear Case Agent
+
+File:
+
+agents/bear_case_agent.py
+
+Builds strongest bearish / avoid interpretation from structured subreads only.
+
+Output:
+
+{
+  "agent": "bear_case",
+  "status": "OK",
+  "bearish_thesis": [],
+  "avoid_reasons": [],
+  "what_would_invalidate_bear_case": [],
+  "confidence": 0.0
+}
+
+Rules:
+
+* Cite only structured factors already present.
+* Must include what would invalidate the bearish case.
+* Cannot invent facts.
+* Cannot use forbidden language.
+
+10.10 Risk Critic
+
+File:
+
+agents/risk_critic.py
+
+Actively searches for reasons to downgrade, block, or avoid.
+
+Check for:
+
+* weak validation
+* low sample size
+* backtested no-edge
+* stale quote
+* wide spread
+* poor R:R
+* bad regime
+* chase location
+* data failure
+* L5 block
+* unconfirmed order-flow
+* catalyst/news shock
+* LLM contradiction
+* forbidden wording
+* override attempts
+
+Output:
+
+{
+  "agent": "risk_critic",
+  "status": "OK",
+  "risk_verdict": "PASS | WARN | BLOCK",
+  "max_allowed_recommendation": "WATCH | WAIT | AVOID | DO_NOT_ADD | THESIS_WEAKENING | EXIT_WARNING | THESIS_INVALIDATED",
+  "downgrade_reasons": [],
+  "l5_override_attempt_detected": false,
+  "warnings": []
+}
+
+Rules:
+
+* If L5 block exists, risk verdict must be BLOCK.
+* If quote/spread gate blocks, risk verdict must be BLOCK.
+* If validation is weak, downgrade.
+* If order-flow is unavailable, warn but do not block by default.
+* If catalyst data is missing, warn if setup depends on catalyst confirmation.
+
+10.11 Final Synthesizer
+
+File:
+
+agents/final_synthesizer.py
+
+Combines all subreads into one dashboard-safe read.
+
+Output:
+
+{
+  "agent": "final_synthesizer",
+  "status": "OK",
+  "one_sentence_read": "string",
+  "final_recommendation": "WATCH | WAIT | AVOID | POSSIBLE_LONG_ZONE | POSSIBLE_SHORT_ZONE | THESIS_VALID | THESIS_WEAKENING | TRAIL_STOP | TAKE_PARTIALS | EXIT_WARNING | THESIS_INVALIDATED | DO_NOT_ADD",
+  "confidence": 0.0,
+  "what_supports": [],
+  "what_argues_against": [],
+  "what_confirms": [],
+  "what_invalidates": [],
+  "position_guidance": [],
+  "risk_notes": []
+}
+
+Rules:
+
+* Must never override deterministic alert level.
+* Must never override L5 block.
+* Must obey risk_critic.max_allowed_recommendation.
+* Must use only approved recommendation enum.
+* Must not include forbidden language.
+* Must not invent facts.
+* Must not imply certainty.
+
+Final recommendation priority:
+
+1. L5 / hard block → AVOID, DO_NOT_ADD, EXIT_WARNING, or THESIS_INVALIDATED only.
+2. In-position thesis invalidated → THESIS_INVALIDATED or EXIT_WARNING.
+3. In-position thesis weakening → THESIS_WEAKENING, TRAIL_STOP, DO_NOT_ADD, or EXIT_WARNING.
+4. Flat with blocked/weak setup → AVOID or WAIT.
+5. Flat with incomplete confirmation → WATCH or WAIT.
+6. Flat with confirmed setup and acceptable gates → POSSIBLE_LONG_ZONE or POSSIBLE_SHORT_ZONE.
+
+The final synthesizer must obey this priority order even if the bull case is strong.
+
+⸻
+
+11. Agent Orchestrator
+
+Create:
+
+agent_orchestrator.py
+
+Responsibilities:
+
+1. Accept one structured copilot event.
+2. Run deterministic agent functions first.
+3. Optionally run LLM-assisted interpretation if enabled.
+4. Run:
+    * technical agent
+    * pattern agent
+    * regime agent
+    * order-flow agent
+    * catalyst agent
+    * position agent
+    * memory agent
+    * bull case agent
+    * bear case agent
+    * risk critic
+    * final synthesizer
+5. Validate every output.
+6. Enforce forbidden wording filter.
+7. Enforce L5 block.
+8. Return one structured response for /api/explain.
+9. Fall back to deterministic read if any LLM component fails.
+
+Output shape:
+
+{
+  "status": "OK | FALLBACK | ERROR",
+  "source": "multi_agent_committee | deterministic_fallback",
+  "event_id": "string_or_null",
+  "symbol": "string_or_null",
+  "alert_level": "string_or_null",
+  "l5_blocked": false,
+  "agents": {
+    "technical": {},
+    "pattern_structure": {},
+    "regime": {},
+    "order_flow": {},
+    "catalyst": {},
+    "position": {},
+    "memory": {},
+    "bull_case": {},
+    "bear_case": {},
+    "risk_critic": {},
+    "final_synthesizer": {}
+  },
+  "dashboard_read": {
+    "one_sentence_read": "string",
+    "final_recommendation": "WATCH",
+    "confidence": 0.0,
+    "what_supports": [],
+    "what_argues_against": [],
+    "what_confirms": [],
+    "what_invalidates": [],
+    "position_guidance": [],
+    "risk_notes": []
+  },
+  "warnings": []
+}
+
+⸻
+
+12. Provider / Model Config
+
+Add provider config similar in spirit to TradingAgents, but simple and safe.
+
+Config keys:
+
+{
+  "use_llm_agents": false,
+  "quick_think_llm": "string_or_null",
+  "deep_think_llm": "string_or_null",
+  "max_debate_rounds": 1
+}
+
+Rules:
+
+* Use quick model for L1/L2/L3.
+* Use deep model only for:
+    * L4/L5
+    * position invalidation
+    * journal review
+    * risk critic escalation
+* Default must be safe if no LLM key exists.
+* If provider fails, use deterministic fallback.
+* Provider abstraction should support future OpenAI / Anthropic / mock providers.
+* Do not hardcode API keys.
+* Tests must not require live LLM calls.
+
+⸻
+
+13. Strategy Lab
+
+Create:
+
+strategy_lab.py
+strategy_registry.json
+
+Goal:
+
+Create a research layer that separates primary edge hypotheses from intraday entry-refinement features.
+
+Definitions:
+
+Primary edge hypothesis = documented or testable market anomaly/context that may create positive expectancy.
+Entry refinement feature = intraday trigger used only to time or filter an entry.
+LLM analyst = explanation layer only.
+
+Initial strategies:
+
+POST_EARNINGS_DRIFT
+RELATIVE_STRENGTH_MOMENTUM
+GAP_CONTINUATION
+GAP_FADE
+OPENING_RANGE_BREAKOUT
+OPENING_RANGE_FAILURE
+VOLATILITY_COMPRESSION_BREAKOUT
+
+Reclassify these as entry-refinement features, not primary edge:
+
+liquidity_sweep
+FVG
+BOS
+CHOCH
+higher_low
+lower_high
+VWAP_reclaim
+VWAP_loss
+ORB_retest
+
+Strategy registry fields:
+
+{
+  "hypothesis_name": "string",
+  "primary_edge_type": "string",
+  "required_data": [],
+  "universe": "string",
+  "setup_conditions": [],
+  "entry_refinement_features": [],
+  "invalidation_rules": [],
+  "target_rules": [],
+  "holding_period": "string",
+  "cost_model": {},
+  "minimum_sample_count": 0,
+  "validation_status": "unproven"
+}
+
+Strategy reports compute:
+
+* sample_count
+* win_rate
+* average_R
+* expectancy_R
+* profit_factor
+* max_drawdown_R
+* MFE
+* MAE
+* time_to_target
+* time_to_stop
+* best_regime
+* worst_regime
+* best_time_window
+* worst_time_window
+* forward_journal_count
+* validation_status
+
+Rules:
+
+* No hand-typed credibility can create validation.
+* Strategy can only be trusted if measured edge exists.
+* Intraday entry refinement cannot be promoted unless the primary edge context is measured.
+* Below sample threshold = paper_pending.
+* Historical-only success = backtested_only.
+* Forward journal success required for paper_validated.
+* CURRENT_PRICE_ASSUMED exits do not count.
+* MANUAL_CONFIRMED trades only count toward forward validation.
+
+⸻
+
+14. Replay Mode
+
+Create:
+
+replay.py
+replay_data.py
+replay_session.py
+
+API endpoints:
+
+GET  /api/replay/status
+POST /api/replay/load
+POST /api/replay/start
+POST /api/replay/pause
+POST /api/replay/step
+POST /api/replay/speed
+POST /api/replay/stop
+
+Replay behavior:
+
+1. User selects symbol and historical date.
+2. Load historical intraday bars.
+3. Optional: load historical trades and quotes if available.
+4. Replay begins at market open or premarket if data exists.
+5. Each replay tick/bar passes into the same deterministic copilot pipeline used by live mode.
+6. Dashboard updates exactly like live mode.
+7. /api/explain works on the replay event.
+8. Position tracking and Close & Journal work in replay mode.
+9. Journal records include replay metadata.
+10. Replay events are not mixed with live events unless explicitly selected.
+
+Data source rules:
+
+* First support local CSV/JSON historical bars so tests do not require API keys.
+* Add adapter hooks for Alpaca historical bars later.
+* Add adapter hooks for Polygon trades/quotes later.
+* Tests must use fixture data only.
+
+Replay panel:
+
+* Symbol input
+* Date input
+* Load button
+* Start
+* Pause
+* Step
+* Speed: 1x / 5x / 10x / 30x
+* Current replay timestamp
+* Replay mode badge
+* Data source badge
+
+Safety:
+
+* Replay is simulation/practice only.
+* Do not add broker execution.
+* Do not add simulated exchange execution.
+* Do not add paper order execution.
+* User may journal manual decisions only.
+
+⸻
+
+15. Edge Scoreboard
+
+Create:
+
+edge_scoreboard.py
+
+Dashboard panel should show:
+
+* proven / promising / unproven / no-edge strategies
+* primary edge
+* entry refinement used
+* sample count
+* expectancy R
+* profit factor
+* max drawdown R
+* forward confirmation status
+* warning if strategy is folklore-only
+* best trigger stacks
+* worst trigger stacks
+* best regimes
+* worst regimes
+* best time windows
+* worst time windows
+* insufficient sample warnings
+
+Validation statuses:
+
+unproven
+paper_pending
+backtested_only
+backtested_pending_forward
+paper_validated
+no_edge
+insufficient_sample
+
+Rules:
+
+* LLM can explain scoreboard results but cannot validate them.
+* All calculations deterministic.
+* No trigger stack becomes trusted from hand-typed credibility alone.
+* Journal confidence matters.
+
+⸻
+
+16. Journal / Validation Hardening
+
+Journal outcome confidence labels:
+
+MANUAL_CONFIRMED
+MANUAL_ESTIMATED
+CURRENT_PRICE_ASSUMED
+WATCH_ONLY
+INVALID_SAMPLE
+
+Rules:
+
+* Only MANUAL_CONFIRMED can count toward edge promotion.
+* CURRENT_PRICE_ASSUMED can be stored but cannot promote edge.
+* Watched/ignored alerts do not count as trade expectancy.
+* Separate:
+    * alert quality
+    * trade quality
+    * avoidance quality
+    * execution quality
+    * LLM usefulness
+    * market-quality warning accuracy
+
+Add validation thresholds:
+
+* minimum backtest sample count
+* minimum forward sample count
+* minimum expectancy R
+* minimum profit factor
+* maximum drawdown R limit
+* regime consistency check
+* abnormal session exclusion
+
+Backtest strength must never compensate for insufficient forward samples.
+
+⸻
+
+17. Feed Quality Layer
+
+Add or extend feed-quality logic.
+
+Track:
+
+* data source
+* quote age
+* bar age
+* missing bid/ask
+* spread bps
+* data completeness
+* stale quote flag
+* market-quality verdict
+* live vs replay mode
+* IEX / Alpaca / Polygon / local fixture source
+
+Dashboard Feed Quality Panel:
+
+Source
+Mode
+Quote age
+Bar age
+Spread bps
+Completeness
+Market-quality verdict
+Data warnings
+
+If feed quality is poor, risk critic must downgrade or block depending on severity.
+
+⸻
+
+18. Dashboard Design
+
+Upgrade dashboard without breaking existing behavior.
+
+18.1 Top Header
+
+Show:
+
+Trading Desk Copilot
+Mode: LIVE / REPLAY / RESEARCH
+Symbol
+Current timestamp
+Data source
+System health
+LLM status
+Replay badge if active
+
+18.2 Live Board
+
+Cards:
+
+* symbol
+* alert level
+* final recommendation
+* trigger stack
+* validation status
+* credibility
+* market-quality verdict
+* risk/reward preview
+* timestamp
+* status badge
+
+18.3 Analyst Committee Panel
+
+Show each agent card:
+
+* Technical
+* Pattern / Structure
+* Regime
+* Order Flow
+* Catalyst
+* Position
+* Memory
+* Bull Case
+* Bear Case
+* Risk Critic
+* Final Synthesizer
+
+Each card should show:
+
+* status
+* bias/verdict
+* confidence
+* top supporting factors
+* warnings
+
+18.4 Final Read Panel
+
+Show:
+
+* one-sentence read
+* final recommendation badge
+* confidence
+* what supports
+* what argues against
+* what confirms
+* what invalidates
+* position guidance
+* risk notes
+
+Must never show forbidden language.
+
+18.5 Position Panel
+
+Controls:
+
+* Start tracking position
+* Direction
+* Entry
+* Stop / invalidation
+* Target
+* Current R
+* Thesis status
+* Update position
+* Clear position
+* Close & Journal
+
+Position status:
+
+* FLAT
+* IN_POSITION
+* THESIS_VALID
+* THESIS_WEAKENING
+* EXIT_WARNING
+* THESIS_INVALIDATED
+* DO_NOT_ADD
+
+18.6 Replay Panel
+
+Controls:
+
+* Symbol
+* Date
+* Load
+* Start
+* Pause
+* Step
+* Speed 1x/5x/10x/30x
+* Stop
+
+Display:
+
+* replay timestamp
+* replay data source
+* replay progress
+* current replay bar
+* replay mode badge
+
+18.7 Journal Panel
+
+Show:
+
+* last journaled trade
+* result R
+* confidence label
+* setup stack
+* mode LIVE/REPLAY
+* notes
+* mistake tags
+* followed plan yes/no
+
+Actions:
+
+* mark watched
+* mark ignored
+* manually tracked
+* skipped due to risk
+* skipped due to uncertainty
+* false alert
+* good alert
+* close & journal
+
+18.8 Edge Scoreboard
+
+Show:
+
+* best strategies
+* worst strategies
+* unproven strategies
+* no-edge strategies
+* paper-pending strategies
+* sample count
+* expectancy R
+* profit factor
+* max drawdown R
+* forward confirmation status
+
+18.9 Feed Quality Panel
+
+Show:
+
+* source
+* mode
+* quote age
+* bar age
+* spread bps
+* missing bid/ask
+* completeness
+* stale warning
+* gate verdict
+
+18.10 History Log
+
+Each historical event card should show:
+
+* timestamp
+* symbol
+* mode
+* alert level
+* final recommendation
+* trigger stack
+* validation
+* market-quality verdict
+* journal status
+* button: Track position from this alert
+* button: Explain
+* button: Journal outcome
+
+⸻
+
+19. API Endpoints
+
+Add or preserve:
+
+GET  /api/copilot
+GET  /api/explain
+POST /api/copilot_eval
+GET  /api/journal
+POST /api/journal_close
+GET  /api/replay/status
+POST /api/replay/load
+POST /api/replay/start
+POST /api/replay/pause
+POST /api/replay/step
+POST /api/replay/speed
+POST /api/replay/stop
+GET  /api/edge_scoreboard
+GET  /api/strategy_lab
+GET  /api/feed_quality
+
+Rules:
+
+* Existing endpoints must remain backward compatible.
+* If dashboard expects legacy fields, preserve them or map new output into old fields.
+* All JSON returned by APIs must be valid JSON.
+* Sanitize NaN, Infinity, and -Infinity to null or safe display fields.
+* Do not allow API calls to create orders.
+
+⸻
+
+20. L5 Block Rule
+
+Non-negotiable.
+
+If event includes:
+
+* L5 block
+* deterministic block
+* quote/spread block
+* stale quote block
+* hard risk block
+* data failure block
+
+Then:
+
+* Risk critic must output risk_verdict: "BLOCK".
+* Final recommendation must be one of:
+    * AVOID
+    * DO_NOT_ADD
+    * THESIS_INVALIDATED
+    * EXIT_WARNING
+
+No agent may soften this into:
+
+* WATCH
+* WAIT
+* POSSIBLE_LONG_ZONE
+* POSSIBLE_SHORT_ZONE
+* THESIS_VALID
+
+Add explicit tests.
+
+⸻
+
+21. Tests to Add
+
+Add tests for:
+
+1. Every agent returns schema-valid JSON.
+2. Order-flow agent returns UNAVAILABLE when no OFI data exists.
+3. Catalyst agent returns NO_CATALYST_DATA when no catalyst data exists.
+4. Memory agent returns INSUFFICIENT_SAMPLE when journal data is thin.
+5. Bull and bear agents cannot invent unsupported facts.
+6. Risk critic downgrades weak validation.
+7. Risk critic downgrades bad spread.
+8. Risk critic downgrades poor R:R.
+9. Final synthesizer uses only approved recommendation enums.
+10. L5 block cannot be softened.
+11. Forbidden wording cannot render.
+12. /api/explain returns multi-agent output.
+13. Existing deterministic fallback still works.
+14. No broker execution code is added.
+15. No simulated exchange code is added.
+16. No portfolio-manager order approval code is added.
+17. LLM failure returns deterministic fallback.
+18. Missing LLM key returns deterministic fallback.
+19. Position agent uses position-safe language.
+20. Catalyst and order-flow agents do not invent missing data.
+21. Replay load works with fixture data.
+22. Replay start/pause/step/speed/stop works.
+23. Replay does not require API keys.
+24. Replay journal entries are marked REPLAY.
+25. Live and replay events are separated.
+26. Strategy Lab separates primary edge from entry refinement.
+27. ICT/FVG/liquidity sweep cannot become proven edge from hand-typed credibility.
+28. Edge Scoreboard computes expectancy and sample counts.
+29. CURRENT_PRICE_ASSUMED exits do not count toward promotion.
+30. MANUAL_CONFIRMED trades can count toward promotion.
+31. API JSON sanitizes NaN and Infinity.
+32. Dashboard-rendered analyst text passes forbidden-language scanner.
+
+Use mock events and fixture data only. Tests must not require live API keys.
+
+⸻
+
+22. Verification Commands
+
+Run:
+
+python -m pytest -q
+
+Run safety grep:
+
+grep -R "submit_order\|place_order\|execute_trade\|simulated exchange\|transaction approval\|portfolio manager approval" . --exclude-dir=.git
+
+The grep must not show newly added execution paths.
+
+Check forbidden UI language through tests, not only raw grep. Test fixtures may contain banned phrases only when clearly isolated as banned-word tests.
+
+⸻
+
+23. Required Final Report
+
+When finished, report in this exact format:
+
+## Verified Current Architecture
+## Files Added
+## Files Modified
+## Agent Flow Implemented
+## Replay Mode Implemented
+## Strategy Lab Implemented
+## Dashboard Changes
+## API Changes
+## Safety Constraints Enforced
+## L5 Block Enforcement
+## Journal / Validation Changes
+## Edge Scoreboard
+## Tests Added
+## Verification Results
+## Known Limitations
+## Final Status
+
+Do not claim completion unless tests pass.
+
+If tests fail, report exact failing tests and why.
+
+If any requirement cannot be safely implemented because the current project structure differs, make the smallest safe adjustment and explain the verified reason.
+
+⸻
+
+24. Final Product Vision
+
+The final system should be:
+
+A retail evidence-based AI trading research terminal.
+
+Not:
+
+An autonomous trading bot.
+
+The strongest architecture is:
+
+deterministic copilot event
++ live/replay data modes
++ TradingAgents-style analyst committee
++ QuantAgent-style intraday reads
++ risk critic
++ Strategy Lab
++ Edge Scoreboard
++ journal validation
++ no execution
+
+The system’s purpose is to:
+
+* reduce impulsive trading
+* expose weak setups
+* track position thesis
+* measure whether trigger stacks work
+* separate folklore from measured edge
+* provide replay practice
+* build personal evidence from journaled outcomes
+* improve decision discipline
+
+The system must not pretend that LLM analysis equals alpha.
+
+Rule:
+
+No measured edge, no trust.
