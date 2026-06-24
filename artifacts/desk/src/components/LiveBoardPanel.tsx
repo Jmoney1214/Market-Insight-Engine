@@ -1,10 +1,11 @@
 import { 
   CopilotEvent,
   DashboardReadRecommendation,
-  useListValidationStates,
-  getListValidationStatesQueryKey
+  useGetScoreboard,
+  getGetScoreboardQueryKey
 } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
+import { validationStatusClass, validationStatusLabel } from "@/lib/validation-status";
 
 interface LiveBoardPanelProps {
   event?: CopilotEvent;
@@ -14,8 +15,8 @@ interface LiveBoardPanelProps {
 }
 
 export function LiveBoardPanel({ event, recommendation, isLoading, isError }: LiveBoardPanelProps) {
-  const { data: validations } = useListValidationStates({
-    query: { queryKey: getListValidationStatesQueryKey() }
+  const { data: scores } = useGetScoreboard({
+    query: { queryKey: getGetScoreboardQueryKey() }
   });
 
   if (isLoading) {
@@ -47,7 +48,7 @@ export function LiveBoardPanel({ event, recommendation, isLoading, isError }: Li
   const date = new Date(timestamp);
   const timeStr = isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString();
 
-  const strategyValidation = validations?.find(v => v.strategyName === triggerStack?.stackName);
+  const strategyScore = scores?.find(s => s.hypothesisName === triggerStack?.stackName);
 
   return (
     <div className="flex flex-col h-full font-mono text-sm divide-y divide-border overflow-y-auto">
@@ -77,9 +78,9 @@ export function LiveBoardPanel({ event, recommendation, isLoading, isError }: Li
       <div className="p-3 space-y-3">
         <div className="flex justify-between items-end mb-1">
           <div className="text-xs font-bold text-muted-foreground">TRIGGER STACK</div>
-          {strategyValidation && (
-            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/50 text-primary">
-              {strategyValidation.validationStatus.replace(/_/g, " ")}
+          {strategyScore && (
+            <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 ${validationStatusClass(strategyScore.validationStatus)}`}>
+              {validationStatusLabel(strategyScore.validationStatus)}
             </Badge>
           )}
         </div>

@@ -5,20 +5,26 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
-import type { StrategyRegistryEntryDefinition } from './strategyRegistryEntryDefinition';
-import type { StrategyRegistryEntryValidationStatus } from './strategyRegistryEntryValidationStatus';
+import type { CostModel } from './costModel';
+import type { StrategyRegistryEntryCategory } from './strategyRegistryEntryCategory';
 
+/**
+ * A Strategy Lab definition — a primary-edge hypothesis or a non-promotable entry-refinement feature.
+ */
 export interface StrategyRegistryEntry {
-  id: number;
   hypothesisName: string;
   primaryEdgeType: string;
-  /** @nullable */
-  universe?: string | null;
-  /** @nullable */
-  holdingPeriod?: string | null;
+  category: StrategyRegistryEntryCategory;
+  promotable: boolean;
+  requiredData: string[];
+  universe: string;
+  setupConditions: string[];
+  entryRefinementFeatures: string[];
+  invalidationRules: string[];
+  targetRules: string[];
+  holdingPeriod: string;
+  costModel: CostModel;
   minimumSampleCount: number;
-  validationStatus: StrategyRegistryEntryValidationStatus;
-  definition: StrategyRegistryEntryDefinition;
-  createdAt: string;
-  updatedAt: string;
+  /** @nullable */
+  note: string | null;
 }

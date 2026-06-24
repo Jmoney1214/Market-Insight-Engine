@@ -25,13 +25,12 @@ import { PositionPanel } from "@/components/PositionPanel";
 import { HistoryLogPanel } from "@/components/HistoryLogPanel";
 import { ChartPanel } from "@/components/ChartPanel";
 import { ReplayBar } from "@/components/ReplayBar";
+import { MeasurementDrawer } from "@/components/MeasurementDrawer";
 
 const MODES = ["LIVE", "REPLAY", "RESEARCH"] as const;
 // LIVE is intentionally never built (permanent no-trading constraint). REPLAY
 // and RESEARCH are the two interactive, research-only modes.
 const AVAILABLE_MODES = new Set(["REPLAY", "RESEARCH"]);
-
-const PHASE6_PANELS = ["STRATEGY LAB", "EDGE SCOREBOARD", "JOURNAL"] as const;
 
 export default function Terminal() {
   const { symbol, source, setSymbol, setSource } = useTerminalStore();
@@ -383,7 +382,7 @@ export default function Terminal() {
         </div>
       </main>
 
-      {/* Footer: replay transport (Phase 5) + Phase 6 placeholders. */}
+      {/* Footer: replay transport + measurement subsystem drawer triggers. */}
       <footer className="h-9 border-t border-border bg-card/50 flex items-center px-4 justify-between shrink-0 font-mono text-[10px] gap-4">
         {isReplay ? (
           <ReplayBar
@@ -409,18 +408,7 @@ export default function Terminal() {
           </button>
         )}
 
-        <div className="flex items-center gap-2 shrink-0">
-          {PHASE6_PANELS.map((label) => (
-            <span
-              key={label}
-              title={`${label} — coming in a later phase`}
-              className="border border-dashed border-border rounded px-2 py-0.5 text-muted-foreground/50 uppercase tracking-wider"
-            >
-              {label}
-              <span className="ml-1 text-muted-foreground/40">· PHASE 6</span>
-            </span>
-          ))}
-        </div>
+        <MeasurementDrawer event={event} />
       </footer>
     </div>
   );

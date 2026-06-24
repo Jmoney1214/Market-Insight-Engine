@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type StrategyRegistryEntryValidationStatus = typeof StrategyRegistryEntryValidationStatus[keyof typeof StrategyRegistryEntryValidationStatus];
+export type EdgeScoreValidationStatus = typeof EdgeScoreValidationStatus[keyof typeof EdgeScoreValidationStatus];
 
 
-export const StrategyRegistryEntryValidationStatus = {
+export const EdgeScoreValidationStatus = {
   unproven: 'unproven',
   paper_pending: 'paper_pending',
   backtested_only: 'backtested_only',

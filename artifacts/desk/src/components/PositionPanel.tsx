@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
   useCreateJournalEntry,
+  getListJournalEntriesQueryKey,
+  getGetScoreboardQueryKey,
   type CopilotEvent,
 } from "@workspace/api-client-react";
+import { buildCloseOutcome } from "@/lib/journal-actions";
 
 interface PositionPanelProps {
   /** The active copilot event, used to tag archived tracking notes. */
@@ -34,8 +38,15 @@ const defaultState: PositionState = {
 
 export function PositionPanel({ event }: PositionPanelProps) {
   const [pos, setPos] = useState<PositionState>(defaultState);
+  // Default to the conservative confidence: a close is only an estimate from the
+  // current price unless the trader explicitly confirms a real fill. Only a
+  // confirmed close ever counts toward the edge scoreboard.
+  const [confirmed, setConfirmed] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const createJournal = useCreateJournalEntry();
+
+  const stackName = event?.triggerStack?.stackName ?? null;
 
   useEffect(() => {
     const saved = localStorage.getItem("desk-position");
@@ -54,6 +65,12 @@ export function PositionPanel({ event }: PositionPanelProps) {
   const updateField = (field: keyof PositionState, value: any) => {
     save({ ...pos, [field]: value });
   };
+
+  const invalidateMeasurement = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListJournalEntriesQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getGetScoreboardQueryKey() }),
+    ]);
 
   const handleJournal = async () => {
     if (!event) {
@@ -80,6 +97,7 @@ export function PositionPanel({ event }: PositionPanelProps) {
           manualOutcome: { ...pos },
         },
       });
+      await invalidateMeasurement();
       toast({
         title: "Tracking note archived",
         description: `${event.symbol} • ${event.mode} • ${
@@ -92,6 +110,74 @@ export function PositionPanel({ event }: PositionPanelProps) {
     } catch {
       toast({
         title: "Could not archive note",
+        description: "Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
+
+  // CLOSE & JOURNAL records a scoreable outcome. It is refused unless the active
+  // read carries a named primary-edge trigger AND a finite R is entered, so we
+  // never journal a fake or unattributable sample.
+  const handleCloseAndJournal = async () => {
+    if (!event) {
+      toast({
+        title: "No active read",
+        description: "Load a symbol before closing a tracked position.",
+        duration: 3000,
+      });
+      return;
+    }
+    const outcome = buildCloseOutcome({
+      strategyName: stackName,
+      rMultiple: pos.currentR,
+      confirmed,
+      direction: pos.direction,
+    });
+    if (!outcome) {
+      toast({
+        title: "Cannot journal close",
+        description: stackName
+          ? "Enter a numeric R multiple to record an outcome."
+          : "Active read has no attributable strategy trigger.",
+        variant: "destructive",
+        duration: 4000,
+      });
+      return;
+    }
+    try {
+      await createJournal.mutateAsync({
+        data: {
+          mode: event.mode,
+          symbol: event.symbol,
+          eventTimestamp: event.timestamp,
+          eventSnapshot: {
+            alertLevel: event.alertLevel ?? null,
+            triggerStack: event.triggerStack ?? null,
+            dataSource: event.dataSource,
+            marketQuality: event.marketQuality,
+          },
+          manualOutcome: {
+            ...outcome,
+            thesisStatus: pos.thesisStatus,
+            entry: pos.entry,
+            target: pos.target,
+            invalidation: pos.invalidation,
+          },
+        },
+      });
+      await invalidateMeasurement();
+      save(defaultState);
+      setConfirmed(false);
+      toast({
+        title: "Position closed & journaled",
+        description: `${event.symbol} • ${outcome.rMultiple.toFixed(2)}R • ${outcome.outcomeConfidence.replace(/_/g, " ")}`,
+        duration: 3500,
+      });
+    } catch {
+      toast({
+        title: "Could not journal close",
         description: "Please try again.",
         variant: "destructive",
         duration: 3000,
@@ -197,7 +283,47 @@ export function PositionPanel({ event }: PositionPanelProps) {
               </div>
             </div>
 
-            <div className="pt-2 flex flex-col gap-2">
+            {/* Attribution + outcome confidence for CLOSE & JOURNAL. */}
+            <div className="border-t border-border/60 pt-2 space-y-2 text-[11px]">
+              <div className="flex justify-between items-center">
+                <span className="text-muted-foreground">STRATEGY</span>
+                <span className="truncate text-right" title={stackName ?? ""}>
+                  {stackName ?? "— (no trigger)"}
+                </span>
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer text-muted-foreground">
+                <input
+                  type="checkbox"
+                  className="accent-primary"
+                  checked={confirmed}
+                  onChange={(e) => setConfirmed(e.target.checked)}
+                />
+                <span>
+                  Confirmed fill{" "}
+                  <span className="text-muted-foreground/60">
+                    ({confirmed ? "MANUAL_CONFIRMED" : "CURRENT_PRICE_ASSUMED"})
+                  </span>
+                </span>
+              </label>
+            </div>
+
+            <div className="pt-1 flex flex-col gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-xs font-mono border-success/60 text-success hover:bg-success/10"
+                onClick={handleCloseAndJournal}
+                disabled={!event || !stackName || createJournal.isPending}
+                title={
+                  !event
+                    ? "No active read loaded"
+                    : !stackName
+                    ? "Active read has no attributable strategy trigger"
+                    : "Close the position and record a scoreable outcome"
+                }
+              >
+                {createJournal.isPending ? "JOURNALING…" : "CLOSE & JOURNAL"}
+              </Button>
               <Button 
                 variant="outline" 
                 size="sm" 

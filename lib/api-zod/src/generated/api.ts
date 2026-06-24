@@ -416,22 +416,31 @@ export const DeleteJournalEntryParams = zod.object({
  * @summary List strategy registry entries
  */
 export const ListStrategiesResponseItem = zod.object({
-  "id": zod.number(),
   "hypothesisName": zod.string(),
   "primaryEdgeType": zod.string(),
-  "universe": zod.string().nullish(),
-  "holdingPeriod": zod.string().nullish(),
+  "category": zod.enum(['primary_edge', 'entry_refinement']),
+  "promotable": zod.boolean(),
+  "requiredData": zod.array(zod.string()),
+  "universe": zod.string(),
+  "setupConditions": zod.array(zod.string()),
+  "entryRefinementFeatures": zod.array(zod.string()),
+  "invalidationRules": zod.array(zod.string()),
+  "targetRules": zod.array(zod.string()),
+  "holdingPeriod": zod.string(),
+  "costModel": zod.object({
+  "commissionPerShare": zod.number(),
+  "slippageBps": zod.number(),
+  "spreadBps": zod.number()
+}),
   "minimumSampleCount": zod.number(),
-  "validationStatus": zod.enum(['unproven', 'paper_pending', 'backtested_only', 'backtested_pending_forward', 'paper_validated', 'no_edge', 'insufficient_sample']),
-  "definition": zod.record(zod.string(), zod.unknown()),
-  "createdAt": zod.string(),
-  "updatedAt": zod.string()
-})
+  "note": zod.string().nullable()
+}).describe('A Strategy Lab definition — a primary-edge hypothesis or a non-promotable entry-refinement feature.')
 export const ListStrategiesResponse = zod.array(ListStrategiesResponseItem)
 
 
 /**
- * @summary List strategy validation states
+ * Compatibility adapter that projects the deterministic edge scoreboard into the legacy validation-state shape. Prefer GET /copilot/scoreboard.
+ * @summary Deprecated: strategy validation states (projection of the edge scoreboard)
  */
 export const ListValidationStatesResponseItem = zod.object({
   "id": zod.number(),
@@ -442,6 +451,36 @@ export const ListValidationStatesResponseItem = zod.object({
   "updatedAt": zod.string()
 })
 export const ListValidationStatesResponse = zod.array(ListValidationStatesResponseItem)
+
+
+/**
+ * @summary Deterministic edge scoreboard computed from journaled outcomes
+ */
+export const GetScoreboardResponseItem = zod.object({
+  "hypothesisName": zod.string(),
+  "primaryEdgeType": zod.string(),
+  "validationStatus": zod.enum(['unproven', 'paper_pending', 'backtested_only', 'backtested_pending_forward', 'paper_validated', 'no_edge', 'insufficient_sample']),
+  "sampleCount": zod.number(),
+  "countableSampleCount": zod.number(),
+  "forwardSampleCount": zod.number(),
+  "paperSampleCount": zod.number(),
+  "backtestSampleCount": zod.number(),
+  "winRate": zod.number().nullable(),
+  "averageR": zod.number().nullable(),
+  "expectancyR": zod.number().nullable(),
+  "profitFactor": zod.number().nullable(),
+  "maxDrawdownR": zod.number().nullable(),
+  "avgMfeR": zod.number().nullable(),
+  "avgMaeR": zod.number().nullable(),
+  "avgTimeToTargetBars": zod.number().nullable(),
+  "avgTimeToStopBars": zod.number().nullable(),
+  "bestRegime": zod.string().nullable(),
+  "worstRegime": zod.string().nullable(),
+  "bestTimeWindow": zod.string().nullable(),
+  "worstTimeWindow": zod.string().nullable(),
+  "note": zod.string().nullable()
+}).describe('Deterministic measured edge metrics + validation status for one primary-edge hypothesis.')
+export const GetScoreboardResponse = zod.array(GetScoreboardResponseItem)
 
 
 /**

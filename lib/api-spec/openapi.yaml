@@ -331,7 +331,10 @@ paths:
     get:
       operationId: listValidationStates
       tags: [copilot]
-      summary: List strategy validation states
+      summary: "Deprecated: strategy validation states (projection of the edge scoreboard)"
+      description: >-
+        Compatibility adapter that projects the deterministic edge scoreboard into
+        the legacy validation-state shape. Prefer GET /copilot/scoreboard.
       responses:
         "200":
           description: Validation states
@@ -341,6 +344,21 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ValidationState"
+
+  /copilot/scoreboard:
+    get:
+      operationId: getScoreboard
+      tags: [copilot]
+      summary: Deterministic edge scoreboard computed from journaled outcomes
+      responses:
+        "200":
+          description: Edge scores, one row per primary-edge hypothesis
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeScore"
 
   /copilot/history:
     get:
@@ -1370,30 +1388,107 @@ components:
         notes:
           type: string
 
+    CostModel:
+      type: object
+      required: [commissionPerShare, slippageBps, spreadBps]
+      properties:
+        commissionPerShare:
+          type: number
+        slippageBps:
+          type: number
+        spreadBps:
+          type: number
+
     StrategyRegistryEntry:
       type: object
+      description: A Strategy Lab definition — a primary-edge hypothesis or a non-promotable entry-refinement feature.
       required:
-        - id
         - hypothesisName
         - primaryEdgeType
+        - category
+        - promotable
+        - requiredData
+        - universe
+        - setupConditions
+        - entryRefinementFeatures
+        - invalidationRules
+        - targetRules
+        - holdingPeriod
+        - costModel
         - minimumSampleCount
-        - validationStatus
-        - definition
-        - createdAt
-        - updatedAt
+        - note
       properties:
-        id:
-          type: integer
         hypothesisName:
           type: string
         primaryEdgeType:
           type: string
+        category:
+          type: string
+          enum: [primary_edge, entry_refinement]
+        promotable:
+          type: boolean
+        requiredData:
+          type: array
+          items:
+            type: string
         universe:
-          type: ["string", "null"]
+          type: string
+        setupConditions:
+          type: array
+          items:
+            type: string
+        entryRefinementFeatures:
+          type: array
+          items:
+            type: string
+        invalidationRules:
+          type: array
+          items:
+            type: string
+        targetRules:
+          type: array
+          items:
+            type: string
         holdingPeriod:
-          type: ["string", "null"]
+          type: string
+        costModel:
+          $ref: "#/components/schemas/CostModel"
         minimumSampleCount:
           type: integer
+        note:
+          type: ["string", "null"]
+
+    EdgeScore:
+      type: object
+      description: Deterministic measured edge metrics + validation status for one primary-edge hypothesis.
+      required:
+        - hypothesisName
+        - primaryEdgeType
+        - validationStatus
+        - sampleCount
+        - countableSampleCount
+        - forwardSampleCount
+        - paperSampleCount
+        - backtestSampleCount
+        - winRate
+        - averageR
+        - expectancyR
+        - profitFactor
+        - maxDrawdownR
+        - avgMfeR
+        - avgMaeR
+        - avgTimeToTargetBars
+        - avgTimeToStopBars
+        - bestRegime
+        - worstRegime
+        - bestTimeWindow
+        - worstTimeWindow
+        - note
+      properties:
+        hypothesisName:
+          type: string
+        primaryEdgeType:
+          type: string
         validationStatus:
           type: string
           enum:
@@ -1404,13 +1499,44 @@ components:
             - paper_validated
             - no_edge
             - insufficient_sample
-        definition:
-          type: object
-          additionalProperties: true
-        createdAt:
-          type: string
-        updatedAt:
-          type: string
+        sampleCount:
+          type: integer
+        countableSampleCount:
+          type: integer
+        forwardSampleCount:
+          type: integer
+        paperSampleCount:
+          type: integer
+        backtestSampleCount:
+          type: integer
+        winRate:
+          type: ["number", "null"]
+        averageR:
+          type: ["number", "null"]
+        expectancyR:
+          type: ["number", "null"]
+        profitFactor:
+          type: ["number", "null"]
+        maxDrawdownR:
+          type: ["number", "null"]
+        avgMfeR:
+          type: ["number", "null"]
+        avgMaeR:
+          type: ["number", "null"]
+        avgTimeToTargetBars:
+          type: ["number", "null"]
+        avgTimeToStopBars:
+          type: ["number", "null"]
+        bestRegime:
+          type: ["string", "null"]
+        worstRegime:
+          type: ["string", "null"]
+        bestTimeWindow:
+          type: ["string", "null"]
+        worstTimeWindow:
+          type: ["string", "null"]
+        note:
+          type: ["string", "null"]
 
     ValidationState:
       type: object

@@ -6,4 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type StrategyRegistryEntryDefinition = { [key: string]: unknown };
+export interface CostModel {
+  commissionPerShare: number;
+  slippageBps: number;
+  spreadBps: number;
+}

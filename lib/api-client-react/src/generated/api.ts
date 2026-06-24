@@ -25,6 +25,7 @@ import type {
   CommitteeRead,
   CopilotEvent,
   CopilotHealth,
+  EdgeScore,
   ExplainCopilotEventParams,
   ExplainReplayEventParams,
   GetCopilotEventParams,
@@ -1199,7 +1200,8 @@ export const getListValidationStatesUrl = () => {
 }
 
 /**
- * @summary List strategy validation states
+ * Compatibility adapter that projects the deterministic edge scoreboard into the legacy validation-state shape. Prefer GET /copilot/scoreboard.
+ * @summary Deprecated: strategy validation states (projection of the edge scoreboard)
  */
 export const listValidationStates = async ( options?: RequestInit): Promise<ValidationState[]> => {
 
@@ -1246,7 +1248,7 @@ export type ListValidationStatesQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List strategy validation states
+ * @summary Deprecated: strategy validation states (projection of the edge scoreboard)
  */
 
 export function useListValidationStates<TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<unknown>>(
@@ -1255,6 +1257,83 @@ export function useListValidationStates<TData = Awaited<ReturnType<typeof listVa
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListValidationStatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetScoreboardUrl = () => {
+
+
+
+
+  return `/api/copilot/scoreboard`
+}
+
+/**
+ * @summary Deterministic edge scoreboard computed from journaled outcomes
+ */
+export const getScoreboard = async ( options?: RequestInit): Promise<EdgeScore[]> => {
+
+  return customFetch<EdgeScore[]>(getGetScoreboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetScoreboardQueryKey = () => {
+    return [
+    `/api/copilot/scoreboard`
+    ] as const;
+    }
+
+
+export const getGetScoreboardQueryOptions = <TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetScoreboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getScoreboard>>> = ({ signal }) => getScoreboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetScoreboardQueryResult = NonNullable<Awaited<ReturnType<typeof getScoreboard>>>
+export type GetScoreboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Deterministic edge scoreboard computed from journaled outcomes
+ */
+
+export function useGetScoreboard<TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetScoreboardQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

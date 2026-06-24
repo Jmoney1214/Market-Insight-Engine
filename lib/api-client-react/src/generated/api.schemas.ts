@@ -730,10 +730,45 @@ export interface JournalEntryInput {
   notes?: string;
 }
 
-export type StrategyRegistryEntryValidationStatus = typeof StrategyRegistryEntryValidationStatus[keyof typeof StrategyRegistryEntryValidationStatus];
+export interface CostModel {
+  commissionPerShare: number;
+  slippageBps: number;
+  spreadBps: number;
+}
+
+export type StrategyRegistryEntryCategory = typeof StrategyRegistryEntryCategory[keyof typeof StrategyRegistryEntryCategory];
 
 
-export const StrategyRegistryEntryValidationStatus = {
+export const StrategyRegistryEntryCategory = {
+  primary_edge: 'primary_edge',
+  entry_refinement: 'entry_refinement',
+} as const;
+
+/**
+ * A Strategy Lab definition — a primary-edge hypothesis or a non-promotable entry-refinement feature.
+ */
+export interface StrategyRegistryEntry {
+  hypothesisName: string;
+  primaryEdgeType: string;
+  category: StrategyRegistryEntryCategory;
+  promotable: boolean;
+  requiredData: string[];
+  universe: string;
+  setupConditions: string[];
+  entryRefinementFeatures: string[];
+  invalidationRules: string[];
+  targetRules: string[];
+  holdingPeriod: string;
+  costModel: CostModel;
+  minimumSampleCount: number;
+  /** @nullable */
+  note: string | null;
+}
+
+export type EdgeScoreValidationStatus = typeof EdgeScoreValidationStatus[keyof typeof EdgeScoreValidationStatus];
+
+
+export const EdgeScoreValidationStatus = {
   unproven: 'unproven',
   paper_pending: 'paper_pending',
   backtested_only: 'backtested_only',
@@ -743,21 +778,46 @@ export const StrategyRegistryEntryValidationStatus = {
   insufficient_sample: 'insufficient_sample',
 } as const;
 
-export type StrategyRegistryEntryDefinition = { [key: string]: unknown };
-
-export interface StrategyRegistryEntry {
-  id: number;
+/**
+ * Deterministic measured edge metrics + validation status for one primary-edge hypothesis.
+ */
+export interface EdgeScore {
   hypothesisName: string;
   primaryEdgeType: string;
+  validationStatus: EdgeScoreValidationStatus;
+  sampleCount: number;
+  countableSampleCount: number;
+  forwardSampleCount: number;
+  paperSampleCount: number;
+  backtestSampleCount: number;
   /** @nullable */
-  universe?: string | null;
+  winRate: number | null;
   /** @nullable */
-  holdingPeriod?: string | null;
-  minimumSampleCount: number;
-  validationStatus: StrategyRegistryEntryValidationStatus;
-  definition: StrategyRegistryEntryDefinition;
-  createdAt: string;
-  updatedAt: string;
+  averageR: number | null;
+  /** @nullable */
+  expectancyR: number | null;
+  /** @nullable */
+  profitFactor: number | null;
+  /** @nullable */
+  maxDrawdownR: number | null;
+  /** @nullable */
+  avgMfeR: number | null;
+  /** @nullable */
+  avgMaeR: number | null;
+  /** @nullable */
+  avgTimeToTargetBars: number | null;
+  /** @nullable */
+  avgTimeToStopBars: number | null;
+  /** @nullable */
+  bestRegime: string | null;
+  /** @nullable */
+  worstRegime: string | null;
+  /** @nullable */
+  bestTimeWindow: string | null;
+  /** @nullable */
+  worstTimeWindow: string | null;
+  /** @nullable */
+  note: string | null;
 }
 
 export type ValidationStateValidationStatus = typeof ValidationStateValidationStatus[keyof typeof ValidationStateValidationStatus];

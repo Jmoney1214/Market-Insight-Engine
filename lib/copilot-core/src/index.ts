@@ -38,3 +38,29 @@ export {
   buildReplayInput,
 } from "./replay";
 export type { ReplaySession } from "./replay";
+
+export {
+  PRIMARY_EDGE_HYPOTHESES,
+  ENTRY_REFINEMENT_FEATURES,
+  STRATEGY_REGISTRY,
+  getStrategy,
+  isPrimaryEdge,
+  isEntryRefinement,
+  isPromotable,
+} from "./strategyLab";
+export type { StrategyDefinition, CostModel } from "./strategyLab";
+
+export {
+  DEFAULT_THRESHOLDS,
+  modeToSampleKind,
+  journalOutcomeToSample,
+  computeEdgeScore,
+  computeScoreboard,
+} from "./edgeScoreboard";
+export type {
+  OutcomeConfidence,
+  SampleKind,
+  TradeSample,
+  EdgeThresholds,
+  EdgeScore,
+} from "./edgeScoreboard";
