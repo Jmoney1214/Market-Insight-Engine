@@ -18,7 +18,7 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Triggers a full analyst report for the given ticker (returns mock data in MVP)
+ * Triggers a full analyst report for the given ticker using live market data and AI-generated analysis
  * @summary Run AI analysis on a ticker
  */
 export const AnalyzeTickerBody = zod.object({
@@ -209,5 +209,132 @@ export const AddToWatchlistBody = zod.object({
 export const RemoveFromWatchlistParams = zod.object({
   "ticker": zod.coerce.string()
 })
+
+
+/**
+ * Returns health status for the Trading Desk Copilot service
+ * @summary Copilot service health check
+ */
+export const CopilotHealthCheckResponse = zod.object({
+  "status": zod.string(),
+  "service": zod.string()
+})
+
+
+/**
+ * @summary List journal entries
+ */
+export const ListJournalEntriesResponseItem = zod.object({
+  "id": zod.number(),
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
+  "symbol": zod.string(),
+  "eventTimestamp": zod.string().nullish(),
+  "eventSnapshot": zod.record(zod.string(), zod.unknown()).nullish(),
+  "manualOutcome": zod.record(zod.string(), zod.unknown()).nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListJournalEntriesResponse = zod.array(ListJournalEntriesResponseItem)
+
+
+/**
+ * @summary Create a journal entry
+ */
+export const CreateJournalEntryBody = zod.object({
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
+  "symbol": zod.string(),
+  "eventTimestamp": zod.string().optional(),
+  "eventSnapshot": zod.record(zod.string(), zod.unknown()).optional(),
+  "manualOutcome": zod.record(zod.string(), zod.unknown()).optional(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete a journal entry
+ */
+export const DeleteJournalEntryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List strategy registry entries
+ */
+export const ListStrategiesResponseItem = zod.object({
+  "id": zod.number(),
+  "hypothesisName": zod.string(),
+  "primaryEdgeType": zod.string(),
+  "universe": zod.string().nullish(),
+  "holdingPeriod": zod.string().nullish(),
+  "minimumSampleCount": zod.number(),
+  "validationStatus": zod.enum(['unproven', 'paper_pending', 'backtested_only', 'backtested_pending_forward', 'paper_validated', 'no_edge', 'insufficient_sample']),
+  "definition": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListStrategiesResponse = zod.array(ListStrategiesResponseItem)
+
+
+/**
+ * @summary List strategy validation states
+ */
+export const ListValidationStatesResponseItem = zod.object({
+  "id": zod.number(),
+  "strategyName": zod.string(),
+  "validationStatus": zod.enum(['unproven', 'paper_pending', 'backtested_only', 'backtested_pending_forward', 'paper_validated', 'no_edge', 'insufficient_sample']),
+  "sampleCount": zod.number(),
+  "metrics": zod.record(zod.string(), zod.unknown()),
+  "updatedAt": zod.string()
+})
+export const ListValidationStatesResponse = zod.array(ListValidationStatesResponseItem)
+
+
+/**
+ * @summary List historical copilot events
+ */
+export const ListHistoryEventsResponseItem = zod.object({
+  "id": zod.number(),
+  "eventId": zod.string().nullish(),
+  "symbol": zod.string().nullish(),
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']),
+  "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullish(),
+  "eventSnapshot": zod.object({
+  "eventId": zod.string(),
+  "symbol": zod.string(),
+  "timestamp": zod.string().describe('ISO 8601 event timestamp'),
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
+  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes (e.g. fixture, yahoo_delayed)'),
+  "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullable().describe('Deterministic alert ladder level L1..L5, or null'),
+  "l5Blocked": zod.boolean().describe('True when a hard L5 safety block is active'),
+  "snapshot": zod.object({
+  "price": zod.number().nullable(),
+  "vwap": zod.number().nullable(),
+  "rvol": zod.number().nullable(),
+  "atr": zod.number().nullable(),
+  "openingRangeHigh": zod.number().nullable(),
+  "openingRangeLow": zod.number().nullable(),
+  "volumeExpansion": zod.boolean().nullable(),
+  "priceLocation": zod.string().nullable(),
+  "spread": zod.number().nullable(),
+  "change1d": zod.number().nullable()
+}),
+  "marketQuality": zod.object({
+  "spreadOk": zod.boolean().nullable(),
+  "quoteFresh": zod.boolean().nullable(),
+  "liquidityOk": zod.boolean().nullable(),
+  "notes": zod.string().nullable()
+}),
+  "triggers": zod.array(zod.object({
+  "name": zod.string(),
+  "category": zod.enum(['primary_edge', 'entry_refinement']).describe('primary_edge | entry_refinement'),
+  "detected": zod.boolean(),
+  "detail": zod.string().nullish()
+})),
+  "warnings": zod.array(zod.string())
+}).describe('Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.'),
+  "createdAt": zod.string()
+})
+export const ListHistoryEventsResponse = zod.array(ListHistoryEventsResponseItem)
 
 

@@ -212,3 +212,268 @@ export interface WatchlistInput {
   notes?: string;
 }
 
+export interface CopilotHealth {
+  status: string;
+  service: string;
+}
+
+/**
+ * LIVE | REPLAY | RESEARCH
+ */
+export type CopilotEventMode = typeof CopilotEventMode[keyof typeof CopilotEventMode];
+
+
+export const CopilotEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * Deterministic alert ladder level L1..L5, or null
+ * @nullable
+ */
+export type CopilotEventAlertLevel = typeof CopilotEventAlertLevel[keyof typeof CopilotEventAlertLevel] | null;
+
+
+export const CopilotEventAlertLevel = {
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+export interface MarketSnapshot {
+  /** @nullable */
+  price: number | null;
+  /** @nullable */
+  vwap: number | null;
+  /** @nullable */
+  rvol: number | null;
+  /** @nullable */
+  atr: number | null;
+  /** @nullable */
+  openingRangeHigh: number | null;
+  /** @nullable */
+  openingRangeLow: number | null;
+  /** @nullable */
+  volumeExpansion: boolean | null;
+  /** @nullable */
+  priceLocation: string | null;
+  /** @nullable */
+  spread: number | null;
+  /** @nullable */
+  change1d: number | null;
+}
+
+export interface MarketQuality {
+  /** @nullable */
+  spreadOk: boolean | null;
+  /** @nullable */
+  quoteFresh: boolean | null;
+  /** @nullable */
+  liquidityOk: boolean | null;
+  /** @nullable */
+  notes: string | null;
+}
+
+/**
+ * primary_edge | entry_refinement
+ */
+export type CopilotTriggerCategory = typeof CopilotTriggerCategory[keyof typeof CopilotTriggerCategory];
+
+
+export const CopilotTriggerCategory = {
+  primary_edge: 'primary_edge',
+  entry_refinement: 'entry_refinement',
+} as const;
+
+export interface CopilotTrigger {
+  name: string;
+  /** primary_edge | entry_refinement */
+  category: CopilotTriggerCategory;
+  detected: boolean;
+  /** @nullable */
+  detail?: string | null;
+}
+
+/**
+ * Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
+ */
+export interface CopilotEvent {
+  eventId: string;
+  symbol: string;
+  /** ISO 8601 event timestamp */
+  timestamp: string;
+  /** LIVE | REPLAY | RESEARCH */
+  mode: CopilotEventMode;
+  /** Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed) */
+  dataSource: string;
+  /**
+     * Deterministic alert ladder level L1..L5, or null
+     * @nullable
+     */
+  alertLevel: CopilotEventAlertLevel;
+  /** True when a hard L5 safety block is active */
+  l5Blocked: boolean;
+  snapshot: MarketSnapshot;
+  marketQuality: MarketQuality;
+  triggers: CopilotTrigger[];
+  warnings: string[];
+}
+
+/**
+ * LIVE | REPLAY | RESEARCH
+ */
+export type JournalEntryMode = typeof JournalEntryMode[keyof typeof JournalEntryMode];
+
+
+export const JournalEntryMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * @nullable
+ */
+export type JournalEntryEventSnapshot = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type JournalEntryManualOutcome = { [key: string]: unknown } | null;
+
+export interface JournalEntry {
+  id: number;
+  /** LIVE | REPLAY | RESEARCH */
+  mode: JournalEntryMode;
+  symbol: string;
+  /** @nullable */
+  eventTimestamp?: string | null;
+  /** @nullable */
+  eventSnapshot?: JournalEntryEventSnapshot;
+  /** @nullable */
+  manualOutcome?: JournalEntryManualOutcome;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+/**
+ * LIVE | REPLAY | RESEARCH
+ */
+export type JournalEntryInputMode = typeof JournalEntryInputMode[keyof typeof JournalEntryInputMode];
+
+
+export const JournalEntryInputMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+export type JournalEntryInputEventSnapshot = { [key: string]: unknown };
+
+export type JournalEntryInputManualOutcome = { [key: string]: unknown };
+
+export interface JournalEntryInput {
+  /** LIVE | REPLAY | RESEARCH */
+  mode: JournalEntryInputMode;
+  symbol: string;
+  eventTimestamp?: string;
+  eventSnapshot?: JournalEntryInputEventSnapshot;
+  manualOutcome?: JournalEntryInputManualOutcome;
+  notes?: string;
+}
+
+export type StrategyRegistryEntryValidationStatus = typeof StrategyRegistryEntryValidationStatus[keyof typeof StrategyRegistryEntryValidationStatus];
+
+
+export const StrategyRegistryEntryValidationStatus = {
+  unproven: 'unproven',
+  paper_pending: 'paper_pending',
+  backtested_only: 'backtested_only',
+  backtested_pending_forward: 'backtested_pending_forward',
+  paper_validated: 'paper_validated',
+  no_edge: 'no_edge',
+  insufficient_sample: 'insufficient_sample',
+} as const;
+
+export type StrategyRegistryEntryDefinition = { [key: string]: unknown };
+
+export interface StrategyRegistryEntry {
+  id: number;
+  hypothesisName: string;
+  primaryEdgeType: string;
+  /** @nullable */
+  universe?: string | null;
+  /** @nullable */
+  holdingPeriod?: string | null;
+  minimumSampleCount: number;
+  validationStatus: StrategyRegistryEntryValidationStatus;
+  definition: StrategyRegistryEntryDefinition;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ValidationStateValidationStatus = typeof ValidationStateValidationStatus[keyof typeof ValidationStateValidationStatus];
+
+
+export const ValidationStateValidationStatus = {
+  unproven: 'unproven',
+  paper_pending: 'paper_pending',
+  backtested_only: 'backtested_only',
+  backtested_pending_forward: 'backtested_pending_forward',
+  paper_validated: 'paper_validated',
+  no_edge: 'no_edge',
+  insufficient_sample: 'insufficient_sample',
+} as const;
+
+export type ValidationStateMetrics = { [key: string]: unknown };
+
+export interface ValidationState {
+  id: number;
+  strategyName: string;
+  validationStatus: ValidationStateValidationStatus;
+  sampleCount: number;
+  metrics: ValidationStateMetrics;
+  updatedAt: string;
+}
+
+export type HistoryEventMode = typeof HistoryEventMode[keyof typeof HistoryEventMode];
+
+
+export const HistoryEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * @nullable
+ */
+export type HistoryEventAlertLevel = typeof HistoryEventAlertLevel[keyof typeof HistoryEventAlertLevel] | null;
+
+
+export const HistoryEventAlertLevel = {
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+export interface HistoryEvent {
+  id: number;
+  /** @nullable */
+  eventId?: string | null;
+  /** @nullable */
+  symbol?: string | null;
+  mode: HistoryEventMode;
+  /** @nullable */
+  alertLevel?: HistoryEventAlertLevel;
+  eventSnapshot: CopilotEvent;
+  createdAt: string;
+}
+

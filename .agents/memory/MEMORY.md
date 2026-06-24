@@ -1,2 +1,3 @@
 - [FinDesk architecture](findesk-architecture.md) — two artifacts: findesk (web, serves `/`) + api-server (serves `/api`); both workflows must run
 - [FinDesk data sourcing](findesk-data-sourcing.md) — analyze uses keyless Yahoo v8 chart + OpenAI; type reports with api-zod's `Report` interface (z.infer→unknown)
+- [Trading Desk Copilot](trading-desk-copilot.md) — new research-only product on SHARED api-server `/api/copilot/*` + single shared OpenAPI spec; permanent NO-trading/NO-execution constraint

@@ -14,6 +14,8 @@ tags:
     description: Ticker analysis and reports
   - name: watchlist
     description: Watchlist management
+  - name: copilot
+    description: Trading Desk Copilot research helper (no order execution)
 
 paths:
   /healthz:
@@ -155,6 +157,118 @@ paths:
       responses:
         "204":
           description: Removed
+
+  /copilot/healthz:
+    get:
+      operationId: copilotHealthCheck
+      tags: [copilot]
+      summary: Copilot service health check
+      description: Returns health status for the Trading Desk Copilot service
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopilotHealth"
+
+  /copilot/journal:
+    get:
+      operationId: listJournalEntries
+      tags: [copilot]
+      summary: List journal entries
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalEntry"
+    post:
+      operationId: createJournalEntry
+      tags: [copilot]
+      summary: Create a journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalEntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntry"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/journal/{id}:
+    delete:
+      operationId: deleteJournalEntry
+      tags: [copilot]
+      summary: Delete a journal entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /copilot/strategies:
+    get:
+      operationId: listStrategies
+      tags: [copilot]
+      summary: List strategy registry entries
+      responses:
+        "200":
+          description: Strategy registry entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StrategyRegistryEntry"
+
+  /copilot/validation:
+    get:
+      operationId: listValidationStates
+      tags: [copilot]
+      summary: List strategy validation states
+      responses:
+        "200":
+          description: Validation states
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ValidationState"
+
+  /copilot/history:
+    get:
+      operationId: listHistoryEvents
+      tags: [copilot]
+      summary: List historical copilot events
+      responses:
+        "200":
+          description: History events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEvent"
 
 components:
   schemas:
@@ -522,4 +636,261 @@ components:
         ticker:
           type: string
         notes:
+          type: string
+
+    CopilotHealth:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+
+    CopilotEvent:
+      type: object
+      description: Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
+      required:
+        - eventId
+        - symbol
+        - timestamp
+        - mode
+        - dataSource
+        - alertLevel
+        - l5Blocked
+        - snapshot
+        - marketQuality
+        - triggers
+        - warnings
+      properties:
+        eventId:
+          type: string
+        symbol:
+          type: string
+        timestamp:
+          type: string
+          description: ISO 8601 event timestamp
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+          description: "LIVE | REPLAY | RESEARCH"
+        dataSource:
+          type: string
+          description: "Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed)"
+        alertLevel:
+          type: ["string", "null"]
+          enum: ["L1", "L2", "L3", "L4", "L5", null]
+          description: "Deterministic alert ladder level L1..L5, or null"
+        l5Blocked:
+          type: boolean
+          description: "True when a hard L5 safety block is active"
+        snapshot:
+          $ref: "#/components/schemas/MarketSnapshot"
+        marketQuality:
+          $ref: "#/components/schemas/MarketQuality"
+        triggers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CopilotTrigger"
+        warnings:
+          type: array
+          items:
+            type: string
+
+    MarketSnapshot:
+      type: object
+      required:
+        - price
+        - vwap
+        - rvol
+        - atr
+        - openingRangeHigh
+        - openingRangeLow
+        - volumeExpansion
+        - priceLocation
+        - spread
+        - change1d
+      properties:
+        price:
+          type: ["number", "null"]
+        vwap:
+          type: ["number", "null"]
+        rvol:
+          type: ["number", "null"]
+        atr:
+          type: ["number", "null"]
+        openingRangeHigh:
+          type: ["number", "null"]
+        openingRangeLow:
+          type: ["number", "null"]
+        volumeExpansion:
+          type: ["boolean", "null"]
+        priceLocation:
+          type: ["string", "null"]
+        spread:
+          type: ["number", "null"]
+        change1d:
+          type: ["number", "null"]
+
+    MarketQuality:
+      type: object
+      required: [spreadOk, quoteFresh, liquidityOk, notes]
+      properties:
+        spreadOk:
+          type: ["boolean", "null"]
+        quoteFresh:
+          type: ["boolean", "null"]
+        liquidityOk:
+          type: ["boolean", "null"]
+        notes:
+          type: ["string", "null"]
+
+    CopilotTrigger:
+      type: object
+      required: [name, category, detected]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [primary_edge, entry_refinement]
+          description: "primary_edge | entry_refinement"
+        detected:
+          type: boolean
+        detail:
+          type: ["string", "null"]
+
+    JournalEntry:
+      type: object
+      required: [id, mode, symbol, createdAt]
+      properties:
+        id:
+          type: integer
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+          description: "LIVE | REPLAY | RESEARCH"
+        symbol:
+          type: string
+        eventTimestamp:
+          type: ["string", "null"]
+        eventSnapshot:
+          type: ["object", "null"]
+          additionalProperties: true
+        manualOutcome:
+          type: ["object", "null"]
+          additionalProperties: true
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    JournalEntryInput:
+      type: object
+      required: [mode, symbol]
+      properties:
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+          description: "LIVE | REPLAY | RESEARCH"
+        symbol:
+          type: string
+        eventTimestamp:
+          type: string
+        eventSnapshot:
+          type: object
+          additionalProperties: true
+        manualOutcome:
+          type: object
+          additionalProperties: true
+        notes:
+          type: string
+
+    StrategyRegistryEntry:
+      type: object
+      required:
+        - id
+        - hypothesisName
+        - primaryEdgeType
+        - minimumSampleCount
+        - validationStatus
+        - definition
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: integer
+        hypothesisName:
+          type: string
+        primaryEdgeType:
+          type: string
+        universe:
+          type: ["string", "null"]
+        holdingPeriod:
+          type: ["string", "null"]
+        minimumSampleCount:
+          type: integer
+        validationStatus:
+          type: string
+          enum:
+            - unproven
+            - paper_pending
+            - backtested_only
+            - backtested_pending_forward
+            - paper_validated
+            - no_edge
+            - insufficient_sample
+        definition:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    ValidationState:
+      type: object
+      required: [id, strategyName, validationStatus, sampleCount, metrics, updatedAt]
+      properties:
+        id:
+          type: integer
+        strategyName:
+          type: string
+        validationStatus:
+          type: string
+          enum:
+            - unproven
+            - paper_pending
+            - backtested_only
+            - backtested_pending_forward
+            - paper_validated
+            - no_edge
+            - insufficient_sample
+        sampleCount:
+          type: integer
+        metrics:
+          type: object
+          additionalProperties: true
+        updatedAt:
+          type: string
+
+    HistoryEvent:
+      type: object
+      required: [id, mode, eventSnapshot, createdAt]
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: ["string", "null"]
+        symbol:
+          type: ["string", "null"]
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+        alertLevel:
+          type: ["string", "null"]
+          enum: ["L1", "L2", "L3", "L4", "L5", null]
+        eventSnapshot:
+          $ref: "#/components/schemas/CopilotEvent"
+        createdAt:
           type: string
