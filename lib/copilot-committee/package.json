@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./guardrails": "./src/guardrails.ts",
+    "./vocab": "./src/vocab.ts"
   },
   "scripts": {
     "test": "vitest run"

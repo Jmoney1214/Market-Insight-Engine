@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/desk/"
+title = "Trading Desk Copilot"
+version = "1.0.0"
+id = "artifacts/desk"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/desk/" ]
+localPort = 18614
+
+[services.development]
+run = "pnpm --filter @workspace/desk run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/desk", "run", "build" ]
+publicDir = "artifacts/desk/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18614"
+BASE_PATH = "/desk/"
