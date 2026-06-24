@@ -172,6 +172,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/CopilotHealth"
 
+  /copilot/event:
+    get:
+      operationId: getCopilotEvent
+      tags: [copilot]
+      summary: Build the canonical deterministic copilot event for a symbol
+      description: >-
+        Computes one deterministic copilot event from bars/quote. Research and
+        helper only: never returns order intent or any execution signal.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [fixture, yahoo_delayed]
+            default: fixture
+          description: "Data source; fixtures require no API keys"
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [LIVE, REPLAY, RESEARCH]
+      responses:
+        "200":
+          description: Canonical copilot event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopilotEvent"
+        "404":
+          description: Unknown fixture symbol
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /copilot/journal:
     get:
       operationId: listJournalEntries
@@ -661,6 +703,12 @@ components:
         - snapshot
         - marketQuality
         - triggers
+        - triggerStack
+        - gates
+        - hardBlocks
+        - riskReward
+        - position
+        - feedQuality
         - warnings
       properties:
         eventId:
@@ -692,6 +740,21 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CopilotTrigger"
+        triggerStack:
+          $ref: "#/components/schemas/TriggerStack"
+        gates:
+          $ref: "#/components/schemas/GateVerdicts"
+        hardBlocks:
+          type: array
+          description: "Non-overridable L5 hard-block codes; empty when not blocked"
+          items:
+            type: string
+        riskReward:
+          $ref: "#/components/schemas/RiskReward"
+        position:
+          $ref: "#/components/schemas/PositionRead"
+        feedQuality:
+          $ref: "#/components/schemas/FeedQuality"
         warnings:
           type: array
           items:
@@ -758,6 +821,133 @@ components:
         detected:
           type: boolean
         detail:
+          type: ["string", "null"]
+
+    TriggerStack:
+      type: object
+      required: [stackName, category, credibility, detectedTriggers]
+      properties:
+        stackName:
+          type: string
+        category:
+          type: ["string", "null"]
+          enum: [primary_edge, entry_refinement, null]
+        credibility:
+          type: number
+          description: "Deterministic credibility score in [0,1]"
+        detectedTriggers:
+          type: array
+          items:
+            type: string
+
+    GateVerdict:
+      type: object
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [PASS, WARN, BLOCK]
+        reason:
+          type: string
+
+    GateVerdicts:
+      type: object
+      required:
+        - data
+        - staleness
+        - spread
+        - marketQuality
+        - credibility
+        - validation
+      properties:
+        data:
+          $ref: "#/components/schemas/GateVerdict"
+        staleness:
+          $ref: "#/components/schemas/GateVerdict"
+        spread:
+          $ref: "#/components/schemas/GateVerdict"
+        marketQuality:
+          $ref: "#/components/schemas/GateVerdict"
+        credibility:
+          $ref: "#/components/schemas/GateVerdict"
+        validation:
+          $ref: "#/components/schemas/GateVerdict"
+
+    RiskReward:
+      type: object
+      description: Research-only structural preview. Never an order, instruction, or signal to transact.
+      required:
+        - direction
+        - entry
+        - invalidation
+        - target
+        - ratio
+        - riskPerShare
+        - notes
+      properties:
+        direction:
+          type: ["string", "null"]
+          enum: [LONG, SHORT, null]
+        entry:
+          type: ["number", "null"]
+        invalidation:
+          type: ["number", "null"]
+        target:
+          type: ["number", "null"]
+        ratio:
+          type: ["number", "null"]
+        riskPerShare:
+          type: ["number", "null"]
+        notes:
+          type: string
+
+    PositionRead:
+      type: object
+      description: Manual position read for research and journaling only.
+      required: [status, side, unrealizedR, thesisStatus, notes]
+      properties:
+        status:
+          type: string
+          enum: [FLAT, IN_POSITION]
+        side:
+          type: ["string", "null"]
+          enum: [LONG, SHORT, null]
+        unrealizedR:
+          type: ["number", "null"]
+        thesisStatus:
+          type: string
+          enum: [VALID, WEAKENING, INVALIDATED, UNKNOWN]
+        notes:
+          type: string
+
+    FeedQuality:
+      type: object
+      required:
+        - source
+        - quoteAgeSeconds
+        - barAgeSeconds
+        - spreadBps
+        - completeness
+        - isStale
+        - verdict
+        - notes
+      properties:
+        source:
+          type: string
+        quoteAgeSeconds:
+          type: ["number", "null"]
+        barAgeSeconds:
+          type: ["number", "null"]
+        spreadBps:
+          type: ["number", "null"]
+        completeness:
+          type: number
+        isStale:
+          type: boolean
+        verdict:
+          type: string
+          enum: [OK, DEGRADED, BLOCKED]
+        notes:
           type: ["string", "null"]
 
     JournalEntry:

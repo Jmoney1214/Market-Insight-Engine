@@ -299,6 +299,145 @@ export interface CopilotTrigger {
 }
 
 /**
+ * @nullable
+ */
+export type TriggerStackCategory = typeof TriggerStackCategory[keyof typeof TriggerStackCategory] | null;
+
+
+export const TriggerStackCategory = {
+  primary_edge: 'primary_edge',
+  entry_refinement: 'entry_refinement',
+} as const;
+
+export interface TriggerStack {
+  stackName: string;
+  /** @nullable */
+  category: TriggerStackCategory;
+  /** Deterministic credibility score in [0,1] */
+  credibility: number;
+  detectedTriggers: string[];
+}
+
+export type GateVerdictStatus = typeof GateVerdictStatus[keyof typeof GateVerdictStatus];
+
+
+export const GateVerdictStatus = {
+  PASS: 'PASS',
+  WARN: 'WARN',
+  BLOCK: 'BLOCK',
+} as const;
+
+export interface GateVerdict {
+  status: GateVerdictStatus;
+  reason: string;
+}
+
+export interface GateVerdicts {
+  data: GateVerdict;
+  staleness: GateVerdict;
+  spread: GateVerdict;
+  marketQuality: GateVerdict;
+  credibility: GateVerdict;
+  validation: GateVerdict;
+}
+
+/**
+ * @nullable
+ */
+export type RiskRewardDirection = typeof RiskRewardDirection[keyof typeof RiskRewardDirection] | null;
+
+
+export const RiskRewardDirection = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+/**
+ * Research-only structural preview. Never an order, instruction, or signal to transact.
+ */
+export interface RiskReward {
+  /** @nullable */
+  direction: RiskRewardDirection;
+  /** @nullable */
+  entry: number | null;
+  /** @nullable */
+  invalidation: number | null;
+  /** @nullable */
+  target: number | null;
+  /** @nullable */
+  ratio: number | null;
+  /** @nullable */
+  riskPerShare: number | null;
+  notes: string;
+}
+
+export type PositionReadStatus = typeof PositionReadStatus[keyof typeof PositionReadStatus];
+
+
+export const PositionReadStatus = {
+  FLAT: 'FLAT',
+  IN_POSITION: 'IN_POSITION',
+} as const;
+
+/**
+ * @nullable
+ */
+export type PositionReadSide = typeof PositionReadSide[keyof typeof PositionReadSide] | null;
+
+
+export const PositionReadSide = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+export type PositionReadThesisStatus = typeof PositionReadThesisStatus[keyof typeof PositionReadThesisStatus];
+
+
+export const PositionReadThesisStatus = {
+  VALID: 'VALID',
+  WEAKENING: 'WEAKENING',
+  INVALIDATED: 'INVALIDATED',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+/**
+ * Manual position read for research and journaling only.
+ */
+export interface PositionRead {
+  status: PositionReadStatus;
+  /** @nullable */
+  side: PositionReadSide;
+  /** @nullable */
+  unrealizedR: number | null;
+  thesisStatus: PositionReadThesisStatus;
+  notes: string;
+}
+
+export type FeedQualityVerdict = typeof FeedQualityVerdict[keyof typeof FeedQualityVerdict];
+
+
+export const FeedQualityVerdict = {
+  OK: 'OK',
+  DEGRADED: 'DEGRADED',
+  BLOCKED: 'BLOCKED',
+} as const;
+
+export interface FeedQuality {
+  source: string;
+  /** @nullable */
+  quoteAgeSeconds: number | null;
+  /** @nullable */
+  barAgeSeconds: number | null;
+  /** @nullable */
+  spreadBps: number | null;
+  completeness: number;
+  isStale: boolean;
+  verdict: FeedQualityVerdict;
+  /** @nullable */
+  notes: string | null;
+}
+
+/**
  * Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
  */
 export interface CopilotEvent {
@@ -320,6 +459,13 @@ export interface CopilotEvent {
   snapshot: MarketSnapshot;
   marketQuality: MarketQuality;
   triggers: CopilotTrigger[];
+  triggerStack: TriggerStack;
+  gates: GateVerdicts;
+  /** Non-overridable L5 hard-block codes; empty when not blocked */
+  hardBlocks: string[];
+  riskReward: RiskReward;
+  position: PositionRead;
+  feedQuality: FeedQuality;
   warnings: string[];
 }
 
@@ -476,4 +622,30 @@ export interface HistoryEvent {
   eventSnapshot: CopilotEvent;
   createdAt: string;
 }
+
+export type GetCopilotEventParams = {
+symbol: string;
+/**
+ * Data source; fixtures require no API keys
+ */
+source?: GetCopilotEventSource;
+mode?: GetCopilotEventMode;
+};
+
+export type GetCopilotEventSource = typeof GetCopilotEventSource[keyof typeof GetCopilotEventSource];
+
+
+export const GetCopilotEventSource = {
+  fixture: 'fixture',
+  yahoo_delayed: 'yahoo_delayed',
+} as const;
+
+export type GetCopilotEventMode = typeof GetCopilotEventMode[keyof typeof GetCopilotEventMode];
+
+
+export const GetCopilotEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
 

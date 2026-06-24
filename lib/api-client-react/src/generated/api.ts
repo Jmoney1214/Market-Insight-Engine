@@ -22,7 +22,9 @@ import type {
 import type {
   AnalyzeInput,
   ApiError,
+  CopilotEvent,
   CopilotHealth,
+  GetCopilotEventParams,
   HealthStatus,
   HistoryEvent,
   JournalEntry,
@@ -705,6 +707,91 @@ export function useCopilotHealthCheck<TData = Awaited<ReturnType<typeof copilotH
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getCopilotHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetCopilotEventUrl = (params: GetCopilotEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/event?${stringifiedParams}` : `/api/copilot/event`
+}
+
+/**
+ * Computes one deterministic copilot event from bars/quote. Research and helper only: never returns order intent or any execution signal.
+ * @summary Build the canonical deterministic copilot event for a symbol
+ */
+export const getCopilotEvent = async (params: GetCopilotEventParams, options?: RequestInit): Promise<CopilotEvent> => {
+
+  return customFetch<CopilotEvent>(getGetCopilotEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCopilotEventQueryKey = (params?: GetCopilotEventParams,) => {
+    return [
+    `/api/copilot/event`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError>>(params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCopilotEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCopilotEvent>>> = ({ signal }) => getCopilotEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCopilotEventQueryResult = NonNullable<Awaited<ReturnType<typeof getCopilotEvent>>>
+export type GetCopilotEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Build the canonical deterministic copilot event for a symbol
+ */
+
+export function useGetCopilotEvent<TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError>>(
+ params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCopilotEventQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

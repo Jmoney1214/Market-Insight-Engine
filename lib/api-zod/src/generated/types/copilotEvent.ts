@@ -8,8 +8,13 @@
 import type { CopilotEventAlertLevel } from './copilotEventAlertLevel';
 import type { CopilotEventMode } from './copilotEventMode';
 import type { CopilotTrigger } from './copilotTrigger';
+import type { FeedQuality } from './feedQuality';
+import type { GateVerdicts } from './gateVerdicts';
 import type { MarketQuality } from './marketQuality';
 import type { MarketSnapshot } from './marketSnapshot';
+import type { PositionRead } from './positionRead';
+import type { RiskReward } from './riskReward';
+import type { TriggerStack } from './triggerStack';
 
 /**
  * Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
@@ -33,5 +38,12 @@ export interface CopilotEvent {
   snapshot: MarketSnapshot;
   marketQuality: MarketQuality;
   triggers: CopilotTrigger[];
+  triggerStack: TriggerStack;
+  gates: GateVerdicts;
+  /** Non-overridable L5 hard-block codes; empty when not blocked */
+  hardBlocks: string[];
+  riskReward: RiskReward;
+  position: PositionRead;
+  feedQuality: FeedQuality;
   warnings: string[];
 }

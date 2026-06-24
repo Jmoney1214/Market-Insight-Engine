@@ -222,6 +222,113 @@ export const CopilotHealthCheckResponse = zod.object({
 
 
 /**
+ * Computes one deterministic copilot event from bars/quote. Research and helper only: never returns order intent or any execution signal.
+ * @summary Build the canonical deterministic copilot event for a symbol
+ */
+export const getCopilotEventQuerySourceDefault = `fixture`;
+
+export const GetCopilotEventQueryParams = zod.object({
+  "symbol": zod.coerce.string(),
+  "source": zod.enum(['fixture', 'yahoo_delayed']).default(getCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys'),
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
+})
+
+export const GetCopilotEventResponse = zod.object({
+  "eventId": zod.string(),
+  "symbol": zod.string(),
+  "timestamp": zod.string().describe('ISO 8601 event timestamp'),
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
+  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes (e.g. fixture, yahoo_delayed)'),
+  "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullable().describe('Deterministic alert ladder level L1..L5, or null'),
+  "l5Blocked": zod.boolean().describe('True when a hard L5 safety block is active'),
+  "snapshot": zod.object({
+  "price": zod.number().nullable(),
+  "vwap": zod.number().nullable(),
+  "rvol": zod.number().nullable(),
+  "atr": zod.number().nullable(),
+  "openingRangeHigh": zod.number().nullable(),
+  "openingRangeLow": zod.number().nullable(),
+  "volumeExpansion": zod.boolean().nullable(),
+  "priceLocation": zod.string().nullable(),
+  "spread": zod.number().nullable(),
+  "change1d": zod.number().nullable()
+}),
+  "marketQuality": zod.object({
+  "spreadOk": zod.boolean().nullable(),
+  "quoteFresh": zod.boolean().nullable(),
+  "liquidityOk": zod.boolean().nullable(),
+  "notes": zod.string().nullable()
+}),
+  "triggers": zod.array(zod.object({
+  "name": zod.string(),
+  "category": zod.enum(['primary_edge', 'entry_refinement']).describe('primary_edge | entry_refinement'),
+  "detected": zod.boolean(),
+  "detail": zod.string().nullish()
+})),
+  "triggerStack": zod.object({
+  "stackName": zod.string(),
+  "category": zod.union([zod.literal('primary_edge'),zod.literal('entry_refinement'),zod.literal(null)]).nullable(),
+  "credibility": zod.number().describe('Deterministic credibility score in [0,1]'),
+  "detectedTriggers": zod.array(zod.string())
+}),
+  "gates": zod.object({
+  "data": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "staleness": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "spread": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "marketQuality": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "credibility": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "validation": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+})
+}),
+  "hardBlocks": zod.array(zod.string()).describe('Non-overridable L5 hard-block codes; empty when not blocked'),
+  "riskReward": zod.object({
+  "direction": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "entry": zod.number().nullable(),
+  "invalidation": zod.number().nullable(),
+  "target": zod.number().nullable(),
+  "ratio": zod.number().nullable(),
+  "riskPerShare": zod.number().nullable(),
+  "notes": zod.string()
+}).describe('Research-only structural preview. Never an order, instruction, or signal to transact.'),
+  "position": zod.object({
+  "status": zod.enum(['FLAT', 'IN_POSITION']),
+  "side": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "unrealizedR": zod.number().nullable(),
+  "thesisStatus": zod.enum(['VALID', 'WEAKENING', 'INVALIDATED', 'UNKNOWN']),
+  "notes": zod.string()
+}).describe('Manual position read for research and journaling only.'),
+  "feedQuality": zod.object({
+  "source": zod.string(),
+  "quoteAgeSeconds": zod.number().nullable(),
+  "barAgeSeconds": zod.number().nullable(),
+  "spreadBps": zod.number().nullable(),
+  "completeness": zod.number(),
+  "isStale": zod.boolean(),
+  "verdict": zod.enum(['OK', 'DEGRADED', 'BLOCKED']),
+  "notes": zod.string().nullable()
+}),
+  "warnings": zod.array(zod.string())
+}).describe('Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.')
+
+
+/**
  * @summary List journal entries
  */
 export const ListJournalEntriesResponseItem = zod.object({
@@ -331,6 +438,65 @@ export const ListHistoryEventsResponseItem = zod.object({
   "detected": zod.boolean(),
   "detail": zod.string().nullish()
 })),
+  "triggerStack": zod.object({
+  "stackName": zod.string(),
+  "category": zod.union([zod.literal('primary_edge'),zod.literal('entry_refinement'),zod.literal(null)]).nullable(),
+  "credibility": zod.number().describe('Deterministic credibility score in [0,1]'),
+  "detectedTriggers": zod.array(zod.string())
+}),
+  "gates": zod.object({
+  "data": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "staleness": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "spread": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "marketQuality": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "credibility": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+}),
+  "validation": zod.object({
+  "status": zod.enum(['PASS', 'WARN', 'BLOCK']),
+  "reason": zod.string()
+})
+}),
+  "hardBlocks": zod.array(zod.string()).describe('Non-overridable L5 hard-block codes; empty when not blocked'),
+  "riskReward": zod.object({
+  "direction": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "entry": zod.number().nullable(),
+  "invalidation": zod.number().nullable(),
+  "target": zod.number().nullable(),
+  "ratio": zod.number().nullable(),
+  "riskPerShare": zod.number().nullable(),
+  "notes": zod.string()
+}).describe('Research-only structural preview. Never an order, instruction, or signal to transact.'),
+  "position": zod.object({
+  "status": zod.enum(['FLAT', 'IN_POSITION']),
+  "side": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "unrealizedR": zod.number().nullable(),
+  "thesisStatus": zod.enum(['VALID', 'WEAKENING', 'INVALIDATED', 'UNKNOWN']),
+  "notes": zod.string()
+}).describe('Manual position read for research and journaling only.'),
+  "feedQuality": zod.object({
+  "source": zod.string(),
+  "quoteAgeSeconds": zod.number().nullable(),
+  "barAgeSeconds": zod.number().nullable(),
+  "spreadBps": zod.number().nullable(),
+  "completeness": zod.number(),
+  "isStale": zod.boolean(),
+  "verdict": zod.enum(['OK', 'DEGRADED', 'BLOCKED']),
+  "notes": zod.string().nullable()
+}),
   "warnings": zod.array(zod.string())
 }).describe('Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.'),
   "createdAt": zod.string()

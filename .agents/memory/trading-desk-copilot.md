@@ -20,3 +20,16 @@ NO live trading, NO order execution, NO broker / simulated-exchange / paper-orde
 - Safety-critical domain fields are OpenAPI enums (generated Zod enforces them at the API boundary): `mode` = LIVE|REPLAY|RESEARCH; `alertLevel` = L1..L5 or null; trigger `category` = primary_edge|entry_refinement; `validationStatus` = unproven|paper_pending|backtested_only|backtested_pending_forward|paper_validated|no_edge|insufficient_sample.
 - Free-form JSON modeled as `type: object, additionalProperties: true`; nullable JSON as `type: ["object","null"]`. Timestamps are `type: string` (return `.toISOString()`), matching FinDesk; validate incoming date strings in the handler and 400 on invalid.
 - DB tables (lib/db): journal_entries, strategy_registry, validation_state, history_log. Columns stay flexible text/jsonb; validation enforced at the API contract layer, not DB CHECK constraints (yet).
+
+## Deterministic core = single source of truth (separate lib)
+The deterministic engine is its OWN composite lib `@workspace/copilot-core`: it defines its own output types and imports NOTHING from the API layer. `buildCopilotEvent()` is pure and mode/source-agnostic.
+**Why:** keeps decision logic independently testable (vitest, fixtures only) and prevents the API/agent layers from leaking into it — the engine stays the source of truth.
+**How to apply:** api-server re-validates the engine's output at the boundary with generated zod (`GetCopilotEventResponse.parse`) and converts core→API via a mapper typed against the GENERATED `CopilotEvent` type, so contract drift fails to compile. Add engine logic in the lib → extend OpenAPI → regenerate → map. Adapters (fixture loader, delayed Yahoo v8 intraday labeled `yahoo_delayed`) live in api-server, never in the core.
+
+## L5 hard blocks are non-overridable BY ARCHITECTURE (not by disclaimer text)
+`evaluateGates()` is the SOLE producer of hard-block codes (DATA_FAILURE / STALE_QUOTE / WIDE_SPREAD / MARKET_QUALITY_FAILURE); `computeAlertLevel()` forces alertLevel L5 + l5Blocked whenever hardBlocks is non-empty. On any live-data fetch failure the route emits a canonical DATA_FAILURE L5 event rather than an error.
+**Why:** safety must be structural — later LLM/agent phases must never raise the ceiling or downgrade an L5.
+**How to apply:** never let a downstream layer recompute or lower alertLevel; agents may only explain an existing event. Keep hard-block production centralized in gates.
+
+## Gotcha: new workspace-lib dependency needs an explicit `pnpm install`
+After adding `@workspace/<lib>` to an artifact's package.json, that artifact's typecheck fails with TS2307 (cannot find module) until you re-run `pnpm install` to create the node_modules symlink — even when the lockfile reports "Already up to date".
