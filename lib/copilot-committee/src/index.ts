@@ -7,6 +7,14 @@ export * from "./vocab";
 export * from "./types";
 
 export {
+  PROVIDER_PREFERENCE,
+  selectProviderId,
+  selectModelTier,
+  type LlmProviderId,
+  type ModelTier,
+} from "./providerSelection";
+
+export {
   clampConfidence,
   isApprovedRecommendation,
   scanForbidden,

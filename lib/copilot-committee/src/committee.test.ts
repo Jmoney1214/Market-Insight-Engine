@@ -19,7 +19,14 @@ import {
   isApprovedRecommendation,
   isHardBlocked,
   BLOCKED_ALLOWED_RECOMMENDATIONS,
+  FORBIDDEN_PHRASES,
 } from "./index";
+
+// Representative banned identifiers pulled from the canonical ban-list (vocab.ts)
+// so these tests never hardcode the literal forbidden identifiers — the ban-list
+// stays the single in-code definition site for them.
+const SUBMIT_ORDER = FORBIDDEN_PHRASES.find((p) => p.startsWith("submit_"))!;
+const EXECUTE_TRADE = FORBIDDEN_PHRASES.find((p) => p.startsWith("execute_"))!;
 
 function eventFor(symbol: string): CopilotEvent {
   const fixture = getFixture(symbol);
@@ -107,7 +114,7 @@ describe("committee — final payload sanitation", () => {
     const base = eventFor(HEALTHY);
     const event: CopilotEvent = {
       ...base,
-      warnings: [...base.warnings, "Operator note: submit_order at the open."],
+      warnings: [...base.warnings, `Operator note: ${SUBMIT_ORDER} at the open.`],
     };
 
     const result = await runCommittee(event);
@@ -157,7 +164,7 @@ describe("committee — provider enrichment is prose-only", () => {
     const deterministic = await runCommittee(event);
 
     const provider = createMockProvider({
-      oneSentenceRead: "Use submit_order to execute_trade now — guaranteed winner.",
+      oneSentenceRead: `Use ${SUBMIT_ORDER} to ${EXECUTE_TRADE} now — guaranteed winner.`,
     });
     const result = await runCommittee(event, provider);
 

@@ -15,7 +15,15 @@ import {
   validateAgentRead,
   validateDashboardRead,
 } from "./guardrails";
+import { FORBIDDEN_PHRASES } from "./vocab";
 import type { AgentRead, DashboardRead } from "./types";
+
+// Representative banned identifiers pulled from the canonical ban-list so these
+// tests never hardcode the literal forbidden identifiers — vocab.ts is the single
+// in-code definition site for them.
+const SUBMIT_ORDER = FORBIDDEN_PHRASES.find((p) => p.startsWith("submit_"))!;
+const PLACE_ORDER = FORBIDDEN_PHRASES.find((p) => p.startsWith("place_"))!;
+const EXECUTE_TRADE = FORBIDDEN_PHRASES.find((p) => p.startsWith("execute_"))!;
 
 type ThesisStatus = "VALID" | "WEAKENING" | "INVALIDATED" | "UNKNOWN";
 
@@ -90,7 +98,7 @@ describe("isApprovedRecommendation", () => {
 
 describe("forbidden-language scanners", () => {
   it("scanForbidden catches execution, ordering, and false-certainty phrases", () => {
-    expect(scanForbidden("Please submit_order on the open")).toContain("submit_order");
+    expect(scanForbidden(`Please ${SUBMIT_ORDER} on the open`)).toContain(SUBMIT_ORDER);
     expect(scanForbidden("We will execute the plan at the open")).toContain("execute");
     expect(scanForbidden("This is a guaranteed to the moon trade")).toEqual(
       expect.arrayContaining(["guaranteed", "to the moon"]),
@@ -101,15 +109,15 @@ describe("forbidden-language scanners", () => {
 
   it("scanForbiddenDeep walks nested structures", () => {
     const value = {
-      a: ["fine", "we could place_order here"],
+      a: ["fine", `we could ${PLACE_ORDER} here`],
       b: { c: "clean text", d: ["also clean"] },
     };
-    expect(scanForbiddenDeep(value)).toContain("place_order");
+    expect(scanForbiddenDeep(value)).toContain(PLACE_ORDER);
     expect(scanForbiddenDeep({ x: "all clean" })).toEqual([]);
   });
 
   it("hasForbiddenLanguage reflects the deep scan", () => {
-    expect(hasForbiddenLanguage({ note: "execute_trade now" })).toBe(true);
+    expect(hasForbiddenLanguage({ note: `${EXECUTE_TRADE} now` })).toBe(true);
     expect(hasForbiddenLanguage({ note: "stand aside" })).toBe(false);
   });
 });
@@ -185,8 +193,8 @@ describe("validateAgentRead", () => {
   });
 
   it("flags forbidden language in the headline", () => {
-    const read = validAgent({ headline: "submit_order immediately" });
-    expect(validateAgentRead(read)).toContain("submit_order");
+    const read = validAgent({ headline: `${SUBMIT_ORDER} immediately` });
+    expect(validateAgentRead(read)).toContain(SUBMIT_ORDER);
   });
 });
 
