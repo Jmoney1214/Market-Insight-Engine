@@ -35,7 +35,7 @@ paths:
       operationId: analyzeTicker
       tags: [analysis]
       summary: Run AI analysis on a ticker
-      description: Triggers a full analyst report for the given ticker (returns mock data in MVP)
+      description: Triggers a full analyst report for the given ticker using live market data and AI-generated analysis
       requestBody:
         required: true
         content:

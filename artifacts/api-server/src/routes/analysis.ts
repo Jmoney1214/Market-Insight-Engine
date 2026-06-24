@@ -2,7 +2,9 @@ import { Router } from "express";
 import { db, reportsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { AnalyzeTickerBody, GetReportParams, DeleteReportParams } from "@workspace/api-zod";
-import { generateMockReport } from "../lib/mockData.js";
+import { fetchMarketData, MarketDataError } from "../lib/marketData.js";
+import { generateAiReport, AiReportError } from "../lib/aiReport.js";
+import { buildReport } from "../lib/buildReport.js";
 
 const router = Router();
 
@@ -16,22 +18,40 @@ router.post("/analyze", async (req, res) => {
   const { ticker } = parsed.data;
   const tickerUpper = ticker.toUpperCase().trim();
 
-  if (!tickerUpper || tickerUpper.length > 6) {
+  if (!tickerUpper || !/^[A-Z.\-]{1,6}$/.test(tickerUpper)) {
     res.status(400).json({ error: "Invalid ticker symbol" });
     return;
   }
 
-  const mockReport = generateMockReport(tickerUpper, 0);
+  let report: ReturnType<typeof buildReport>;
+  try {
+    const market = await fetchMarketData(tickerUpper);
+    const ai = await generateAiReport(tickerUpper, market);
+    report = buildReport(tickerUpper, market, ai);
+  } catch (err) {
+    if (err instanceof MarketDataError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
+    if (err instanceof AiReportError) {
+      req.log.error({ err }, "AI report generation failed");
+      res.status(502).json({ error: "Could not generate analysis. Please try again." });
+      return;
+    }
+    req.log.error({ err }, "Unexpected error generating report");
+    res.status(500).json({ error: "Could not generate analysis. Please try again." });
+    return;
+  }
 
   const [inserted] = await db
     .insert(reportsTable)
     .values({
       ticker: tickerUpper,
-      companyName: mockReport.companyName,
-      sector: mockReport.sector,
-      industry: mockReport.industry,
-      overallRating: mockReport.overallRating,
-      reportData: mockReport as unknown as Record<string, unknown>,
+      companyName: report.companyName,
+      sector: report.sector,
+      industry: report.industry,
+      overallRating: report.overallRating,
+      reportData: report as unknown as Record<string, unknown>,
     })
     .returning();
 
