@@ -18,6 +18,7 @@ export {
   detectTriggers,
   buildTriggerStack,
   inferDirection,
+  newlyFiredTriggers,
 } from "./triggers";
 
 export { evaluateGates } from "./gates";
@@ -27,7 +28,20 @@ export { computeRiskReward } from "./riskReward";
 export { evaluatePosition } from "./position";
 export { computeFeedQuality } from "./feedQuality";
 export { sanitizeDeep, sanitizeNumber } from "./sanitize";
-export { atr, mean, sum, round, trueRange, highest, lowest } from "./detectors";
+export {
+  atr,
+  mean,
+  sum,
+  round,
+  trueRange,
+  highest,
+  lowest,
+  swingHighs,
+  swingLows,
+  lastSwingHigh,
+  lastSwingLow,
+} from "./detectors";
+export type { SwingPoint } from "./detectors";
 
 export { FIXTURES, getFixture, listFixtures } from "./fixtures";
 export type { Fixture } from "./fixtures";

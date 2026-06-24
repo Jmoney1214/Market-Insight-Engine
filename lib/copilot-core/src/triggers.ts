@@ -4,26 +4,58 @@
 // triggers are context only and must never be treated as proven alpha on their
 // own. Credibility here is a deterministic function of what was detected, not a
 // hand-typed score.
+//
+// SAFETY / HONESTY INVARIANT:
+//   - Every detector is a pure function of the in-session bars plus optional
+//     out-of-band context. No LLM, no randomness, no hidden state.
+//   - Detectors that need data the current source cannot supply (e.g. the prior
+//     session close for gaps) stay dormant — they report detected:false rather
+//     than guessing — so single-session fixtures never emit spurious signals.
+//   - entry_refinement triggers are CONTEXT ONLY. They never drive directional
+//     bias and the scoreboard never scores them; they cannot become a proven edge.
 
-import { round } from "./detectors";
+import {
+  COMPRESSION_LOOKBACK,
+  COMPRESSION_RANGE_ATR,
+  GAP_MIN_PCT,
+  SWING_LOOKBACK,
+} from "./constants";
+import {
+  highest,
+  lastSwingHigh,
+  lastSwingLow,
+  lowest,
+  round,
+  swingHighs,
+  swingLows,
+} from "./detectors";
 import type {
   Bar,
   Direction,
   Features,
   Trigger,
   TriggerCategory,
+  TriggerContext,
   TriggerStack,
 } from "./types";
 
+// Directional primary-edge triggers feed the net directional bias. Entry
+// refinement triggers are intentionally excluded — they are context only.
 const BULLISH = new Set([
   "OPENING_RANGE_BREAKOUT",
   "TREND_CONTINUATION_LONG",
   "VWAP_RECLAIM",
+  "VOLATILITY_COMPRESSION_BREAKOUT_LONG",
+  "GAP_CONTINUATION_LONG",
+  "GAP_FADE_LONG",
 ]);
 const BEARISH = new Set([
   "OPENING_RANGE_FAILURE",
   "TREND_CONTINUATION_SHORT",
   "VWAP_REJECTION",
+  "VOLATILITY_COMPRESSION_BREAKOUT_SHORT",
+  "GAP_CONTINUATION_SHORT",
+  "GAP_FADE_SHORT",
 ]);
 
 function makeTrigger(
@@ -35,12 +67,20 @@ function makeTrigger(
   return { name, category, detected, detail };
 }
 
-export function detectTriggers(bars: Bar[], features: Features): Trigger[] {
+const NO_CONTEXT: TriggerContext = { priorClose: null };
+
+export function detectTriggers(
+  bars: Bar[],
+  features: Features,
+  context: TriggerContext = NO_CONTEXT,
+): Trigger[] {
   const { price, vwap, openingRangeHigh, openingRangeLow, volumeExpansion } =
     features;
   const prevClose = bars.length >= 2 ? bars[bars.length - 2].c : null;
   const triggers: Trigger[] = [];
 
+  // --- Primary-edge directional hypotheses (original seven; order preserved so
+  //     the stack name stays stable for existing consumers). ---------------
   const orbDetected =
     price !== null &&
     openingRangeHigh !== null &&
@@ -99,7 +139,11 @@ export function detectTriggers(bars: Bar[], features: Features): Trigger[] {
   );
 
   const reclaim =
-    price !== null && vwap !== null && prevClose !== null && prevClose < vwap && price > vwap;
+    price !== null &&
+    vwap !== null &&
+    prevClose !== null &&
+    prevClose < vwap &&
+    price > vwap;
   triggers.push(
     makeTrigger(
       "VWAP_RECLAIM",
@@ -110,7 +154,11 @@ export function detectTriggers(bars: Bar[], features: Features): Trigger[] {
   );
 
   const rejection =
-    price !== null && vwap !== null && prevClose !== null && prevClose > vwap && price < vwap;
+    price !== null &&
+    vwap !== null &&
+    prevClose !== null &&
+    prevClose > vwap &&
+    price < vwap;
   triggers.push(
     makeTrigger(
       "VWAP_REJECTION",
@@ -130,7 +178,335 @@ export function detectTriggers(bars: Bar[], features: Features): Trigger[] {
     ),
   );
 
+  // --- Volatility-compression breakout (primary edge, bar-derived). --------
+  triggers.push(
+    detectCompressionBreakout(bars, features),
+  );
+
+  // --- Gap continuation / fade (primary edge, gated on prior-session close). -
+  const gap = detectGapTriggers(bars, features, context.priorClose);
+  triggers.push(gap.continuation, gap.fade);
+
+  // --- Entry-refinement context (ICT/SMC + structure). Context only. -------
+  triggers.push(...detectStructureTriggers(bars, features));
+
   return triggers;
+}
+
+/**
+ * Volatility-compression breakout: a tight coil (range small versus ATR) that
+ * resolves on the latest bar with an expansion close beyond the coil on
+ * expanding volume. Direction is encoded in the trigger name so it can feed the
+ * directional bias without ambiguity.
+ */
+function detectCompressionBreakout(bars: Bar[], features: Features): Trigger {
+  const name = "VOLATILITY_COMPRESSION_BREAKOUT";
+  const { atr, volumeExpansion, price } = features;
+  // Need the coil window plus the resolving bar.
+  if (
+    bars.length < COMPRESSION_LOOKBACK + 1 ||
+    atr === null ||
+    atr <= 0 ||
+    price === null ||
+    volumeExpansion !== true
+  ) {
+    return makeTrigger(name, "primary_edge", false, null);
+  }
+  const latest = bars[bars.length - 1];
+  const coil = bars.slice(-(COMPRESSION_LOOKBACK + 1), -1);
+  const coilHigh = highest(coil.map((b) => b.h));
+  const coilLow = lowest(coil.map((b) => b.l));
+  if (coilHigh === null || coilLow === null) {
+    return makeTrigger(name, "primary_edge", false, null);
+  }
+  const coilRange = coilHigh - coilLow;
+  const contracted = coilRange <= COMPRESSION_RANGE_ATR * atr;
+  const expansionBar = latest.h - latest.l >= atr;
+  const breakoutUp = latest.c > coilHigh;
+  const breakoutDown = latest.c < coilLow;
+
+  if (contracted && expansionBar && breakoutUp) {
+    return makeTrigger(
+      `${name}_LONG`,
+      "primary_edge",
+      true,
+      "Price expanded above a volatility contraction on rising volume",
+    );
+  }
+  if (contracted && expansionBar && breakoutDown) {
+    return makeTrigger(
+      `${name}_SHORT`,
+      "primary_edge",
+      true,
+      "Price expanded below a volatility contraction on rising volume",
+    );
+  }
+  return makeTrigger(name, "primary_edge", false, null);
+}
+
+/**
+ * Gap continuation and gap fade. Both require the prior-session close; when it
+ * is unavailable they stay dormant (detected:false) so single-session data can
+ * never fabricate a gap. Continuation and fade are mutually exclusive for a
+ * given gap direction by construction.
+ */
+function detectGapTriggers(
+  bars: Bar[],
+  features: Features,
+  priorClose: number | null,
+): { continuation: Trigger; fade: Trigger } {
+  const contName = "GAP_CONTINUATION";
+  const fadeName = "GAP_FADE";
+  const { price, openingRangeHigh, openingRangeLow, volumeExpansion } = features;
+  const sessionOpen = bars.length > 0 ? bars[0].o : null;
+
+  const dormant = {
+    continuation: makeTrigger(contName, "primary_edge", false, null),
+    fade: makeTrigger(fadeName, "primary_edge", false, null),
+  };
+  if (
+    priorClose === null ||
+    priorClose <= 0 ||
+    sessionOpen === null ||
+    price === null ||
+    openingRangeHigh === null ||
+    openingRangeLow === null
+  ) {
+    return dormant;
+  }
+
+  const gapPct = round(((sessionOpen - priorClose) / priorClose) * 100, 2);
+  const gapUp = gapPct >= GAP_MIN_PCT;
+  const gapDown = gapPct <= -GAP_MIN_PCT;
+  if (!gapUp && !gapDown) return dormant;
+
+  // Continuation: price extends past the opening range in the gap direction on
+  // expanding volume.
+  let continuation = makeTrigger(contName, "primary_edge", false, null);
+  if (gapUp && price > openingRangeHigh && volumeExpansion === true) {
+    continuation = makeTrigger(
+      `${contName}_LONG`,
+      "primary_edge",
+      true,
+      "Gap up held above the opening range on expanding volume",
+    );
+  } else if (gapDown && price < openingRangeLow && volumeExpansion === true) {
+    continuation = makeTrigger(
+      `${contName}_SHORT`,
+      "primary_edge",
+      true,
+      "Gap down held below the opening range on expanding volume",
+    );
+  }
+
+  // Fade: price reverses through the opposite side of the opening range, working
+  // back toward the prior close (gap fill).
+  let fade = makeTrigger(fadeName, "primary_edge", false, null);
+  if (gapUp && price < openingRangeLow) {
+    fade = makeTrigger(
+      `${fadeName}_SHORT`,
+      "primary_edge",
+      true,
+      "Gap up reversed below the opening range toward the prior close",
+    );
+  } else if (gapDown && price > openingRangeHigh) {
+    fade = makeTrigger(
+      `${fadeName}_LONG`,
+      "primary_edge",
+      true,
+      "Gap down reversed above the opening range toward the prior close",
+    );
+  }
+
+  return { continuation, fade };
+}
+
+/**
+ * Entry-refinement structure detectors (ICT/SMC folklore + market structure).
+ * These are CONTEXT ONLY: they never feed directional bias and are never
+ * promotable to a proven edge.
+ */
+function detectStructureTriggers(bars: Bar[], features: Features): Trigger[] {
+  const out: Trigger[] = [];
+  const { price, vwap } = features;
+  const swingHigh = lastSwingHigh(bars, SWING_LOOKBACK);
+  const swingLow = lastSwingLow(bars, SWING_LOOKBACK);
+  const highs = swingHighs(bars, SWING_LOOKBACK).map((p) => p.price);
+  const lows = swingLows(bars, SWING_LOOKBACK).map((p) => p.price);
+  const latest = bars.length > 0 ? bars[bars.length - 1] : null;
+  const close = latest ? latest.c : price;
+
+  // Higher low / lower high: structure read from the last two confirmed swings.
+  const higherLow =
+    lows.length >= 2 && lows[lows.length - 1] > lows[lows.length - 2];
+  out.push(
+    makeTrigger(
+      "HIGHER_LOW",
+      "entry_refinement",
+      higherLow,
+      higherLow ? "Most recent swing low printed above the prior swing low" : null,
+    ),
+  );
+
+  const lowerHigh =
+    highs.length >= 2 && highs[highs.length - 1] < highs[highs.length - 2];
+  out.push(
+    makeTrigger(
+      "LOWER_HIGH",
+      "entry_refinement",
+      lowerHigh,
+      lowerHigh
+        ? "Most recent swing high printed below the prior swing high"
+        : null,
+    ),
+  );
+
+  // Break of structure: price closes beyond the most recent swing in the
+  // direction of the prevailing structure (continuation).
+  let bos = makeTrigger("BREAK_OF_STRUCTURE", "entry_refinement", false, null);
+  if (close !== null) {
+    if (higherLow && swingHigh !== null && close > swingHigh.price) {
+      bos = makeTrigger(
+        "BREAK_OF_STRUCTURE",
+        "entry_refinement",
+        true,
+        "Price closed above the prior swing high, extending the up structure",
+      );
+    } else if (lowerHigh && swingLow !== null && close < swingLow.price) {
+      bos = makeTrigger(
+        "BREAK_OF_STRUCTURE",
+        "entry_refinement",
+        true,
+        "Price closed below the prior swing low, extending the down structure",
+      );
+    }
+  }
+  out.push(bos);
+
+  // Change of character: the first close against the prevailing structure.
+  let choch = makeTrigger("CHANGE_OF_CHARACTER", "entry_refinement", false, null);
+  if (close !== null) {
+    if (higherLow && swingLow !== null && close < swingLow.price) {
+      choch = makeTrigger(
+        "CHANGE_OF_CHARACTER",
+        "entry_refinement",
+        true,
+        "Price closed below the prior swing low, breaking the up structure",
+      );
+    } else if (lowerHigh && swingHigh !== null && close > swingHigh.price) {
+      choch = makeTrigger(
+        "CHANGE_OF_CHARACTER",
+        "entry_refinement",
+        true,
+        "Price closed above the prior swing high, breaking the down structure",
+      );
+    }
+  }
+  out.push(choch);
+
+  // Liquidity sweep: the latest bar wicks beyond a prior swing then closes back
+  // inside (a stop run that fails to hold).
+  let sweep = makeTrigger("LIQUIDITY_SWEEP", "entry_refinement", false, null);
+  if (latest !== null) {
+    if (swingLow !== null && latest.l < swingLow.price && latest.c > swingLow.price) {
+      sweep = makeTrigger(
+        "LIQUIDITY_SWEEP",
+        "entry_refinement",
+        true,
+        "Price wicked below the prior swing low and closed back above it",
+      );
+    } else if (
+      swingHigh !== null &&
+      latest.h > swingHigh.price &&
+      latest.c < swingHigh.price
+    ) {
+      sweep = makeTrigger(
+        "LIQUIDITY_SWEEP",
+        "entry_refinement",
+        true,
+        "Price wicked above the prior swing high and closed back below it",
+      );
+    }
+  }
+  out.push(sweep);
+
+  // Fair value gap: a three-bar imbalance on the most recent bars.
+  let fvg = makeTrigger("FVG", "entry_refinement", false, null);
+  if (bars.length >= 3) {
+    const a = bars[bars.length - 3];
+    const c = bars[bars.length - 1];
+    if (c.l > a.h) {
+      fvg = makeTrigger(
+        "FVG",
+        "entry_refinement",
+        true,
+        "A bullish fair value gap formed over the last three bars",
+      );
+    } else if (c.h < a.l) {
+      fvg = makeTrigger(
+        "FVG",
+        "entry_refinement",
+        true,
+        "A bearish fair value gap formed over the last three bars",
+      );
+    }
+  }
+  out.push(fvg);
+
+  // Opening-range retest: after an opening-range break, price returns to the
+  // level and holds on the right side of it.
+  out.push(detectOrbRetest(bars, features));
+
+  // VWAP loss: price crossed below VWAP and held below it for two bars.
+  let vwapLoss = makeTrigger("VWAP_LOSS", "entry_refinement", false, null);
+  if (bars.length >= 3 && vwap !== null) {
+    const c1 = bars[bars.length - 1].c;
+    const c2 = bars[bars.length - 2].c;
+    const c3 = bars[bars.length - 3].c;
+    if (c3 >= vwap && c2 < vwap && c1 < vwap) {
+      vwapLoss = makeTrigger(
+        "VWAP_LOSS",
+        "entry_refinement",
+        true,
+        "Price lost VWAP and held below it for two bars",
+      );
+    }
+  }
+  out.push(vwapLoss);
+
+  return out;
+}
+
+function detectOrbRetest(bars: Bar[], features: Features): Trigger {
+  const name = "ORB_RETEST";
+  const { openingRangeHigh, openingRangeLow } = features;
+  const latest = bars.length > 0 ? bars[bars.length - 1] : null;
+  if (latest === null) return makeTrigger(name, "entry_refinement", false, null);
+  const earlier = bars.slice(0, -1);
+
+  if (openingRangeHigh !== null) {
+    const brokeOut = earlier.some((b) => b.c > openingRangeHigh);
+    if (brokeOut && latest.l <= openingRangeHigh && latest.c > openingRangeHigh) {
+      return makeTrigger(
+        name,
+        "entry_refinement",
+        true,
+        "Price pulled back to the opening range high and held above it",
+      );
+    }
+  }
+  if (openingRangeLow !== null) {
+    const brokeDown = earlier.some((b) => b.c < openingRangeLow);
+    if (brokeDown && latest.h >= openingRangeLow && latest.c < openingRangeLow) {
+      return makeTrigger(
+        name,
+        "entry_refinement",
+        true,
+        "Price pulled back to the opening range low and held below it",
+      );
+    }
+  }
+  return makeTrigger(name, "entry_refinement", false, null);
 }
 
 export function buildTriggerStack(triggers: Trigger[]): TriggerStack {
@@ -164,4 +540,20 @@ export function inferDirection(triggers: Trigger[]): Direction | null {
   if (score > 0) return "LONG";
   if (score < 0) return "SHORT";
   return null;
+}
+
+/**
+ * Triggers that transitioned into a detected state since the previous read
+ * (false -> true, or newly present). Returns an empty list when there is no
+ * prior baseline, so the first read after a stream/context switch never fires.
+ * This is the deterministic debounce: a trigger that stays detected fires once.
+ */
+export function newlyFiredTriggers<T extends { name: string; detected: boolean }>(
+  prev: T[] | null | undefined,
+  curr: T[],
+): T[] {
+  if (!prev) return [];
+  const wasDetected = new Map<string, boolean>();
+  for (const t of prev) wasDetected.set(t.name, t.detected);
+  return curr.filter((t) => t.detected && wasDetected.get(t.name) !== true);
 }

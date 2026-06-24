@@ -6,6 +6,8 @@ import {
 } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { validationStatusClass, validationStatusLabel } from "@/lib/validation-status";
+import { useTriggerAlertStore } from "@/hooks/use-trigger-alert-store";
+import { safeText } from "@/lib/safety";
 
 interface LiveBoardPanelProps {
   event?: CopilotEvent;
@@ -18,6 +20,9 @@ export function LiveBoardPanel({ event, recommendation, isLoading, isError }: Li
   const { data: scores } = useGetScoreboard({
     query: { queryKey: getGetScoreboardQueryKey() }
   });
+
+  const focusedTrigger = useTriggerAlertStore((s) => s.focusedTrigger);
+  const focusTrigger = useTriggerAlertStore((s) => s.focusTrigger);
 
   if (isLoading) {
     return (
@@ -40,10 +45,14 @@ export function LiveBoardPanel({ event, recommendation, isLoading, isError }: Li
     symbol,
     alertLevel,
     triggerStack,
+    triggers,
     marketQuality,
     riskReward,
     timestamp
   } = event;
+
+  const blocked = event.l5Blocked || alertLevel === "L5";
+  const detectedTriggers = (triggers ?? []).filter((t) => t.detected);
 
   const date = new Date(timestamp);
   const timeStr = isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString();
@@ -75,7 +84,7 @@ export function LiveBoardPanel({ event, recommendation, isLoading, isError }: Li
         </div>
       </div>
 
-      <div className="p-3 space-y-3">
+      <div id="trigger-stack-section" className="p-3 space-y-3 scroll-mt-2">
         <div className="flex justify-between items-end mb-1">
           <div className="text-xs font-bold text-muted-foreground">TRIGGER STACK</div>
           {strategyScore && (
@@ -99,17 +108,60 @@ export function LiveBoardPanel({ event, recommendation, isLoading, isError }: Li
               : "—"}
           </div>
         </div>
-        {triggerStack?.detectedTriggers && triggerStack.detectedTriggers.length > 0 && (
-          <div className="mt-2 text-xs">
+
+        {detectedTriggers.length > 0 ? (
+          <div className="mt-2 text-xs space-y-1">
             <div className="text-muted-foreground mb-1">DETECTIONS</div>
-            <div className="flex flex-wrap gap-1">
-              {triggerStack.detectedTriggers.map((t, i) => (
-                <span key={i} className="bg-muted/50 border border-border px-1 py-0.5 rounded text-[10px]">
-                  {t}
-                </span>
-              ))}
-            </div>
+            {detectedTriggers.map((t) => {
+              const isFocused = focusedTrigger === t.name;
+              const isContext = t.category === "entry_refinement";
+              const detail = t.detail ? safeText(t.detail) : null;
+              return (
+                <button
+                  key={t.name}
+                  type="button"
+                  onClick={() => focusTrigger(isFocused ? null : t.name)}
+                  className={`w-full text-left rounded border px-2 py-1 transition-colors ${
+                    isFocused
+                      ? "border-primary/60 bg-primary/10 ring-1 ring-primary/40"
+                      : "border-border bg-muted/30 hover:bg-muted/50"
+                  }`}
+                  title={detail ?? undefined}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-[10px] tracking-tight truncate">
+                      {t.name.replace(/_/g, " ")}
+                    </span>
+                    <span
+                      className={`ml-auto shrink-0 rounded border px-1 py-0 text-[8px] uppercase ${
+                        isContext
+                          ? "border-border text-muted-foreground bg-muted/30"
+                          : "border-primary/40 text-primary bg-primary/10"
+                      }`}
+                    >
+                      {isContext ? "CONTEXT" : "EDGE"}
+                    </span>
+                  </div>
+                  {isFocused && detail && (
+                    <div className="mt-1 text-[10px] leading-snug text-muted-foreground whitespace-pre-wrap">
+                      {detail}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+            {detectedTriggers.some((t) => t.category === "entry_refinement") && (
+              <div className="text-[9px] text-muted-foreground/60 pt-0.5">
+                CONTEXT = supporting structure, not a promotable edge.
+              </div>
+            )}
           </div>
+        ) : (
+          !blocked && (
+            <div className="mt-2 text-[10px] text-muted-foreground/60">
+              No triggers detected.
+            </div>
+          )
         )}
       </div>
 

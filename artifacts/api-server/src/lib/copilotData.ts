@@ -39,7 +39,12 @@ export function loadFixtureInput(symbol: string): BuildEventInput | null {
 type YahooIntradayResponse = {
   chart?: {
     result?: Array<{
-      meta?: { regularMarketPrice?: number; regularMarketTime?: number };
+      meta?: {
+        regularMarketPrice?: number;
+        regularMarketTime?: number;
+        chartPreviousClose?: number;
+        previousClose?: number;
+      };
       timestamp?: number[];
       indicators?: {
         quote?: Array<{
@@ -145,11 +150,21 @@ export async function fetchIntradayInput(
   const quote: Quote | null =
     price !== null ? { bid: null, ask: null, last: price, quoteTime } : null;
 
+  // Prior-session close gates the deterministic gap detectors. It only exists
+  // on the live (delayed) feed; fixtures intentionally leave it null.
+  const rawPriorClose =
+    result.meta?.chartPreviousClose ?? result.meta?.previousClose ?? null;
+  const priorClose =
+    typeof rawPriorClose === "number" && Number.isFinite(rawPriorClose)
+      ? rawPriorClose
+      : null;
+
   return {
     symbol: symbol.toUpperCase(),
     mode,
     dataSource: INTRADAY_SOURCE,
     bars,
     quote,
+    priorClose,
   };
 }

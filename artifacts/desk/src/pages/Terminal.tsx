@@ -16,8 +16,10 @@ import {
 } from "@workspace/api-client-react";
 import { useTerminalStore } from "@/hooks/use-terminal-store";
 import { useReplayStore } from "@/hooks/use-replay-store";
+import { useTriggerAlerts } from "@/hooks/use-trigger-alerts";
 
 import { LiveBoardPanel } from "@/components/LiveBoardPanel";
+import { TriggerBanner } from "@/components/TriggerBanner";
 import { FinalReadPanel } from "@/components/FinalReadPanel";
 import { AnalystCommitteePanel } from "@/components/AnalystCommitteePanel";
 import { FeedQualityPanel } from "@/components/FeedQualityPanel";
@@ -154,6 +156,12 @@ export default function Terminal() {
   const currentMode = event?.mode ?? (isReplay ? "REPLAY" : "RESEARCH");
   const replayUnavailable = isReplay && !!replaySessionError;
 
+  // Live trigger banner. The stream key intentionally excludes the replay step
+  // so stepping diffs against the prior bar; symbol/mode/date/source changes
+  // reset the baseline.
+  const streamKey = `${symbol}:${currentMode}:${isReplay ? date ?? "" : source}`;
+  useTriggerAlerts(event, streamKey);
+
   const headerDate = event?.timestamp ? new Date(event.timestamp) : null;
   const headerTime =
     headerDate && !isNaN(headerDate.getTime())
@@ -180,6 +188,7 @@ export default function Terminal() {
 
   return (
     <div className="h-screen w-full bg-background text-foreground flex flex-col overflow-hidden font-sans">
+      <TriggerBanner />
       <header className="h-12 border-b border-border bg-card/50 flex items-center px-4 justify-between shrink-0 gap-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="font-mono font-bold text-sm tracking-tight whitespace-nowrap">

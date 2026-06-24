@@ -42,3 +42,15 @@ export const TARGET_R_MULTIPLE = 2;
 
 /** Trigger-stack credibility below this -> credibility WARN. */
 export const MIN_CREDIBILITY = 0.3;
+
+/** Fractal radius (bars on each side) used to confirm a swing pivot. */
+export const SWING_LOOKBACK = 2;
+
+/** Number of bars before the latest that form the volatility-contraction coil. */
+export const COMPRESSION_LOOKBACK = 6;
+
+/** Coil range at or below this multiple of ATR counts as a contraction. */
+export const COMPRESSION_RANGE_ATR = 1.5;
+
+/** Absolute open-vs-prior-close gap (percent) needed to register a gap. */
+export const GAP_MIN_PCT = 1;

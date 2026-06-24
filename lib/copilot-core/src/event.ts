@@ -67,7 +67,9 @@ export function buildCopilotEvent(input: BuildEventInput): CopilotEvent {
   const quote = input.quote ?? null;
 
   const features = computeFeatures(bars, quote);
-  const triggers = detectTriggers(bars, features);
+  const triggers = detectTriggers(bars, features, {
+    priorClose: input.priorClose ?? null,
+  });
   const triggerStack = buildTriggerStack(triggers);
   const direction = inferDirection(triggers);
 

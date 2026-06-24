@@ -89,6 +89,22 @@ export interface BuildEventInput {
   nowMs?: number;
   position?: PositionInput | null;
   validation?: ValidationSnapshot | null;
+  /**
+   * Prior regular-session close, when a data source can supply it. Gap detectors
+   * stay dormant (never fire) when this is absent, so single-session fixtures
+   * cannot produce spurious gap signals. Deliberately NOT part of {@link Features}
+   * so it never leaks onto the wire snapshot.
+   */
+  priorClose?: number | null;
+}
+
+/**
+ * Optional out-of-band context for {@link detectTriggers} that is not derivable
+ * from the in-session bars alone. Detectors requiring a field must treat its
+ * absence (null) as "cannot evaluate" and report `detected: false`.
+ */
+export interface TriggerContext {
+  priorClose: number | null;
 }
 
 export interface Features {

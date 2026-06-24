@@ -54,3 +54,64 @@ export function lowest(values: number[]): number | null {
   for (const v of values) if (v < lo) lo = v;
   return lo;
 }
+
+/** A confirmed swing pivot: its bar index and the pivot price. */
+export interface SwingPoint {
+  index: number;
+  price: number;
+}
+
+/**
+ * Confirmed swing highs using a symmetric fractal: bar `i` is a swing high when
+ * its high is strictly greater than the highs of the `lookback` bars on each
+ * side. The most recent `lookback` bars can never be confirmed yet (no future
+ * bars to compare against), which keeps detection deterministic and replayable.
+ */
+export function swingHighs(bars: Bar[], lookback: number): SwingPoint[] {
+  const out: SwingPoint[] = [];
+  if (lookback < 1) return out;
+  for (let i = lookback; i < bars.length - lookback; i++) {
+    const pivot = bars[i].h;
+    let isSwing = true;
+    for (let j = i - lookback; j <= i + lookback; j++) {
+      if (j === i) continue;
+      if (bars[j].h >= pivot) {
+        isSwing = false;
+        break;
+      }
+    }
+    if (isSwing) out.push({ index: i, price: pivot });
+  }
+  return out;
+}
+
+/** Confirmed swing lows (mirror of {@link swingHighs}). */
+export function swingLows(bars: Bar[], lookback: number): SwingPoint[] {
+  const out: SwingPoint[] = [];
+  if (lookback < 1) return out;
+  for (let i = lookback; i < bars.length - lookback; i++) {
+    const pivot = bars[i].l;
+    let isSwing = true;
+    for (let j = i - lookback; j <= i + lookback; j++) {
+      if (j === i) continue;
+      if (bars[j].l <= pivot) {
+        isSwing = false;
+        break;
+      }
+    }
+    if (isSwing) out.push({ index: i, price: pivot });
+  }
+  return out;
+}
+
+/** Most recently confirmed swing high, or null when none exists. */
+export function lastSwingHigh(bars: Bar[], lookback: number): SwingPoint | null {
+  const highs = swingHighs(bars, lookback);
+  return highs.length > 0 ? highs[highs.length - 1] : null;
+}
+
+/** Most recently confirmed swing low, or null when none exists. */
+export function lastSwingLow(bars: Bar[], lookback: number): SwingPoint | null {
+  const lows = swingLows(bars, lookback);
+  return lows.length > 0 ? lows[lows.length - 1] : null;
+}
