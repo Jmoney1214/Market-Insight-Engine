@@ -169,6 +169,23 @@ describe("manual position read", () => {
   });
 });
 
+describe("event carries underlying bars", () => {
+  it("exposes the OHLCV bars used to build the event, oldest first", () => {
+    const fixture = getFixture("AAPL")!;
+    const event = eventFor("AAPL");
+    expect(event.bars).toHaveLength(fixture.bars.length);
+    expect(event.bars[0]).toEqual(fixture.bars[0]);
+    // The event timestamp is anchored to the most recent bar.
+    expect(event.bars[event.bars.length - 1].t * 1000).toBe(
+      Date.parse(event.timestamp),
+    );
+  });
+
+  it("emits an empty bar array on total data failure (NODATA)", () => {
+    expect(eventFor("NODATA").bars).toEqual([]);
+  });
+});
+
 describe("locked threshold constants", () => {
   it("pins the deterministic thresholds", () => {
     expect(STALE_QUOTE_SECONDS).toBe(60);

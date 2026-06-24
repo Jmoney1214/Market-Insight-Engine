@@ -190,4 +190,6 @@ export interface CopilotEvent {
   position: PositionRead;
   feedQuality: FeedQuality;
   warnings: string[];
+  /** OHLCV bars underlying this event, oldest first; empty on data failure. */
+  bars: Bar[];
 }

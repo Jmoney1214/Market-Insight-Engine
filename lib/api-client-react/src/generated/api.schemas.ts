@@ -237,6 +237,24 @@ export interface CopilotHealth {
 }
 
 /**
+ * A single OHLCV price bar. `t` is epoch seconds at the bar open.
+ */
+export interface CopilotBar {
+  /** Epoch seconds at the bar open */
+  t: number;
+  /** Open */
+  o: number;
+  /** High */
+  h: number;
+  /** Low */
+  l: number;
+  /** Close */
+  c: number;
+  /** Volume */
+  v: number;
+}
+
+/**
  * LIVE | REPLAY | RESEARCH
  */
 export type CopilotEventMode = typeof CopilotEventMode[keyof typeof CopilotEventMode];
@@ -486,6 +504,8 @@ export interface CopilotEvent {
   position: PositionRead;
   feedQuality: FeedQuality;
   warnings: string[];
+  /** OHLCV bars underlying this event, oldest first; empty on data failure. */
+  bars: CopilotBar[];
 }
 
 export type AgentReadAgent = typeof AgentReadAgent[keyof typeof AgentReadAgent];

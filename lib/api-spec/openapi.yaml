@@ -908,6 +908,30 @@ components:
         service:
           type: string
 
+    CopilotBar:
+      type: object
+      description: A single OHLCV price bar. `t` is epoch seconds at the bar open.
+      required: [t, o, h, l, c, v]
+      properties:
+        t:
+          type: number
+          description: Epoch seconds at the bar open
+        o:
+          type: number
+          description: Open
+        h:
+          type: number
+          description: High
+        l:
+          type: number
+          description: Low
+        c:
+          type: number
+          description: Close
+        v:
+          type: number
+          description: Volume
+
     CopilotEvent:
       type: object
       description: Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
@@ -929,6 +953,7 @@ components:
         - position
         - feedQuality
         - warnings
+        - bars
       properties:
         eventId:
           type: string
@@ -978,6 +1003,11 @@ components:
           type: array
           items:
             type: string
+        bars:
+          type: array
+          description: "OHLCV bars underlying this event, oldest first; empty on data failure."
+          items:
+            $ref: "#/components/schemas/CopilotBar"
 
     AgentRead:
       type: object

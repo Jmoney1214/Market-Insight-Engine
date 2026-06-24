@@ -5,6 +5,7 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
+import type { CopilotBar } from './copilotBar';
 import type { CopilotEventAlertLevel } from './copilotEventAlertLevel';
 import type { CopilotEventMode } from './copilotEventMode';
 import type { CopilotTrigger } from './copilotTrigger';
@@ -46,4 +47,6 @@ export interface CopilotEvent {
   position: PositionRead;
   feedQuality: FeedQuality;
   warnings: string[];
+  /** OHLCV bars underlying this event, oldest first; empty on data failure. */
+  bars: CopilotBar[];
 }

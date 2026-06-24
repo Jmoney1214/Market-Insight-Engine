@@ -324,7 +324,15 @@ export const GetCopilotEventResponse = zod.object({
   "verdict": zod.enum(['OK', 'DEGRADED', 'BLOCKED']),
   "notes": zod.string().nullable()
 }),
-  "warnings": zod.array(zod.string())
+  "warnings": zod.array(zod.string()),
+  "bars": zod.array(zod.object({
+  "t": zod.number().describe('Epoch seconds at the bar open'),
+  "o": zod.number().describe('Open'),
+  "h": zod.number().describe('High'),
+  "l": zod.number().describe('Low'),
+  "c": zod.number().describe('Close'),
+  "v": zod.number().describe('Volume')
+}).describe('A single OHLCV price bar. `t` is epoch seconds at the bar open.')).describe('OHLCV bars underlying this event, oldest first; empty on data failure.')
 }).describe('Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.')
 
 
@@ -583,7 +591,15 @@ export const ListHistoryEventsResponseItem = zod.object({
   "verdict": zod.enum(['OK', 'DEGRADED', 'BLOCKED']),
   "notes": zod.string().nullable()
 }),
-  "warnings": zod.array(zod.string())
+  "warnings": zod.array(zod.string()),
+  "bars": zod.array(zod.object({
+  "t": zod.number().describe('Epoch seconds at the bar open'),
+  "o": zod.number().describe('Open'),
+  "h": zod.number().describe('High'),
+  "l": zod.number().describe('Low'),
+  "c": zod.number().describe('Close'),
+  "v": zod.number().describe('Volume')
+}).describe('A single OHLCV price bar. `t` is epoch seconds at the bar open.')).describe('OHLCV bars underlying this event, oldest first; empty on data failure.')
 }).describe('Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.'),
   "createdAt": zod.string()
 })
@@ -716,7 +732,15 @@ export const GetReplayEventResponse = zod.object({
   "verdict": zod.enum(['OK', 'DEGRADED', 'BLOCKED']),
   "notes": zod.string().nullable()
 }),
-  "warnings": zod.array(zod.string())
+  "warnings": zod.array(zod.string()),
+  "bars": zod.array(zod.object({
+  "t": zod.number().describe('Epoch seconds at the bar open'),
+  "o": zod.number().describe('Open'),
+  "h": zod.number().describe('High'),
+  "l": zod.number().describe('Low'),
+  "c": zod.number().describe('Close'),
+  "v": zod.number().describe('Volume')
+}).describe('A single OHLCV price bar. `t` is epoch seconds at the bar open.')).describe('OHLCV bars underlying this event, oldest first; empty on data failure.')
 }).describe('Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.')
 
 

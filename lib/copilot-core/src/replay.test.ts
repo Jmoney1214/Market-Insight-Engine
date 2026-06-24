@@ -95,6 +95,14 @@ describe("replay events through the deterministic pipeline", () => {
     expect(late.hardBlocks).toHaveLength(0);
   });
 
+  it("exposes the revealed bars[0..step] on the built event (N+1 bars)", () => {
+    const event = buildCopilotEvent(buildReplayInput("AAPL", DATE, 9)!);
+    expect(event.bars).toHaveLength(10);
+    expect(event.bars[event.bars.length - 1].t * 1000).toBe(
+      Date.parse(event.timestamp),
+    );
+  });
+
   it("keeps replay separate from live: distinct mode, source, and eventId", () => {
     const replay = buildCopilotEvent(buildReplayInput("AAPL", DATE, 70)!);
     const live = buildCopilotEvent({

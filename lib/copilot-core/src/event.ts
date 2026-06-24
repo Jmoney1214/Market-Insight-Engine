@@ -128,6 +128,7 @@ export function buildCopilotEvent(input: BuildEventInput): CopilotEvent {
     position,
     feedQuality,
     warnings,
+    bars,
   };
 
   return sanitizeDeep(event);

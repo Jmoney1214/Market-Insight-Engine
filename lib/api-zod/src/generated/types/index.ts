@@ -22,6 +22,7 @@ export * from './committeeReadSource';
 export * from './committeeReadStatus';
 export * from './companySnapshot';
 export * from './comparable';
+export * from './copilotBar';
 export * from './copilotEvent';
 export * from './copilotEventAlertLevel';
 export * from './copilotEventMode';

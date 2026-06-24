@@ -42,5 +42,13 @@ export function coreEventToApiEvent(event: CoreCopilotEvent): ApiCopilotEvent {
     position: { ...event.position },
     feedQuality: { ...event.feedQuality },
     warnings: [...event.warnings],
+    bars: event.bars.map((b) => ({
+      t: b.t,
+      o: b.o,
+      h: b.h,
+      l: b.l,
+      c: b.c,
+      v: b.v,
+    })),
   };
 }
