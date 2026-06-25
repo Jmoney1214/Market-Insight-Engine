@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { CopilotEvent } from "@workspace/api-client-react";
-import { deriveTriggerAlerts } from "@/lib/trigger-alerts";
+import { deriveTriggerAlerts, eventAlertSignature } from "@/lib/trigger-alerts";
 import { useTriggerAlertStore } from "@/hooks/use-trigger-alert-store";
 
 // Orchestrates the live trigger banner. Tracks the previous event for the
@@ -21,27 +21,31 @@ export function useTriggerAlerts(
 
   const prevEventRef = useRef<CopilotEvent | null>(null);
   const streamKeyRef = useRef<string | null>(null);
-  const lastEventIdRef = useRef<string | null>(null);
+  const lastSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Stream changed: reset baseline and clear stale UI state.
     if (streamKeyRef.current !== streamKey) {
       streamKeyRef.current = streamKey;
       prevEventRef.current = null;
-      lastEventIdRef.current = null;
+      lastSignatureRef.current = null;
       clearAlerts();
       focusTrigger(null);
     }
 
     if (!event) return;
-    // Guard against reprocessing the same event (polling refetch identity churn
-    // or a re-render with unchanged data).
-    if (lastEventIdRef.current === event.eventId) return;
+    // Guard against reprocessing identical polls (refetch identity churn or a
+    // re-render with unchanged data). The signature keys off content
+    // (eventId + the detected-state vector) rather than eventId alone, so an
+    // intrabar false -> true flip — which shares the same eventId during a live
+    // polling bar — is processed promptly instead of waiting for the bar close.
+    const signature = eventAlertSignature(event);
+    if (lastSignatureRef.current === signature) return;
 
     const alerts = deriveTriggerAlerts(prevEventRef.current, event);
     if (alerts.length > 0) pushAlerts(alerts);
 
     prevEventRef.current = event;
-    lastEventIdRef.current = event.eventId;
+    lastSignatureRef.current = signature;
   }, [event, streamKey, pushAlerts, clearAlerts, focusTrigger]);
 }

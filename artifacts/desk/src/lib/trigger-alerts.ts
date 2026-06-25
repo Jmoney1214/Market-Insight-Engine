@@ -20,6 +20,27 @@ export interface TriggerAlert {
 }
 
 /**
+ * Compact content signature used to dedupe live polls. Keying off this instead
+ * of `eventId` alone lets an intrabar transition alert promptly: during a live
+ * (RESEARCH polling) bar every poll shares the same `eventId`
+ * (`symbol:mode:lastBarTime`), so a trigger that flips false -> true mid-bar
+ * would otherwise wait for the bar to close. Including the detected-state vector
+ * means the signature changes the moment a trigger fires, while identical polls
+ * (same detected set) keep the same signature and are skipped — preserving the
+ * no-churn / debounce behaviour.
+ */
+export function eventAlertSignature(
+  event: CopilotEvent | null | undefined,
+): string | null {
+  if (!event) return null;
+  const detected = event.triggers
+    .map((t) => `${t.name}:${t.detected ? 1 : 0}`)
+    .sort()
+    .join(",");
+  return `${event.eventId}|${detected}`;
+}
+
+/**
  * Diff the previous and current events and return the triggers that just fired
  * (false -> true). Returns [] when:
  *  - there is no current event,
