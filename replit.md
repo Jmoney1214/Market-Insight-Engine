@@ -10,6 +10,10 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+- Live market data (optional; falls back to mock per-section when absent):
+  - `FMP_API_KEY` — Financial Modeling Prep (fundamentals, financials, valuation, analyst targets, news)
+  - `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` — Alpaca market data (real-time price + technicals)
+  - `ALPACA_FEED` — `sip` (default, paid consolidated) or `iex` (free)
 
 ## Stack
 
@@ -26,7 +30,10 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- `/analyze` builds reports via `artifacts/api-server/src/lib/buildReport.ts`, which fuses live data from FMP (`lib/providers/fmp.ts`) and Alpaca SIP (`lib/providers/alpaca.ts`) into the exact shape produced by `mockData.ts`.
+- Graceful degradation is per-section: missing/failed provider → that section falls back to mock and its `isPlaceholder` flag reflects whether the data is real. With no keys at all, the app returns a full mock report.
+- Price prefers Alpaca SIP real-time trade; technicals (RSI/SMA/support/resistance/golden cross) are computed locally in `lib/providers/indicators.ts` from Alpaca daily bars. Fundamentals, valuation, analyst targets, and news come from FMP's `stable` API.
+- Provider API keys are read from env only (`lib/providers/config.ts`) — never committed.
 
 ## Product
 

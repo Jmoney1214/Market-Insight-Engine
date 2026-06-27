@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, reportsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { AnalyzeTickerBody, GetReportParams, DeleteReportParams } from "@workspace/api-zod";
-import { generateMockReport } from "../lib/mockData.js";
+import { buildReport } from "../lib/buildReport.js";
 
 const router = Router();
 
@@ -21,17 +21,17 @@ router.post("/analyze", async (req, res) => {
     return;
   }
 
-  const mockReport = generateMockReport(tickerUpper, 0);
+  const report = await buildReport(tickerUpper, 0);
 
   const [inserted] = await db
     .insert(reportsTable)
     .values({
       ticker: tickerUpper,
-      companyName: mockReport.companyName,
-      sector: mockReport.sector,
-      industry: mockReport.industry,
-      overallRating: mockReport.overallRating,
-      reportData: mockReport as unknown as Record<string, unknown>,
+      companyName: report.companyName,
+      sector: report.sector,
+      industry: report.industry,
+      overallRating: report.overallRating,
+      reportData: report as unknown as Record<string, unknown>,
     })
     .returning();
 

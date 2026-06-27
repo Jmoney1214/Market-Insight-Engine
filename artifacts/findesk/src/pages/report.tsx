@@ -345,7 +345,7 @@ export default function ReportPage() {
                 </div>
                 <div className="lg:col-span-2 h-[260px] rounded-md border border-border bg-background/40 p-4">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 text-center">
-                    Revenue history (millions)
+                    Revenue history ($ billions)
                   </p>
                   <ResponsiveContainer width="100%" height="85%">
                     <BarChart data={financials.revenueHistory}>
