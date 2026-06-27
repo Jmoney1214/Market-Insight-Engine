@@ -26,7 +26,18 @@ async function fmpGet<T = unknown>(
       logger.warn({ path, status: res.status }, "FMP request failed");
       return null;
     }
-    return (await res.json()) as T;
+    const data = await res.json();
+    // FMP can return 200 OK with an error payload (e.g. {"Error Message": "..."})
+    // on rate limits / key issues. Treat these as failures so downstream array
+    // operations don't throw and the section degrades gracefully.
+    if (data && typeof data === "object" && !Array.isArray(data)) {
+      const obj = data as Record<string, unknown>;
+      if ("Error Message" in obj || "error" in obj) {
+        logger.warn({ path, error: obj["Error Message"] ?? obj["error"] }, "FMP returned API error");
+        return null;
+      }
+    }
+    return data as T;
   } catch (err) {
     logger.warn({ path, err: String(err) }, "FMP request errored");
     return null;
@@ -108,7 +119,7 @@ export async function getIncomeStatements(symbol: string): Promise<FmpIncome[] |
     period: "annual",
     limit: 5,
   });
-  if (!rows) return null;
+  if (!Array.isArray(rows)) return null;
   return rows.map((r) => ({
     fiscalYear: String(r["fiscalYear"] ?? r["date"] ?? ""),
     revenue: Number(r["revenue"] ?? 0),
@@ -119,7 +130,10 @@ export async function getIncomeStatements(symbol: string): Promise<FmpIncome[] |
 export async function getDcf(symbol: string): Promise<FmpDcf | null> {
   const row = first(await fmpGet<Array<Record<string, unknown>>>("discounted-cash-flow", { symbol }));
   if (!row) return null;
-  return { dcf: Number(row["dcf"] ?? 0), price: Number(row["Stock Price"] ?? 0) };
+  const dcf = Number(row["dcf"] ?? 0);
+  // Guard against zero/invalid DCF — downstream divides by this value.
+  if (!Number.isFinite(dcf) || dcf <= 0) return null;
+  return { dcf, price: Number(row["Stock Price"] ?? 0) };
 }
 
 export function getPriceTarget(symbol: string): Promise<FmpPriceTarget | null> {
@@ -132,10 +146,11 @@ export function getRating(symbol: string): Promise<FmpRating | null> {
 
 export async function getPeers(symbol: string): Promise<string[] | null> {
   const rows = await fmpGet<Array<Record<string, unknown>>>("stock-peers", { symbol });
-  if (!rows) return null;
+  if (!Array.isArray(rows)) return null;
   return rows.map((r) => String(r["symbol"] ?? "")).filter(Boolean);
 }
 
-export function getStockNews(symbol: string, limit = 6): Promise<FmpNewsItem[] | null> {
-  return fmpGet<FmpNewsItem[]>("news/stock", { symbols: symbol, limit });
+export async function getStockNews(symbol: string, limit = 6): Promise<FmpNewsItem[] | null> {
+  const rows = await fmpGet<FmpNewsItem[]>("news/stock", { symbols: symbol, limit });
+  return Array.isArray(rows) ? rows : null;
 }

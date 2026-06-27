@@ -104,9 +104,10 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
       ? round(ratios["netIncomePerShareTTM"])
       : base.snapshot.eps,
     revenue: income?.[0]?.revenue ? formatBigUSD(income[0].revenue) : base.snapshot.revenue,
-    employees: profile?.fullTimeEmployees
-      ? Number(profile.fullTimeEmployees).toLocaleString("en-US")
-      : base.snapshot.employees,
+    employees:
+      profile?.fullTimeEmployees && Number.isFinite(Number(profile.fullTimeEmployees))
+        ? Number(profile.fullTimeEmployees).toLocaleString("en-US")
+        : base.snapshot.employees,
     headquarters:
       profile?.city && profile?.state ? `${profile.city}, ${profile.state}` : base.snapshot.headquarters,
     founded: profile?.ipoDate ? profile.ipoDate.split("-")[0]! : base.snapshot.founded,
@@ -142,7 +143,7 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
   const intrinsicLow = priceTarget?.targetLow || (dcf ? round(dcf.dcf * 0.85) : base.valuation.intrinsicValueLow);
   const intrinsicHigh = priceTarget?.targetHigh || (dcf ? round(dcf.dcf * 1.15) : base.valuation.intrinsicValueHigh);
   const consensus = priceTarget?.targetConsensus ?? priceTarget?.targetMedian;
-  const dcfNotes = dcf
+  const dcfNotes = dcf && dcf.dcf > 0
     ? `DCF intrinsic value estimate: $${round(dcf.dcf)}/share. At the current price of $${price}, the stock trades at a ${Math.abs(round(((price - dcf.dcf) / dcf.dcf) * 100))}% ${price >= dcf.dcf ? "premium to" : "discount to"} DCF fair value.${consensus ? ` Analyst consensus target: $${round(consensus)}.` : ""}`
     : base.valuation.dcfNotes;
   const peComparison =
