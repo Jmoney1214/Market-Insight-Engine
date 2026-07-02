@@ -17,7 +17,9 @@
 import {
   COMPRESSION_LOOKBACK,
   COMPRESSION_RANGE_ATR,
+  EARNINGS_DRIFT_WINDOW_SECONDS,
   GAP_MIN_PCT,
+  RELATIVE_STRENGTH_MIN_PCT,
   SWING_LOOKBACK,
 } from "./constants";
 import {
@@ -49,6 +51,8 @@ const BULLISH = new Set([
   "VOLATILITY_COMPRESSION_BREAKOUT_LONG",
   "GAP_CONTINUATION_LONG",
   "GAP_FADE_LONG",
+  "POST_EARNINGS_DRIFT_LONG",
+  "RELATIVE_STRENGTH_MOMENTUM_LONG",
 ]);
 const BEARISH = new Set([
   "OPENING_RANGE_FAILURE",
@@ -57,6 +61,8 @@ const BEARISH = new Set([
   "VOLATILITY_COMPRESSION_BREAKOUT_SHORT",
   "GAP_CONTINUATION_SHORT",
   "GAP_FADE_SHORT",
+  "POST_EARNINGS_DRIFT_SHORT",
+  "RELATIVE_STRENGTH_MOMENTUM_SHORT",
 ]);
 
 function makeTrigger(
@@ -68,7 +74,11 @@ function makeTrigger(
   return { name, category, detected, detail };
 }
 
-const NO_CONTEXT: TriggerContext = { priorClose: null };
+const NO_CONTEXT: TriggerContext = {
+  priorClose: null,
+  earningsTime: null,
+  benchmarkReturnPct: null,
+};
 
 export function detectTriggers(
   bars: Bar[],
@@ -187,6 +197,22 @@ export function detectTriggers(
   // --- Gap continuation / fade (primary edge, gated on prior-session close). -
   const gap = detectGapTriggers(bars, features, context.priorClose);
   triggers.push(gap.continuation, gap.fade);
+
+  // --- Post-earnings drift (primary edge, gated on a recent earnings date plus
+  //     the prior-session close). Dormant when either is unavailable. ---------
+  triggers.push(
+    detectPostEarningsDrift(
+      bars,
+      features,
+      context.priorClose,
+      context.earningsTime,
+    ),
+  );
+
+  // --- Relative-strength momentum (primary edge, gated on a benchmark return). -
+  triggers.push(
+    detectRelativeStrength(bars, features, context.benchmarkReturnPct),
+  );
 
   // --- Entry-refinement context (ICT/SMC + structure). Context only. -------
   triggers.push(...detectStructureTriggers(bars, features));
@@ -320,6 +346,130 @@ function detectGapTriggers(
   }
 
   return { continuation, fade };
+}
+
+/**
+ * Post-earnings drift: a directional primary edge gated on a recent earnings
+ * report (epoch-seconds timestamp) AND the prior-session close. Both are
+ * out-of-band context the in-session bars cannot supply, so the detector stays
+ * dormant (detected:false) when either is missing — fixtures/replay leave them
+ * null and therefore never fabricate an earnings signal. The drift direction is
+ * the post-earnings gap direction once it holds through the opening range on
+ * expanding volume; direction is encoded in the trigger name so it can feed the
+ * directional bias as a genuine primary edge.
+ */
+function detectPostEarningsDrift(
+  bars: Bar[],
+  features: Features,
+  priorClose: number | null,
+  earningsTime: number | null,
+): Trigger {
+  const name = "POST_EARNINGS_DRIFT";
+  const { price, openingRangeHigh, openingRangeLow, volumeExpansion } = features;
+  const sessionOpen = bars.length > 0 ? bars[0].o : null;
+  const sessionStart = bars.length > 0 ? bars[0].t : null;
+
+  if (
+    earningsTime === null ||
+    priorClose === null ||
+    priorClose <= 0 ||
+    sessionOpen === null ||
+    sessionStart === null ||
+    price === null ||
+    openingRangeHigh === null ||
+    openingRangeLow === null ||
+    volumeExpansion !== true
+  ) {
+    return makeTrigger(name, "primary_edge", false, null);
+  }
+
+  // The report must precede this session's open and fall inside the recency
+  // window, so only a fresh, drift-eligible report can arm the detector.
+  const sinceEarnings = sessionStart - earningsTime;
+  const reportedRecently =
+    sinceEarnings >= 0 && sinceEarnings <= EARNINGS_DRIFT_WINDOW_SECONDS;
+  if (!reportedRecently) {
+    return makeTrigger(name, "primary_edge", false, null);
+  }
+
+  const gapPct = round(((sessionOpen - priorClose) / priorClose) * 100, 2);
+  const gapUp = gapPct >= GAP_MIN_PCT;
+  const gapDown = gapPct <= -GAP_MIN_PCT;
+
+  if (gapUp && price > openingRangeHigh) {
+    return makeTrigger(
+      `${name}_LONG`,
+      "primary_edge",
+      true,
+      "Post-earnings gap up held above the opening range on expanding volume",
+    );
+  }
+  if (gapDown && price < openingRangeLow) {
+    return makeTrigger(
+      `${name}_SHORT`,
+      "primary_edge",
+      true,
+      "Post-earnings gap down held below the opening range on expanding volume",
+    );
+  }
+  return makeTrigger(name, "primary_edge", false, null);
+}
+
+/**
+ * Relative-strength momentum: a directional primary edge gated on a benchmark
+ * (e.g. SPY) percent return since the open. The symbol's since-open return is
+ * compared against the benchmark's; meaningful outperformance while holding
+ * above VWAP with intact higher-low structure is a bullish edge, and the mirror
+ * (underperformance below VWAP with a lower-high) is bearish. Without the
+ * benchmark return the detector cannot evaluate and stays dormant, so
+ * single-session fixtures never fabricate a relative-strength signal.
+ */
+function detectRelativeStrength(
+  bars: Bar[],
+  features: Features,
+  benchmarkReturnPct: number | null,
+): Trigger {
+  const name = "RELATIVE_STRENGTH_MOMENTUM";
+  const { price, vwap } = features;
+  const sessionOpen = bars.length > 0 ? bars[0].o : null;
+
+  if (
+    benchmarkReturnPct === null ||
+    sessionOpen === null ||
+    sessionOpen <= 0 ||
+    price === null ||
+    vwap === null
+  ) {
+    return makeTrigger(name, "primary_edge", false, null);
+  }
+
+  const symbolReturnPct = round(((price - sessionOpen) / sessionOpen) * 100, 2);
+  const relativePct = round(symbolReturnPct - benchmarkReturnPct, 2);
+
+  const highs = swingHighs(bars, SWING_LOOKBACK).map((p) => p.price);
+  const lows = swingLows(bars, SWING_LOOKBACK).map((p) => p.price);
+  const higherLow =
+    lows.length >= 2 && lows[lows.length - 1] > lows[lows.length - 2];
+  const lowerHigh =
+    highs.length >= 2 && highs[highs.length - 1] < highs[highs.length - 2];
+
+  if (relativePct >= RELATIVE_STRENGTH_MIN_PCT && price > vwap && higherLow) {
+    return makeTrigger(
+      `${name}_LONG`,
+      "primary_edge",
+      true,
+      "Outperforming the benchmark since the open while holding above VWAP",
+    );
+  }
+  if (relativePct <= -RELATIVE_STRENGTH_MIN_PCT && price < vwap && lowerHigh) {
+    return makeTrigger(
+      `${name}_SHORT`,
+      "primary_edge",
+      true,
+      "Underperforming the benchmark since the open while holding below VWAP",
+    );
+  }
+  return makeTrigger(name, "primary_edge", false, null);
 }
 
 /**

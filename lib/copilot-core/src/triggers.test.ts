@@ -271,6 +271,192 @@ describe("gap detectors (gated on prior-session close)", () => {
   });
 });
 
+describe("post-earnings drift (gated on a recent earnings date)", () => {
+  // 5m bars; session opens at t=0. A clean gap up that holds the opening range.
+  const DAY = 86_400;
+  const gapBars = (open: number): Bar[] => [
+    bar(0, open, open + 1, open - 0.5, open + 0.8, 5000),
+    bar(300, open + 0.8, open + 1.5, open + 0.3, open + 1.2, 5000),
+    bar(600, open + 1.2, open + 1.8, open + 0.8, open + 1.5, 5000),
+  ];
+  const driftFeat = () =>
+    feat({
+      price: 103,
+      openingRangeHigh: 102.5,
+      openingRangeLow: 101,
+      volumeExpansion: true,
+    });
+
+  it("stays dormant when no earnings time is available", () => {
+    const names = detectedNames(
+      detectTriggers(gapBars(102), driftFeat(), {
+        priorClose: 100,
+        earningsTime: null,
+        benchmarkReturnPct: null,
+      }),
+    );
+    expect(names.some((n) => n.startsWith("POST_EARNINGS_DRIFT"))).toBe(false);
+  });
+
+  it("stays dormant when the prior close is missing (no gap context)", () => {
+    const names = detectedNames(
+      detectTriggers(gapBars(102), driftFeat(), {
+        priorClose: null,
+        earningsTime: -DAY,
+        benchmarkReturnPct: null,
+      }),
+    );
+    expect(names.some((n) => n.startsWith("POST_EARNINGS_DRIFT"))).toBe(false);
+  });
+
+  it("stays dormant when the report is older than the recency window", () => {
+    const names = detectedNames(
+      detectTriggers(gapBars(102), driftFeat(), {
+        priorClose: 100,
+        earningsTime: -5 * DAY, // well before the 36h window
+        benchmarkReturnPct: null,
+      }),
+    );
+    expect(names.some((n) => n.startsWith("POST_EARNINGS_DRIFT"))).toBe(false);
+  });
+
+  it("fires LONG on a recent earnings gap up that holds the opening range", () => {
+    const triggers = detectTriggers(gapBars(102), driftFeat(), {
+      priorClose: 100,
+      earningsTime: -3600, // 1h before the session open
+      benchmarkReturnPct: null,
+    });
+    const names = detectedNames(triggers);
+    expect(names).toContain("POST_EARNINGS_DRIFT_LONG");
+    expect(inferDirection(triggers)).toBe("LONG");
+  });
+
+  it("fires SHORT on a recent earnings gap down that holds below the range", () => {
+    const triggers = detectTriggers(
+      gapBars(98),
+      feat({
+        price: 97,
+        openingRangeHigh: 99,
+        openingRangeLow: 97.5,
+        volumeExpansion: true,
+      }),
+      { priorClose: 100, earningsTime: -3600, benchmarkReturnPct: null },
+    );
+    const names = detectedNames(triggers);
+    expect(names).toContain("POST_EARNINGS_DRIFT_SHORT");
+    expect(inferDirection(triggers)).toBe("SHORT");
+  });
+
+  it("classifies the drift trigger as a promotable primary edge", () => {
+    const triggers = detectTriggers(gapBars(102), driftFeat(), {
+      priorClose: 100,
+      earningsTime: -3600,
+      benchmarkReturnPct: null,
+    });
+    const t = triggers.find((x) => x.name === "POST_EARNINGS_DRIFT_LONG");
+    expect(t?.category).toBe("primary_edge");
+  });
+});
+
+describe("relative-strength momentum (gated on a benchmark return)", () => {
+  // Rising structure: two higher swing lows so higher-low is intact.
+  const rsBase: Bar[] = [
+    bar(0, 100, 100.5, 99.8, 100.2),
+    bar(1, 100.2, 100.6, 99.5, 100),
+    bar(2, 100, 100.4, 99.2, 99.6), // swing low 99.2
+    bar(3, 99.8, 101, 99.8, 100.8),
+    bar(4, 100.8, 101.5, 100.4, 101.2),
+    bar(5, 101.2, 102, 100.8, 101.6), // swing high
+    bar(6, 101.4, 101.8, 100.6, 101),
+    bar(7, 101, 101.6, 100.2, 100.6), // swing low 100.2 (> 99.2)
+    bar(8, 100.8, 102, 100.6, 101.8),
+    bar(9, 101.8, 103, 101.5, 102.5),
+  ];
+
+  it("stays dormant when no benchmark return is available", () => {
+    const names = detectedNames(
+      detectTriggers(rsBase, feat({ price: 102.5, vwap: 101 }), {
+        priorClose: null,
+        earningsTime: null,
+        benchmarkReturnPct: null,
+      }),
+    );
+    expect(names.some((n) => n.startsWith("RELATIVE_STRENGTH"))).toBe(false);
+  });
+
+  it("does not fire when outperformance is below the noise threshold", () => {
+    // Symbol since-open return: (102.5-100)/100 = 2.5%. Benchmark 2.2% -> 0.3pp.
+    const names = detectedNames(
+      detectTriggers(rsBase, feat({ price: 102.5, vwap: 101 }), {
+        priorClose: null,
+        earningsTime: null,
+        benchmarkReturnPct: 2.2,
+      }),
+    );
+    expect(names.some((n) => n.startsWith("RELATIVE_STRENGTH"))).toBe(false);
+  });
+
+  it("fires LONG when the symbol outperforms above VWAP with a higher low", () => {
+    // Symbol 2.5% vs benchmark 0.5% -> 2.0pp outperformance.
+    const triggers = detectTriggers(rsBase, feat({ price: 102.5, vwap: 101 }), {
+      priorClose: null,
+      earningsTime: null,
+      benchmarkReturnPct: 0.5,
+    });
+    const names = detectedNames(triggers);
+    expect(names).toContain("RELATIVE_STRENGTH_MOMENTUM_LONG");
+    expect(inferDirection(triggers)).toBe("LONG");
+  });
+
+  it("does not fire LONG when price is below VWAP despite outperformance", () => {
+    const names = detectedNames(
+      detectTriggers(rsBase, feat({ price: 102.5, vwap: 103 }), {
+        priorClose: null,
+        earningsTime: null,
+        benchmarkReturnPct: 0.5,
+      }),
+    );
+    expect(names.some((n) => n.startsWith("RELATIVE_STRENGTH"))).toBe(false);
+  });
+
+  it("fires SHORT when the symbol underperforms below VWAP with a lower high", () => {
+    // Falling structure: two confirmed swing highs (103 @2, 102 @6), the later
+    // lower than the earlier, so lower-high is intact.
+    const rsDown: Bar[] = [
+      bar(0, 99, 100, 98, 99.5),
+      bar(1, 99.5, 101, 98.5, 100.5),
+      bar(2, 100.5, 103, 100, 102), // swing high 103
+      bar(3, 101, 101, 99, 99.5),
+      bar(4, 99.5, 100, 98, 98.5),
+      bar(5, 98.5, 100.5, 98, 100),
+      bar(6, 100, 102, 99, 101), // swing high 102 (< 103)
+      bar(7, 100, 100, 97.5, 98),
+      bar(8, 98, 99, 97, 97.5),
+      bar(9, 97.5, 98.5, 96.8, 97),
+      bar(10, 97, 98, 96.5, 97.2),
+    ];
+    // Symbol since-open: (97.2-99)/99 = -1.82% vs benchmark +0.5% -> -2.32pp.
+    const triggers = detectTriggers(rsDown, feat({ price: 97.2, vwap: 99 }), {
+      priorClose: null,
+      earningsTime: null,
+      benchmarkReturnPct: 0.5,
+    });
+    const names = detectedNames(triggers);
+    expect(names).toContain("RELATIVE_STRENGTH_MOMENTUM_SHORT");
+    expect(inferDirection(triggers)).toBe("SHORT");
+  });
+});
+
+describe("new context detectors stay dormant under NO_CONTEXT default", () => {
+  it("emits neither earnings drift nor relative strength without context", () => {
+    const bars = [...STRUCTURE_BASE, bar(10, 11.5, 13, 11, 12.5)];
+    // Called with the two-arg overload (default NO_CONTEXT).
+    const names = detectedNames(detectTriggers(bars, feat({ price: 12.5 })));
+    expect(names.some((n) => n.startsWith("POST_EARNINGS_DRIFT"))).toBe(false);
+    expect(names.some((n) => n.startsWith("RELATIVE_STRENGTH"))).toBe(false);
+  });
+});
+
 describe("buildTriggerStack", () => {
   const trig = (
     name: string,

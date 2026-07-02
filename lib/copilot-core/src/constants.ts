@@ -54,3 +54,17 @@ export const COMPRESSION_RANGE_ATR = 1.5;
 
 /** Absolute open-vs-prior-close gap (percent) needed to register a gap. */
 export const GAP_MIN_PCT = 1;
+
+/**
+ * Maximum age (seconds) of an earnings report, measured from the session open,
+ * for POST_EARNINGS_DRIFT to treat it as "recently reported". This is a
+ * deterministic approximation of "within the prior session" that covers an
+ * after-hours release the prior day and a pre-market release the session day.
+ */
+export const EARNINGS_DRIFT_WINDOW_SECONDS = 36 * 60 * 60;
+
+/**
+ * Minimum benchmark-relative outperformance (percentage points, since the open)
+ * for RELATIVE_STRENGTH_MOMENTUM to register, filtering out noise-level drift.
+ */
+export const RELATIVE_STRENGTH_MIN_PCT = 0.5;

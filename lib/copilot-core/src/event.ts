@@ -69,6 +69,8 @@ export function buildCopilotEvent(input: BuildEventInput): CopilotEvent {
   const features = computeFeatures(bars, quote);
   const triggers = detectTriggers(bars, features, {
     priorClose: input.priorClose ?? null,
+    earningsTime: input.earningsTime ?? null,
+    benchmarkReturnPct: input.benchmarkReturnPct ?? null,
   });
   const triggerStack = buildTriggerStack(triggers);
   const direction = inferDirection(triggers);

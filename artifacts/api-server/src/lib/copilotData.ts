@@ -22,6 +22,12 @@ export class CopilotDataError extends Error {
 
 export const INTRADAY_SOURCE = "yahoo_delayed";
 
+/** Benchmark/index series used for the relative-strength comparison. */
+export const BENCHMARK_SYMBOL = "SPY";
+
+const RESEARCH_USER_AGENT =
+  "Mozilla/5.0 (Trading Desk Copilot research client)";
+
 /** Build a deterministic event input from the built-in fixtures (no network). */
 export function loadFixtureInput(symbol: string): BuildEventInput | null {
   const fixture = getFixture(symbol);
@@ -60,15 +66,16 @@ type YahooIntradayResponse = {
   };
 };
 
+type YahooChartResult = NonNullable<
+  NonNullable<YahooIntradayResponse["chart"]>["result"]
+>[number];
+
 /**
- * Delayed intraday adapter using Yahoo's public v8 chart endpoint (no API key).
- * The data is delayed, not real-time, and is labeled as `yahoo_delayed`. It only
- * reads market data — it never places, approves, or simulates any position.
+ * Fetch and validate one symbol's delayed v8 chart payload, throwing a
+ * deterministic {@link CopilotDataError} on any transport/parse failure. Shared
+ * by the symbol feed and the benchmark series so both behave identically.
  */
-export async function fetchIntradayInput(
-  symbol: string,
-  mode: Mode = "LIVE",
-): Promise<BuildEventInput> {
+async function requestYahooChart(symbol: string): Promise<YahooChartResult> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(
     symbol,
   )}?range=1d&interval=5m`;
@@ -76,9 +83,7 @@ export async function fetchIntradayInput(
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Trading Desk Copilot research client)",
-      },
+      headers: { "User-Agent": RESEARCH_USER_AGENT },
       signal: AbortSignal.timeout(12_000),
     });
   } catch {
@@ -109,7 +114,11 @@ export async function fetchIntradayInput(
   if (!result || json.chart?.error) {
     throw new CopilotDataError(`No market data found for "${symbol}".`, 404);
   }
+  return result;
+}
 
+/** Parse the OHLCV bars out of a validated chart result. */
+function parseBars(result: YahooChartResult): Bar[] {
   const timestamps = result.timestamp ?? [];
   const q = result.indicators?.quote?.[0] ?? {};
   const bars: Bar[] = [];
@@ -139,7 +148,137 @@ export async function fetchIntradayInput(
       });
     }
   }
+  return bars;
+}
 
+/**
+ * Benchmark (SPY) percent return since the session open, used by the
+ * relative-strength detector. Best-effort: any failure resolves to null so the
+ * detector stays dormant rather than breaking the symbol's read.
+ */
+async function fetchBenchmarkReturnPct(): Promise<number | null> {
+  try {
+    const result = await requestYahooChart(BENCHMARK_SYMBOL);
+    const bars = parseBars(result);
+    const sessionOpen = bars.length > 0 ? bars[0].o : null;
+    const lastBar = bars.length > 0 ? bars[bars.length - 1] : null;
+    const price = result.meta?.regularMarketPrice ?? lastBar?.c ?? null;
+    if (sessionOpen === null || sessionOpen <= 0 || price === null) return null;
+    return Math.round(((price - sessionOpen) / sessionOpen) * 100 * 100) / 100;
+  } catch {
+    return null;
+  }
+}
+
+type YahooQuoteSummaryResponse = {
+  quoteSummary?: {
+    result?: Array<{
+      calendarEvents?: {
+        earnings?: {
+          earningsDate?: Array<{ raw?: number }>;
+        };
+      };
+    }>;
+  };
+};
+
+/**
+ * Acquire a Yahoo crumb + cookie pair needed by the authenticated quoteSummary
+ * endpoint. Keyless (no API key) but cookie-gated; best-effort, returns null on
+ * any failure.
+ */
+async function getYahooCrumb(): Promise<{
+  crumb: string;
+  cookie: string;
+} | null> {
+  try {
+    const seed = await fetch("https://fc.yahoo.com", {
+      headers: { "User-Agent": RESEARCH_USER_AGENT },
+      signal: AbortSignal.timeout(8_000),
+    });
+    const setCookies = seed.headers.getSetCookie?.() ?? [];
+    const cookie = setCookies
+      .map((c) => c.split(";")[0])
+      .filter(Boolean)
+      .join("; ");
+    if (!cookie) return null;
+
+    const crumbRes = await fetch(
+      "https://query1.finance.yahoo.com/v1/test/getcrumb",
+      {
+        headers: { "User-Agent": RESEARCH_USER_AGENT, cookie },
+        signal: AbortSignal.timeout(8_000),
+      },
+    );
+    if (!crumbRes.ok) return null;
+    const crumb = (await crumbRes.text()).trim();
+    if (!crumb || crumb.includes("<")) return null;
+    return { crumb, cookie };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Most recent PAST earnings timestamp (epoch seconds) for the symbol, used by
+ * the post-earnings-drift detector. Keyless (crumb/cookie, no API key) and
+ * best-effort: any failure — or when the only known earnings date is in the
+ * future — resolves to null so the detector stays dormant.
+ */
+async function fetchEarningsTime(symbol: string): Promise<number | null> {
+  try {
+    const creds = await getYahooCrumb();
+    if (!creds) return null;
+    const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(
+      symbol,
+    )}?modules=calendarEvents&crumb=${encodeURIComponent(creds.crumb)}`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": RESEARCH_USER_AGENT, cookie: creds.cookie },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as YahooQuoteSummaryResponse;
+    const dates =
+      json.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate ??
+      [];
+    const nowSec = Math.floor(Date.now() / 1000);
+    const past = dates
+      .map((d) => d.raw)
+      .filter(
+        (raw): raw is number =>
+          typeof raw === "number" && Number.isFinite(raw) && raw <= nowSec,
+      );
+    if (past.length === 0) return null;
+    return Math.max(...past);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Delayed intraday adapter using Yahoo's public v8 chart endpoint (no API key).
+ * The data is delayed, not real-time, and is labeled as `yahoo_delayed`. It only
+ * reads market data — it never places, approves, or simulates any position.
+ *
+ * Alongside the symbol's bars it sources two best-effort out-of-band context
+ * fields (the benchmark return and the most recent earnings time) used by the
+ * relative-strength and post-earnings-drift detectors. Either resolving to null
+ * simply leaves the corresponding detector dormant; they never block the read.
+ */
+export async function fetchIntradayInput(
+  symbol: string,
+  mode: Mode = "LIVE",
+): Promise<BuildEventInput> {
+  const symbolUpper = symbol.toUpperCase();
+  const [result, benchmarkReturnPct, earningsTime] = await Promise.all([
+    requestYahooChart(symbol),
+    symbolUpper === BENCHMARK_SYMBOL
+      ? Promise.resolve<number | null>(null)
+      : fetchBenchmarkReturnPct(),
+    fetchEarningsTime(symbol),
+  ]);
+
+  const bars = parseBars(result);
   const lastBar = bars.length > 0 ? bars[bars.length - 1] : null;
   const price = result.meta?.regularMarketPrice ?? lastBar?.c ?? null;
   const quoteTime =
@@ -160,11 +299,13 @@ export async function fetchIntradayInput(
       : null;
 
   return {
-    symbol: symbol.toUpperCase(),
+    symbol: symbolUpper,
     mode,
     dataSource: INTRADAY_SOURCE,
     bars,
     quote,
     priorClose,
+    earningsTime,
+    benchmarkReturnPct,
   };
 }

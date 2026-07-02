@@ -96,6 +96,19 @@ export interface BuildEventInput {
    * so it never leaks onto the wire snapshot.
    */
   priorClose?: number | null;
+  /**
+   * Epoch-seconds timestamp of the symbol's most recent earnings report, when a
+   * source can supply it. POST_EARNINGS_DRIFT stays dormant when this is absent,
+   * so fixtures/replay (which leave it null) never fabricate an earnings signal.
+   */
+  earningsTime?: number | null;
+  /**
+   * Benchmark/index (e.g. SPY) percent return since the session open, when a
+   * source can supply it. RELATIVE_STRENGTH_MOMENTUM stays dormant when this is
+   * absent. Like {@link priorClose}, it is out-of-band context and never part of
+   * {@link Features}, so it never leaks onto the wire snapshot.
+   */
+  benchmarkReturnPct?: number | null;
 }
 
 /**
@@ -105,6 +118,16 @@ export interface BuildEventInput {
  */
 export interface TriggerContext {
   priorClose: number | null;
+  /**
+   * Epoch-seconds timestamp of the most recent earnings report, or null when
+   * unavailable. POST_EARNINGS_DRIFT stays dormant when null.
+   */
+  earningsTime: number | null;
+  /**
+   * Benchmark (e.g. SPY) percent return since the session open, or null when
+   * unavailable. RELATIVE_STRENGTH_MOMENTUM stays dormant when null.
+   */
+  benchmarkReturnPct: number | null;
 }
 
 export interface Features {
