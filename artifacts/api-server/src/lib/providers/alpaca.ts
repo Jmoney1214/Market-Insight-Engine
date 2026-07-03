@@ -59,6 +59,34 @@ export async function getSnapshot(symbol: string): Promise<AlpacaSnapshot | null
   };
 }
 
+export type AlpacaNewsItem = { title: string; source: string; date: string; url: string };
+
+// Alpaca returns HTML-escaped headline text; decode the common entities.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
+}
+
+/** Company news from Alpaca's news API (paid, no per-request quota wall). */
+export async function getNews(symbol: string, limit = 10): Promise<AlpacaNewsItem[] | null> {
+  const url = new URL("https://data.alpaca.markets/v1beta1/news");
+  url.searchParams.set("symbols", symbol);
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("sort", "desc");
+  const data = await alpacaGet<{ news?: Array<Record<string, any>> }>(url);
+  if (!data?.news || data.news.length === 0) return null;
+  return data.news.map((n) => ({
+    title: decodeEntities(String(n["headline"] ?? "")),
+    source: String(n["source"] ?? "Alpaca"),
+    date: String(n["created_at"] ?? "").split("T")[0] ?? "",
+    url: String(n["url"] ?? ""),
+  }));
+}
+
 export type DailyBars = {
   closes: number[];
   highs: number[];

@@ -48,10 +48,12 @@ import { ReportNav, type NavSection } from "@/components/report/report-nav";
 import { VerdictSummary } from "@/components/report/verdict-summary";
 import { ReportSection, MetricTile, KeyValue } from "@/components/report/primitives";
 import { ValuationRangeBar, RsiGauge } from "@/components/report/charts";
+import { TradingViewChart, TradingViewTechnicals, TradingViewFundamentals } from "@/components/tradingview";
 
 const SECTIONS: NavSection[] = [
   { id: "verdict", label: "Verdict" },
   { id: "snapshot", label: "Snapshot" },
+  { id: "chart", label: "Chart" },
   { id: "catalysts", label: "Catalysts" },
   { id: "news", label: "News" },
   { id: "filings", label: "Filings" },
@@ -251,6 +253,11 @@ export default function ReportPage() {
           </Card>
         </ReportSection>
 
+        {/* Live chart (TradingView) */}
+        <ReportSection id="chart" title="Price Chart" icon={BarChart3}>
+          <TradingViewChart symbol={report.ticker} />
+        </ReportSection>
+
         {/* Catalysts */}
         <ReportSection id="catalysts" title="Catalyst Summary" icon={Target}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -371,6 +378,9 @@ export default function ReportPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="mt-4">
+            <TradingViewFundamentals symbol={report.ticker} />
+          </div>
         </ReportSection>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
@@ -457,6 +467,9 @@ export default function ReportPage() {
                 </div>
               </CardContent>
             </Card>
+            <div className="mt-4">
+              <TradingViewTechnicals symbol={report.ticker} />
+            </div>
           </ReportSection>
         </div>
 

@@ -54,6 +54,7 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     news,
     snapshot,
     bars,
+    alpacaNews,
   ] = await Promise.all([
     hasFmp ? fmp.getQuote(ticker) : Promise.resolve(null),
     hasFmp ? fmp.getProfile(ticker) : Promise.resolve(null),
@@ -66,7 +67,13 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     hasFmp ? fmp.getStockNews(ticker, 6) : Promise.resolve(null),
     hasAlpaca ? alpaca.getSnapshot(ticker) : Promise.resolve(null),
     hasAlpaca ? alpaca.getDailyBars(ticker) : Promise.resolve(null),
+    hasAlpaca ? alpaca.getNews(ticker, 10) : Promise.resolve(null),
   ]);
+
+  // News: prefer Alpaca (paid, no quota wall); fall back to FMP if present.
+  const newsList: Array<{ title: string; source: string; date: string }> | null =
+    alpacaNews ??
+    (news ? news.map((n) => ({ title: n.title, source: n.publisher || "FMP", date: (n.publishedDate || "").split(" ")[0] || "" })) : null);
 
   const report: Report = base;
 
@@ -189,19 +196,19 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
   }
 
   // ---- News (real headlines; sentiment is heuristic) -----------------------
-  if (news && news.length > 0) {
+  if (newsList && newsList.length > 0) {
     report.news = {
       isPlaceholder: false,
       sentiment: (() => {
-        const tones = news.map((n) => headlineSentiment(n.title));
+        const tones = newsList.map((n) => headlineSentiment(n.title));
         const bull = tones.filter((t) => t === "Bullish").length;
         const bear = tones.filter((t) => t === "Bearish").length;
         return bull > bear ? "Bullish" : bear > bull ? "Bearish" : "Neutral";
       })(),
-      headlines: news.slice(0, 5).map((n) => ({
+      headlines: newsList.slice(0, 5).map((n) => ({
         title: n.title,
-        source: n.publisher || "FMP",
-        date: (n.publishedDate || "").split(" ")[0] || "",
+        source: n.source,
+        date: n.date,
         sentiment: headlineSentiment(n.title),
       })),
     };
