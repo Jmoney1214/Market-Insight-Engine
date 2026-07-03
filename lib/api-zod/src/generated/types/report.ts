@@ -10,6 +10,7 @@ import type { CatalystSummary } from './catalystSummary';
 import type { CompanySnapshot } from './companySnapshot';
 import type { FilingsSummary } from './filingsSummary';
 import type { FinancialOverview } from './financialOverview';
+import type { Fundamentals } from './fundamentals';
 import type { NewsSummary } from './newsSummary';
 import type { RiskChecklist } from './riskChecklist';
 import type { TechnicalTrend } from './technicalTrend';
@@ -36,4 +37,5 @@ export interface Report {
   risks: RiskChecklist;
   thesis: Thesis;
   actionPlan: ActionPlan;
+  fundamentals?: Fundamentals;
 }

@@ -177,6 +177,53 @@ export interface ActionPlan {
   disclaimer: string;
 }
 
+/**
+ * Rich fundamentals data (FMP). Present when a fundamentals key is configured.
+ */
+export interface Fundamentals {
+  isPlaceholder: boolean;
+  /** @nullable */
+  fiscalYear?: string | null;
+  /** @nullable */
+  totalAssets?: number | null;
+  /** @nullable */
+  totalDebt?: number | null;
+  /** @nullable */
+  netDebt?: number | null;
+  /** @nullable */
+  cashAndShortTermInvestments?: number | null;
+  /** @nullable */
+  totalEquity?: number | null;
+  /** @nullable */
+  operatingCashFlow?: number | null;
+  /** @nullable */
+  capitalExpenditure?: number | null;
+  /** @nullable */
+  freeCashFlow?: number | null;
+  /** @nullable */
+  dividendsPaid?: number | null;
+  /** @nullable */
+  stockBuybacks?: number | null;
+  /** @nullable */
+  ratingConsensus?: string | null;
+  /** @nullable */
+  ratingStrongBuy?: number | null;
+  /** @nullable */
+  ratingBuy?: number | null;
+  /** @nullable */
+  ratingHold?: number | null;
+  /** @nullable */
+  ratingSell?: number | null;
+  /** @nullable */
+  ratingStrongSell?: number | null;
+  /** @nullable */
+  estimateFiscalYear?: string | null;
+  /** @nullable */
+  estimatedRevenueAvg?: number | null;
+  /** @nullable */
+  estimatedEpsAvg?: number | null;
+}
+
 export interface Report {
   id: number;
   ticker: string;
@@ -197,6 +244,7 @@ export interface Report {
   risks: RiskChecklist;
   thesis: Thesis;
   actionPlan: ActionPlan;
+  fundamentals?: Fundamentals;
 }
 
 export interface WatchlistEntry {

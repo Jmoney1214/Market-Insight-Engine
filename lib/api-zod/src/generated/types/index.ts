@@ -14,6 +14,7 @@ export * from './companySnapshot';
 export * from './comparable';
 export * from './filingsSummary';
 export * from './financialOverview';
+export * from './fundamentals';
 export * from './healthStatus';
 export * from './newsItem';
 export * from './newsSummary';

@@ -154,3 +154,82 @@ export async function getStockNews(symbol: string, limit = 6): Promise<FmpNewsIt
   const rows = await fmpGet<FmpNewsItem[]>("news/stock", { symbols: symbol, limit });
   return Array.isArray(rows) ? rows : null;
 }
+
+export type FmpBalanceSheet = {
+  fiscalYear: string;
+  totalAssets: number;
+  totalDebt: number;
+  netDebt: number;
+  cashAndShortTermInvestments: number;
+  totalEquity: number;
+};
+
+export async function getBalanceSheet(symbol: string): Promise<FmpBalanceSheet | null> {
+  const r = first(await fmpGet<Array<Record<string, unknown>>>("balance-sheet-statement", { symbol, period: "annual", limit: 1 }));
+  if (!r) return null;
+  return {
+    fiscalYear: String(r["fiscalYear"] ?? r["date"] ?? ""),
+    totalAssets: Number(r["totalAssets"] ?? 0),
+    totalDebt: Number(r["totalDebt"] ?? 0),
+    netDebt: Number(r["netDebt"] ?? 0),
+    cashAndShortTermInvestments: Number(r["cashAndShortTermInvestments"] ?? 0),
+    totalEquity: Number(r["totalStockholdersEquity"] ?? r["totalEquity"] ?? 0),
+  };
+}
+
+export type FmpCashFlow = {
+  fiscalYear: string;
+  operatingCashFlow: number;
+  capitalExpenditure: number;
+  freeCashFlow: number;
+  dividendsPaid: number;
+  stockBuybacks: number;
+};
+
+export async function getCashFlow(symbol: string): Promise<FmpCashFlow | null> {
+  const r = first(await fmpGet<Array<Record<string, unknown>>>("cash-flow-statement", { symbol, period: "annual", limit: 1 }));
+  if (!r) return null;
+  return {
+    fiscalYear: String(r["fiscalYear"] ?? r["date"] ?? ""),
+    operatingCashFlow: Number(r["operatingCashFlow"] ?? r["netCashProvidedByOperatingActivities"] ?? 0),
+    capitalExpenditure: Number(r["capitalExpenditure"] ?? 0),
+    freeCashFlow: Number(r["freeCashFlow"] ?? 0),
+    dividendsPaid: Number(r["netDividendsPaid"] ?? r["commonDividendsPaid"] ?? 0),
+    stockBuybacks: Number(r["commonStockRepurchased"] ?? 0),
+  };
+}
+
+export type FmpRatingsSummary = {
+  consensus: string;
+  strongBuy: number;
+  buy: number;
+  hold: number;
+  sell: number;
+  strongSell: number;
+};
+
+export async function getRatingsSummary(symbol: string): Promise<FmpRatingsSummary | null> {
+  const r = first(await fmpGet<Array<Record<string, unknown>>>("grades-consensus", { symbol }));
+  if (!r) return null;
+  return {
+    consensus: String(r["consensus"] ?? ""),
+    strongBuy: Number(r["strongBuy"] ?? 0),
+    buy: Number(r["buy"] ?? 0),
+    hold: Number(r["hold"] ?? 0),
+    sell: Number(r["sell"] ?? 0),
+    strongSell: Number(r["strongSell"] ?? 0),
+  };
+}
+
+export type FmpEstimate = { fiscalYear: string; revenueAvg: number; epsAvg: number };
+
+/** Analyst estimates — gated behind a higher FMP tier; returns null gracefully if denied. */
+export async function getEstimates(symbol: string): Promise<FmpEstimate | null> {
+  const r = first(await fmpGet<Array<Record<string, unknown>>>("analyst-estimates", { symbol, period: "annual", limit: 1 }));
+  if (!r) return null;
+  return {
+    fiscalYear: String(r["fiscalYear"] ?? r["date"] ?? ""),
+    revenueAvg: Number(r["revenueAvg"] ?? r["estimatedRevenueAvg"] ?? 0),
+    epsAvg: Number(r["epsAvg"] ?? r["estimatedEpsAvg"] ?? 0),
+  };
+}

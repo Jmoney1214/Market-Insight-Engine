@@ -241,6 +241,56 @@ components:
           $ref: "#/components/schemas/Thesis"
         actionPlan:
           $ref: "#/components/schemas/ActionPlan"
+        fundamentals:
+          $ref: "#/components/schemas/Fundamentals"
+
+    Fundamentals:
+      type: object
+      description: "Rich fundamentals data (FMP). Present when a fundamentals key is configured."
+      required: [isPlaceholder]
+      properties:
+        isPlaceholder:
+          type: boolean
+        fiscalYear:
+          type: ["string", "null"]
+        totalAssets:
+          type: ["number", "null"]
+        totalDebt:
+          type: ["number", "null"]
+        netDebt:
+          type: ["number", "null"]
+        cashAndShortTermInvestments:
+          type: ["number", "null"]
+        totalEquity:
+          type: ["number", "null"]
+        operatingCashFlow:
+          type: ["number", "null"]
+        capitalExpenditure:
+          type: ["number", "null"]
+        freeCashFlow:
+          type: ["number", "null"]
+        dividendsPaid:
+          type: ["number", "null"]
+        stockBuybacks:
+          type: ["number", "null"]
+        ratingConsensus:
+          type: ["string", "null"]
+        ratingStrongBuy:
+          type: ["number", "null"]
+        ratingBuy:
+          type: ["number", "null"]
+        ratingHold:
+          type: ["number", "null"]
+        ratingSell:
+          type: ["number", "null"]
+        ratingStrongSell:
+          type: ["number", "null"]
+        estimateFiscalYear:
+          type: ["string", "null"]
+        estimatedRevenueAvg:
+          type: ["number", "null"]
+        estimatedEpsAvg:
+          type: ["number", "null"]
 
     CompanySnapshot:
       type: object

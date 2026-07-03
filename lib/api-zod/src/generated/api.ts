@@ -170,7 +170,30 @@ export const GetReportResponse = zod.object({
   "timeHorizon": zod.string(),
   "keyMonitors": zod.array(zod.string()),
   "disclaimer": zod.string()
-})
+}),
+  "fundamentals": zod.object({
+  "isPlaceholder": zod.boolean(),
+  "fiscalYear": zod.string().nullish(),
+  "totalAssets": zod.number().nullish(),
+  "totalDebt": zod.number().nullish(),
+  "netDebt": zod.number().nullish(),
+  "cashAndShortTermInvestments": zod.number().nullish(),
+  "totalEquity": zod.number().nullish(),
+  "operatingCashFlow": zod.number().nullish(),
+  "capitalExpenditure": zod.number().nullish(),
+  "freeCashFlow": zod.number().nullish(),
+  "dividendsPaid": zod.number().nullish(),
+  "stockBuybacks": zod.number().nullish(),
+  "ratingConsensus": zod.string().nullish(),
+  "ratingStrongBuy": zod.number().nullish(),
+  "ratingBuy": zod.number().nullish(),
+  "ratingHold": zod.number().nullish(),
+  "ratingSell": zod.number().nullish(),
+  "ratingStrongSell": zod.number().nullish(),
+  "estimateFiscalYear": zod.string().nullish(),
+  "estimatedRevenueAvg": zod.number().nullish(),
+  "estimatedEpsAvg": zod.number().nullish()
+}).optional().describe('Rich fundamentals data (FMP). Present when a fundamentals key is configured.')
 })
 
 

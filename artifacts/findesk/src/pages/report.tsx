@@ -49,6 +49,7 @@ import { VerdictSummary } from "@/components/report/verdict-summary";
 import { ReportSection, MetricTile, KeyValue } from "@/components/report/primitives";
 import { ValuationRangeBar, RsiGauge } from "@/components/report/charts";
 import { TradingViewChart, TradingViewTechnicals, TradingViewFundamentals } from "@/components/tradingview";
+import { FundamentalsSection } from "@/components/report/fundamentals-section";
 
 const SECTIONS: NavSection[] = [
   { id: "verdict", label: "Verdict" },
@@ -60,6 +61,7 @@ const SECTIONS: NavSection[] = [
   { id: "financials", label: "Financials" },
   { id: "valuation", label: "Valuation" },
   { id: "technical", label: "Technical" },
+  { id: "fundamentals", label: "Fundamentals" },
   { id: "risks", label: "Risks" },
   { id: "scenarios", label: "Scenarios" },
   { id: "action", label: "Action" },
@@ -472,6 +474,11 @@ export default function ReportPage() {
             </div>
           </ReportSection>
         </div>
+
+        {/* Fundamentals (FMP) */}
+        {report.fundamentals && !report.fundamentals.isPlaceholder && (
+          <FundamentalsSection f={report.fundamentals} />
+        )}
 
         {/* Risks */}
         <ReportSection id="risks" title="Risk Checklist" icon={ShieldAlert}>

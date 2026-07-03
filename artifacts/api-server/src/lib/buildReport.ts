@@ -12,7 +12,31 @@ import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
 import { sma, rsi, support, resistance, changeOverBars } from "./providers/indicators.js";
 
-type Report = ReturnType<typeof generateMockReport>;
+type Fundamentals = {
+  isPlaceholder: boolean;
+  fiscalYear: string | null;
+  totalAssets: number | null;
+  totalDebt: number | null;
+  netDebt: number | null;
+  cashAndShortTermInvestments: number | null;
+  totalEquity: number | null;
+  operatingCashFlow: number | null;
+  capitalExpenditure: number | null;
+  freeCashFlow: number | null;
+  dividendsPaid: number | null;
+  stockBuybacks: number | null;
+  ratingConsensus: string | null;
+  ratingStrongBuy: number | null;
+  ratingBuy: number | null;
+  ratingHold: number | null;
+  ratingSell: number | null;
+  ratingStrongSell: number | null;
+  estimateFiscalYear: string | null;
+  estimatedRevenueAvg: number | null;
+  estimatedEpsAvg: number | null;
+};
+
+type Report = ReturnType<typeof generateMockReport> & { fundamentals?: Fundamentals };
 
 const round = (n: number, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
 const pct = (n: number, p = 1) => round(n * 100, p);
@@ -68,6 +92,14 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     hasAlpaca ? alpaca.getSnapshot(ticker) : Promise.resolve(null),
     hasAlpaca ? alpaca.getDailyBars(ticker) : Promise.resolve(null),
     hasAlpaca ? alpaca.getNews(ticker, 10) : Promise.resolve(null),
+  ]);
+
+  // Rich fundamentals (FMP) — statements, cash flow, analyst ratings, estimates.
+  const [balanceSheet, cashFlow, ratingsSummary, estimates] = await Promise.all([
+    hasFmp ? fmp.getBalanceSheet(ticker) : Promise.resolve(null),
+    hasFmp ? fmp.getCashFlow(ticker) : Promise.resolve(null),
+    hasFmp ? fmp.getRatingsSummary(ticker) : Promise.resolve(null),
+    hasFmp ? fmp.getEstimates(ticker) : Promise.resolve(null),
   ]);
 
   // News: prefer Alpaca (paid, no quota wall); fall back to FMP if present.
@@ -132,7 +164,7 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
           .reverse()
           .map((r) => ({ period: `FY${r.fiscalYear}`, revenue: round(r.revenue / 1e9, 1) }))
       : base.financials.revenueHistory;
-  const fcf = keyMetrics?.["freeCashFlowToEquityTTM"] ?? keyMetrics?.["freeCashFlowToFirmTTM"];
+  const fcf = cashFlow?.freeCashFlow ?? keyMetrics?.["freeCashFlowToEquityTTM"] ?? keyMetrics?.["freeCashFlowToFirmTTM"];
 
   report.financials = {
     isPlaceholder: !(hasFmp && !!ratios),
@@ -245,7 +277,10 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
 
   // ---- Rating + scenarios + action plan ------------------------------------
   let finalRating = base.overallRating;
-  if (rating && Number.isFinite(rating.overallScore)) {
+  if (ratingsSummary && ratingsSummary.consensus) {
+    const c = ratingsSummary.consensus.toLowerCase();
+    finalRating = c.includes("buy") ? "BUY" : c.includes("sell") ? "SELL" : "HOLD";
+  } else if (rating && Number.isFinite(rating.overallScore)) {
     finalRating = rating.overallScore >= 4 ? "BUY" : rating.overallScore <= 2 ? "SELL" : "HOLD";
   } else if (consensus && price) {
     const up = (consensus - price) / price;
@@ -281,8 +316,35 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     profitTarget: `$${round(consensus || price * 1.15)} (consensus) | $${round(priceTarget?.targetHigh || price * 1.45)} (high target)`,
   };
 
+  // ---- Rich fundamentals block (dashboard cards + research agents) ---------
+  if (hasFmp && (balanceSheet || cashFlow || ratingsSummary || estimates)) {
+    report.fundamentals = {
+      isPlaceholder: false,
+      fiscalYear: balanceSheet?.fiscalYear ?? cashFlow?.fiscalYear ?? null,
+      totalAssets: balanceSheet?.totalAssets ?? null,
+      totalDebt: balanceSheet?.totalDebt ?? null,
+      netDebt: balanceSheet?.netDebt ?? null,
+      cashAndShortTermInvestments: balanceSheet?.cashAndShortTermInvestments ?? null,
+      totalEquity: balanceSheet?.totalEquity ?? null,
+      operatingCashFlow: cashFlow?.operatingCashFlow ?? null,
+      capitalExpenditure: cashFlow?.capitalExpenditure ?? null,
+      freeCashFlow: cashFlow?.freeCashFlow ?? null,
+      dividendsPaid: cashFlow?.dividendsPaid ?? null,
+      stockBuybacks: cashFlow?.stockBuybacks ?? null,
+      ratingConsensus: ratingsSummary?.consensus ?? null,
+      ratingStrongBuy: ratingsSummary?.strongBuy ?? null,
+      ratingBuy: ratingsSummary?.buy ?? null,
+      ratingHold: ratingsSummary?.hold ?? null,
+      ratingSell: ratingsSummary?.sell ?? null,
+      ratingStrongSell: ratingsSummary?.strongSell ?? null,
+      estimateFiscalYear: estimates?.fiscalYear ?? null,
+      estimatedRevenueAvg: estimates?.revenueAvg ?? null,
+      estimatedEpsAvg: estimates?.epsAvg ?? null,
+    };
+  }
+
   logger.info(
-    { ticker, hasFmp, hasAlpaca, price, rating: finalRating },
+    { ticker, hasFmp, hasAlpaca, price, rating: finalRating, fundamentals: !!report.fundamentals },
     "Built live report",
   );
 
