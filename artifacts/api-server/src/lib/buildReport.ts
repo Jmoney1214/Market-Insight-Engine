@@ -10,7 +10,13 @@ import { hasLiveData, hasFmp, hasAlpaca } from "./providers/config.js";
 import { logger } from "./logger.js";
 import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
-import { sma, rsi, support, resistance, changeOverBars } from "./providers/indicators.js";
+import { sma, rsi, atr, support, resistance, changeOverBars } from "./providers/indicators.js";
+
+function todayNY(offsetDays = 0): string {
+  return new Date(Date.now() + offsetDays * 86_400_000).toLocaleDateString("en-CA", {
+    timeZone: "America/New_York",
+  });
+}
 
 type Fundamentals = {
   isPlaceholder: boolean;
@@ -36,7 +42,26 @@ type Fundamentals = {
   estimatedEpsAvg: number | null;
 };
 
-type Report = ReturnType<typeof generateMockReport> & { fundamentals?: Fundamentals };
+type TodaySetup = {
+  isPlaceholder: boolean;
+  gapPct: number;
+  prevClose: number;
+  sessionOpen: number | null;
+  sessionHigh: number | null;
+  sessionLow: number | null;
+  sessionVwap: number | null;
+  rvol: number | null;
+  atrPct: number | null;
+  expectedRangeLow: number | null;
+  expectedRangeHigh: number | null;
+  earningsToday: boolean;
+  gradeChange: string | null;
+};
+
+type Report = ReturnType<typeof generateMockReport> & {
+  fundamentals?: Fundamentals;
+  todaySetup?: TodaySetup;
+};
 
 const round = (n: number, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
 const pct = (n: number, p = 1) => round(n * 100, p);
@@ -94,13 +119,17 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     hasAlpaca ? alpaca.getNews(ticker, 10) : Promise.resolve(null),
   ]);
 
-  // Rich fundamentals (FMP) — statements, cash flow, analyst ratings, estimates.
-  const [balanceSheet, cashFlow, ratingsSummary, estimates] = await Promise.all([
-    hasFmp ? fmp.getBalanceSheet(ticker) : Promise.resolve(null),
-    hasFmp ? fmp.getCashFlow(ticker) : Promise.resolve(null),
-    hasFmp ? fmp.getRatingsSummary(ticker) : Promise.resolve(null),
-    hasFmp ? fmp.getEstimates(ticker) : Promise.resolve(null),
-  ]);
+  // Rich fundamentals (FMP) — statements, cash flow, analyst ratings, estimates —
+  // plus the intraday catalysts for the Today card.
+  const [balanceSheet, cashFlow, ratingsSummary, estimates, earningsSet, latestGrade] =
+    await Promise.all([
+      hasFmp ? fmp.getBalanceSheet(ticker) : Promise.resolve(null),
+      hasFmp ? fmp.getCashFlow(ticker) : Promise.resolve(null),
+      hasFmp ? fmp.getRatingsSummary(ticker) : Promise.resolve(null),
+      hasFmp ? fmp.getEstimates(ticker) : Promise.resolve(null),
+      hasFmp ? fmp.getEarningsCalendar(todayNY(), todayNY(1)) : Promise.resolve(null),
+      hasFmp ? fmp.getLatestGradeFor(ticker) : Promise.resolve(null),
+    ]);
 
   // News: prefer Alpaca (paid, no quota wall); fall back to FMP if present.
   const newsList: Array<{ title: string; source: string; date: string }> | null =
@@ -343,8 +372,44 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     };
   }
 
+  // ---- Today's Setup — the intraday half of the merged report ---------------
+  if (snapshot) {
+    const gapPct = round(((snapshot.price - snapshot.prevClose) / snapshot.prevClose) * 100);
+    let atrPct: number | null = null;
+    let rvol: number | null = null;
+    if (bars && bars.closes.length > 15) {
+      const a = atr(bars.highs, bars.lows, bars.closes, 14);
+      atrPct = a != null ? round((a / snapshot.price) * 100) : null;
+      if (snapshot.sessionIsToday && snapshot.sessionVolume) {
+        const recent = bars.volumes.slice(-21, -1);
+        const avgVol = recent.length > 0 ? recent.reduce((x, y) => x + y, 0) / recent.length : 0;
+        rvol = avgVol > 0 ? round(snapshot.sessionVolume / avgVol) : null;
+      }
+    }
+    const gradeDate = latestGrade?.publishedDate?.slice(0, 10) ?? "";
+    const gradeIsFresh = gradeDate >= todayNY(-7);
+    report.todaySetup = {
+      isPlaceholder: false,
+      gapPct,
+      prevClose: round(snapshot.prevClose),
+      sessionOpen: snapshot.sessionOpen != null ? round(snapshot.sessionOpen) : null,
+      sessionHigh: snapshot.dayHigh ? round(snapshot.dayHigh) : null,
+      sessionLow: snapshot.dayLow ? round(snapshot.dayLow) : null,
+      sessionVwap: snapshot.sessionVwap != null ? round(snapshot.sessionVwap) : null,
+      rvol,
+      atrPct,
+      expectedRangeLow: atrPct != null ? round(price * (1 - atrPct / 100)) : null,
+      expectedRangeHigh: atrPct != null ? round(price * (1 + atrPct / 100)) : null,
+      earningsToday: earningsSet?.has(ticker) ?? false,
+      gradeChange:
+        latestGrade && gradeIsFresh && latestGrade.gradingCompany
+          ? `${latestGrade.action.includes("up") ? "Upgraded" : latestGrade.action.includes("down") ? "Downgraded" : `Rated ${latestGrade.newGrade}`} by ${latestGrade.gradingCompany} (${gradeDate})`
+          : null,
+    };
+  }
+
   logger.info(
-    { ticker, hasFmp, hasAlpaca, price, rating: finalRating, fundamentals: !!report.fundamentals },
+    { ticker, hasFmp, hasAlpaca, price, rating: finalRating, fundamentals: !!report.fundamentals, todaySetup: !!report.todaySetup },
     "Built live report",
   );
 

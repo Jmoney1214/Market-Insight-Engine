@@ -286,6 +286,20 @@ export async function getLatestGradeChanges(limit = 150): Promise<FmpGradeChange
   }));
 }
 
+/** Most recent analyst grade action for one symbol (e.g. for the report's Today card). */
+export async function getLatestGradeFor(symbol: string): Promise<FmpGradeChange | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("grades", { symbol, limit: 1 });
+  const r = first(Array.isArray(rows) ? rows : null);
+  if (!r) return null;
+  return {
+    symbol: String(r["symbol"] ?? symbol),
+    action: String(r["action"] ?? "").toLowerCase(),
+    newGrade: String(r["newGrade"] ?? ""),
+    gradingCompany: String(r["gradingCompany"] ?? ""),
+    publishedDate: String(r["date"] ?? r["publishedDate"] ?? ""),
+  };
+}
+
 export type FmpEstimate = { fiscalYear: string; revenueAvg: number; epsAvg: number };
 
 /** Analyst estimates — gated behind a higher FMP tier; returns null gracefully if denied. */

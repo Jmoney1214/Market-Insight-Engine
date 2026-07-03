@@ -29,6 +29,7 @@ export * from './scanResult';
 export * from './technicalTrend';
 export * from './thesis';
 export * from './thesisCase';
+export * from './todaySetup';
 export * from './valuationFramework';
 export * from './watchlistEntry';
 export * from './watchlistInput';

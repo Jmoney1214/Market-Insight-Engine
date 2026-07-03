@@ -224,6 +224,47 @@ export interface Fundamentals {
   estimatedEpsAvg?: number | null;
 }
 
+/**
+ * Intraday context for the current/most-recent session (Alpaca SIP + catalysts). The 'trade today' half of the report.
+ */
+export interface TodaySetup {
+  isPlaceholder: boolean;
+  /** % vs last completed session close (pre/post-market aware) */
+  gapPct: number;
+  prevClose: number;
+  /** @nullable */
+  sessionOpen?: number | null;
+  /** @nullable */
+  sessionHigh?: number | null;
+  /** @nullable */
+  sessionLow?: number | null;
+  /** @nullable */
+  sessionVwap?: number | null;
+  /**
+     * Session volume vs 20-day average (only when a live session is underway)
+     * @nullable
+     */
+  rvol?: number | null;
+  /** @nullable */
+  atrPct?: number | null;
+  /**
+     * price - 1 ATR
+     * @nullable
+     */
+  expectedRangeLow?: number | null;
+  /**
+     * price + 1 ATR
+     * @nullable
+     */
+  expectedRangeHigh?: number | null;
+  earningsToday?: boolean;
+  /**
+     * Recent analyst action, e.g. "Upgraded to Overweight by Morgan Stanley (2026-07-02)"
+     * @nullable
+     */
+  gradeChange?: string | null;
+}
+
 export interface Report {
   id: number;
   ticker: string;
@@ -245,6 +286,7 @@ export interface Report {
   thesis: Thesis;
   actionPlan: ActionPlan;
   fundamentals?: Fundamentals;
+  todaySetup?: TodaySetup;
 }
 
 export interface ScanCandidate {

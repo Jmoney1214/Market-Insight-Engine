@@ -276,6 +276,45 @@ components:
           $ref: "#/components/schemas/ActionPlan"
         fundamentals:
           $ref: "#/components/schemas/Fundamentals"
+        todaySetup:
+          $ref: "#/components/schemas/TodaySetup"
+
+    TodaySetup:
+      type: object
+      description: "Intraday context for the current/most-recent session (Alpaca SIP + catalysts). The 'trade today' half of the report."
+      required: [isPlaceholder, gapPct, prevClose]
+      properties:
+        isPlaceholder:
+          type: boolean
+        gapPct:
+          type: number
+          description: "% vs last completed session close (pre/post-market aware)"
+        prevClose:
+          type: number
+        sessionOpen:
+          type: ["number", "null"]
+        sessionHigh:
+          type: ["number", "null"]
+        sessionLow:
+          type: ["number", "null"]
+        sessionVwap:
+          type: ["number", "null"]
+        rvol:
+          type: ["number", "null"]
+          description: Session volume vs 20-day average (only when a live session is underway)
+        atrPct:
+          type: ["number", "null"]
+        expectedRangeLow:
+          type: ["number", "null"]
+          description: price - 1 ATR
+        expectedRangeHigh:
+          type: ["number", "null"]
+          description: price + 1 ATR
+        earningsToday:
+          type: boolean
+        gradeChange:
+          type: ["string", "null"]
+          description: Recent analyst action, e.g. "Upgraded to Overweight by Morgan Stanley (2026-07-02)"
 
     Fundamentals:
       type: object

@@ -50,9 +50,11 @@ import { ReportSection, MetricTile, KeyValue } from "@/components/report/primiti
 import { ValuationRangeBar, RsiGauge } from "@/components/report/charts";
 import { TradingViewChart, TradingViewTechnicals, TradingViewFundamentals } from "@/components/tradingview";
 import { FundamentalsSection } from "@/components/report/fundamentals-section";
+import { TodaySetupSection } from "@/components/report/today-setup";
 
 const SECTIONS: NavSection[] = [
   { id: "verdict", label: "Verdict" },
+  { id: "today", label: "Today" },
   { id: "snapshot", label: "Snapshot" },
   { id: "chart", label: "Chart" },
   { id: "catalysts", label: "Catalysts" },
@@ -221,6 +223,11 @@ export default function ReportPage() {
 
       <div className="flex-1 container mx-auto px-4 max-w-6xl space-y-10 py-8">
         <VerdictSummary report={report} />
+
+        {/* Today's Setup — intraday context (the scan's data, per ticker) */}
+        {report.todaySetup && !report.todaySetup.isPlaceholder && (
+          <TodaySetupSection t={report.todaySetup} price={snapshot.price} />
+        )}
 
         {/* Snapshot */}
         <ReportSection id="snapshot" title="Company Snapshot" icon={Building2}>

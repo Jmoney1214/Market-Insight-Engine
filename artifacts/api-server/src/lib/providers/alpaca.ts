@@ -38,9 +38,15 @@ async function alpacaGet<T = unknown>(url: URL): Promise<T | null> {
 
 export type AlpacaSnapshot = {
   price: number;
+  /** Close of the last fully completed session (pre/post-market-aware gap reference). */
   prevClose: number;
   dayHigh: number;
   dayLow: number;
+  sessionOpen: number | null;
+  sessionVwap: number | null;
+  sessionVolume: number | null;
+  /** True when the daily bar belongs to the same calendar day as the latest trade (live session). */
+  sessionIsToday: boolean;
 };
 
 export async function getSnapshot(symbol: string): Promise<AlpacaSnapshot | null> {
@@ -48,14 +54,27 @@ export async function getSnapshot(symbol: string): Promise<AlpacaSnapshot | null
   url.searchParams.set("feed", alpacaFeed);
   const data = await alpacaGet<Record<string, any>>(url);
   if (!data) return null;
-  const price = Number(data["latestTrade"]?.p ?? data["dailyBar"]?.c ?? 0);
-  const prevClose = Number(data["prevDailyBar"]?.c ?? data["dailyBar"]?.o ?? 0);
+  const trade = data["latestTrade"];
+  const daily = data["dailyBar"];
+  const prevDaily = data["prevDailyBar"];
+  const price = Number(trade?.p ?? daily?.c ?? 0);
   if (!price) return null;
+  // Same convention as getSnapshots: pre-market (trade on a newer day than the
+  // last daily bar) gaps against that bar's close; intraday against prev session.
+  const tradeDay = String(trade?.t ?? "").slice(0, 10);
+  const barDay = String(daily?.t ?? "").slice(0, 10);
+  const sessionIsToday = tradeDay !== "" && tradeDay === barDay;
+  const prevClose = Number(tradeDay > barDay ? daily?.c : prevDaily?.c ?? daily?.o) || 0;
+  if (!prevClose) return null;
   return {
     price,
     prevClose,
-    dayHigh: Number(data["dailyBar"]?.h ?? 0),
-    dayLow: Number(data["dailyBar"]?.l ?? 0),
+    dayHigh: Number(daily?.h ?? 0),
+    dayLow: Number(daily?.l ?? 0),
+    sessionOpen: daily?.o != null ? Number(daily.o) : null,
+    sessionVwap: daily?.vw != null ? Number(daily.vw) : null,
+    sessionVolume: daily?.v != null ? Number(daily.v) : null,
+    sessionIsToday,
   };
 }
 
@@ -157,6 +176,7 @@ export type DailyBars = {
   closes: number[];
   highs: number[];
   lows: number[];
+  volumes: number[];
 };
 
 /** Daily bars for the last `days` calendar days (default ~500, enough for SMA200 + 52w). */
@@ -177,5 +197,6 @@ export async function getDailyBars(symbol: string, days = 500): Promise<DailyBar
     closes: bars.map((b) => Number(b["c"])),
     highs: bars.map((b) => Number(b["h"])),
     lows: bars.map((b) => Number(b["l"])),
+    volumes: bars.map((b) => Number(b["v"])),
   };
 }

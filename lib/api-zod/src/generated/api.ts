@@ -243,7 +243,22 @@ export const GetReportResponse = zod.object({
   "estimateFiscalYear": zod.string().nullish(),
   "estimatedRevenueAvg": zod.number().nullish(),
   "estimatedEpsAvg": zod.number().nullish()
-}).optional().describe('Rich fundamentals data (FMP). Present when a fundamentals key is configured.')
+}).optional().describe('Rich fundamentals data (FMP). Present when a fundamentals key is configured.'),
+  "todaySetup": zod.object({
+  "isPlaceholder": zod.boolean(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "prevClose": zod.number(),
+  "sessionOpen": zod.number().nullish(),
+  "sessionHigh": zod.number().nullish(),
+  "sessionLow": zod.number().nullish(),
+  "sessionVwap": zod.number().nullish(),
+  "rvol": zod.number().nullish().describe('Session volume vs 20-day average (only when a live session is underway)'),
+  "atrPct": zod.number().nullish(),
+  "expectedRangeLow": zod.number().nullish().describe('price - 1 ATR'),
+  "expectedRangeHigh": zod.number().nullish().describe('price + 1 ATR'),
+  "earningsToday": zod.boolean().optional(),
+  "gradeChange": zod.string().nullish().describe('Recent analyst action, e.g. \"Upgraded to Overweight by Morgan Stanley (2026-07-02)\"')
+}).optional().describe('Intraday context for the current\/most-recent session (Alpaca SIP + catalysts). The \'trade today\' half of the report.')
 })
 
 
