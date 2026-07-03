@@ -11,6 +11,7 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string
+  - Hosted DB: dedicated Supabase project `findesk` (ref `ganihlwaijdxpigssyab`, us-east-1, free tier). Schema already applied (reports, watchlist, scan_scorecard) with RLS enabled/no policies so tables are NOT reachable via Supabase's public REST API — the app connects via direct Postgres only. Use the session-pooler connection string (IPv4-safe): `postgresql://postgres.ganihlwaijdxpigssyab:<DB_PASSWORD>@aws-0-us-east-1.pooler.supabase.com:5432/postgres`. The DB password is set/reset in the Supabase dashboard (Settings → Database) — never committed.
 - Market data (paid plans; Alpaca is the primary server-side spine):
   - `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` — Alpaca market data (real-time price, daily bars → technicals, news). **Primary source.**
   - `ALPACA_FEED` — `sip` (default, paid consolidated) or `iex`.
