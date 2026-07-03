@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startScanScheduler } from "./lib/scan";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,8 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Proactive hunter: pre-warm the morning scan on weekdays so the dashboard
+  // opens already loaded with the day's research.
+  startScanScheduler();
 });

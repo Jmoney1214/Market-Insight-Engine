@@ -315,6 +315,12 @@ components:
         gradeChange:
           type: ["string", "null"]
           description: Recent analyst action, e.g. "Upgraded to Overweight by Morgan Stanley (2026-07-02)"
+        avgDailyRangePct:
+          type: ["number", "null"]
+          description: Average (high-low)/close % over the last 10 sessions
+        multiTradeDays:
+          type: ["number", "null"]
+          description: Sessions out of the last 10 that ranged >=2%
 
     Fundamentals:
       type: object
@@ -410,9 +416,15 @@ components:
           description: 14-day ATR as % of price (intraday range potential)
         rsi:
           type: ["number", "null"]
+        avgDailyRangePct:
+          type: ["number", "null"]
+          description: Average (high-low)/close % over the last 10 sessions
+        multiTradeDays:
+          type: ["number", "null"]
+          description: Sessions out of the last 10 that ranged >=2% — the "multiple trades today" signal
         score:
           type: number
-          description: 0-100 composite (volatility, liquidity, gap, catalysts)
+          description: 0-100 composite (repeatable range, liquidity, gap, catalysts)
         reasons:
           type: array
           items:

@@ -65,6 +65,32 @@ export function atr(highs: number[], lows: number[], closes: number[], period = 
   return a;
 }
 
+/**
+ * Repeatable intraday-range stats over the last `lookback` sessions:
+ * average (high-low)/close % and how many sessions ranged >= thresholdPct.
+ * A name that ranged >=2% on 9 of the last 10 days tends to offer multiple
+ * intraday trades again today.
+ */
+export function rangeStats(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  lookback = 10,
+  thresholdPct = 2,
+): { avgRangePct: number; daysAboveThreshold: number; lookback: number } | null {
+  const n = Math.min(highs.length, lows.length, closes.length);
+  if (n < lookback) return null;
+  let sum = 0;
+  let above = 0;
+  for (let i = n - lookback; i < n; i++) {
+    if (!closes[i]) continue;
+    const rangePct = ((highs[i]! - lows[i]!) / closes[i]!) * 100;
+    sum += rangePct;
+    if (rangePct >= thresholdPct) above++;
+  }
+  return { avgRangePct: sum / lookback, daysAboveThreshold: above, lookback };
+}
+
 /** % change between the close ~`bars` ago and the latest close. */
 export function changeOverBars(closes: number[], bars: number): number | null {
   if (closes.length <= bars) return null;

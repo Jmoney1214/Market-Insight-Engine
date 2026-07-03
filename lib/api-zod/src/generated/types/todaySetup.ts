@@ -45,4 +45,14 @@ export interface TodaySetup {
      * @nullable
      */
   gradeChange?: string | null;
+  /**
+     * Average (high-low)/close % over the last 10 sessions
+     * @nullable
+     */
+  avgDailyRangePct?: number | null;
+  /**
+     * Sessions out of the last 10 that ranged >=2%
+     * @nullable
+     */
+  multiTradeDays?: number | null;
 }

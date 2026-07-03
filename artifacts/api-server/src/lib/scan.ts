@@ -15,7 +15,7 @@ import { hasFmp, hasAlpaca } from "./providers/config.js";
 import { logger } from "./logger.js";
 import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
-import { atr, rsi } from "./providers/indicators.js";
+import { atr, rsi, rangeStats } from "./providers/indicators.js";
 
 export type ScanCandidate = {
   symbol: string;
@@ -25,6 +25,8 @@ export type ScanCandidate = {
   avgVolume: number | null;
   atrPct: number | null;
   rsi: number | null;
+  avgDailyRangePct: number | null;
+  multiTradeDays: number | null;
   score: number;
   reasons: string[];
 };
@@ -57,6 +59,51 @@ function todayNY(offsetDays = 0): string {
 
 export function scanAvailable(): boolean {
   return hasFmp && hasAlpaca;
+}
+
+/** Minutes since midnight in New York, plus weekday flag. */
+function nyClock(): { minutes: number; isWeekday: boolean } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    hour: "2-digit",
+    minute: "2-digit",
+    weekday: "short",
+    hour12: false,
+  }).formatToParts(new Date());
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const minutes = Number(get("hour")) * 60 + Number(get("minute"));
+  const isWeekday = !["Sat", "Sun"].includes(get("weekday"));
+  return { minutes, isWeekday };
+}
+
+const SCHEDULER_INTERVAL_MS = 5 * 60 * 1000;
+const WINDOW_START = 7 * 60; // 7:00 ET — research is ready well before 8:30
+const WINDOW_END = 16 * 60; // 4:00 ET — keep movers fresh through the close
+
+/**
+ * Proactive hunter: refreshes the scan every 5 minutes on weekdays from
+ * 7:00 ET through the close, so the dashboard is already loaded with the
+ * morning's research the moment it's opened. Costs ~10 provider calls per
+ * refresh — negligible against the 750/min budget.
+ */
+export function startScanScheduler(): void {
+  if (!scanAvailable()) {
+    logger.info("Scan scheduler not started (provider keys missing)");
+    return;
+  }
+  const tick = async () => {
+    const { minutes, isWeekday } = nyClock();
+    if (!isWeekday || minutes < WINDOW_START || minutes >= WINDOW_END) return;
+    try {
+      await runPremarketScan(true);
+      logger.info("Scheduled scan refreshed");
+    } catch (err) {
+      logger.warn({ err: String(err) }, "Scheduled scan failed");
+    }
+  };
+  setInterval(tick, SCHEDULER_INTERVAL_MS).unref();
+  void tick(); // warm immediately if we boot inside the window
+  logger.info("Scan scheduler started (weekdays 07:00-16:00 ET, every 5 min)");
 }
 
 export async function runPremarketScan(refresh = false): Promise<ScanResult> {
@@ -114,14 +161,23 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     const bars = barsList[i];
     let atrPct: number | null = null;
     let rsiVal: number | null = null;
+    let avgDailyRangePct: number | null = null;
+    let multiTradeDays: number | null = null;
     if (bars && bars.closes.length > 15) {
       const a = atr(bars.highs, bars.lows, bars.closes, 14);
       atrPct = a != null ? round((a / f.price) * 100) : null;
       const r = rsi(bars.closes, 14);
       rsiVal = r != null ? round(r, 1) : null;
+      const rs = rangeStats(bars.highs, bars.lows, bars.closes, 10, 2);
+      if (rs) {
+        avgDailyRangePct = round(rs.avgRangePct, 1);
+        multiTradeDays = rs.daysAboveThreshold;
+      }
     }
 
     const reasons: string[] = [];
+    if (multiTradeDays != null && multiTradeDays >= 7)
+      reasons.push(`Ranged ≥2% on ${multiTradeDays} of last 10 days (multi-trade profile)`);
     if (Math.abs(f.gapPct) >= GAP_THRESHOLD)
       reasons.push(`Gap ${f.gapPct >= 0 ? "+" : ""}${round(f.gapPct)}% vs last close`);
     if (earnings?.has(f.symbol)) reasons.push("Earnings today/next session");
@@ -136,15 +192,18 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     if (rsiVal != null && rsiVal >= 70) reasons.push(`RSI ${rsiVal} (overbought)`);
     if (rsiVal != null && rsiVal <= 30) reasons.push(`RSI ${rsiVal} (oversold)`);
 
-    // Composite 0-100: tradeability first (range + liquidity), then gap + catalysts.
-    const volatility = clamp01((atrPct ?? 1.5) / 5);
+    // Composite 0-100: "multiple trades today" first — repeatable range (day-in,
+    // day-out ≥2% sessions + ATR) and liquidity — then gap + catalysts.
+    const repeatability = clamp01((multiTradeDays ?? 3) / 8);
+    const rangeSize = clamp01((atrPct ?? 1.5) / 5);
+    const volatility = 0.55 * repeatability + 0.45 * rangeSize;
     const liquidity = clamp01(Math.log10(Math.max(f.dollarVol, 1)) / Math.log10(5e9));
     const gapMag = clamp01(Math.abs(f.gapPct) / 5);
     const catalyst = clamp01(
       (earnings?.has(f.symbol) ? 0.5 : 0) + (grade ? 0.3 : 0) + (headline ? 0.2 : 0),
     );
     const score = round(
-      100 * (0.35 * volatility + 0.25 * liquidity + 0.2 * gapMag + 0.2 * catalyst),
+      100 * (0.4 * volatility + 0.25 * liquidity + 0.15 * gapMag + 0.2 * catalyst),
       1,
     );
 
@@ -156,6 +215,8 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
       avgVolume: u?.volume ?? null,
       atrPct,
       rsi: rsiVal,
+      avgDailyRangePct,
+      multiTradeDays,
       score,
       reasons,
     };

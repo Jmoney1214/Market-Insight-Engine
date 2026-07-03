@@ -55,6 +55,21 @@ export function TodaySetupSection({ t, price }: { t: TodaySetup; price: number }
                 RVOL {t.rvol}x
               </Badge>
             )}
+            {t.multiTradeDays != null && (
+              <Badge
+                className={cn(
+                  "text-xs font-mono-numbers",
+                  t.multiTradeDays >= 7 ? toneBadge.bullish : "bg-muted text-muted-foreground",
+                )}
+              >
+                Multi-trade: ≥2% range on {t.multiTradeDays}/10 days
+              </Badge>
+            )}
+            {t.avgDailyRangePct != null && (
+              <Badge variant="outline" className="text-xs font-mono-numbers">
+                Avg range {t.avgDailyRangePct}%/day
+              </Badge>
+            )}
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">

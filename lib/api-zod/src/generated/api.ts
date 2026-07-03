@@ -30,7 +30,9 @@ export const GetPremarketScanResponse = zod.object({
   "avgVolume": zod.number().nullish(),
   "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
   "rsi": zod.number().nullish(),
-  "score": zod.number().describe('0-100 composite (volatility, liquidity, gap, catalysts)'),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
+  "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
   "reasons": zod.array(zod.string())
 })),
   "likelyJump": zod.array(zod.object({
@@ -41,7 +43,9 @@ export const GetPremarketScanResponse = zod.object({
   "avgVolume": zod.number().nullish(),
   "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
   "rsi": zod.number().nullish(),
-  "score": zod.number().describe('0-100 composite (volatility, liquidity, gap, catalysts)'),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
+  "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
   "reasons": zod.array(zod.string())
 })),
   "likelyFall": zod.array(zod.object({
@@ -52,7 +56,9 @@ export const GetPremarketScanResponse = zod.object({
   "avgVolume": zod.number().nullish(),
   "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
   "rsi": zod.number().nullish(),
-  "score": zod.number().describe('0-100 composite (volatility, liquidity, gap, catalysts)'),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
+  "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
   "reasons": zod.array(zod.string())
 }))
 })
@@ -257,7 +263,9 @@ export const GetReportResponse = zod.object({
   "expectedRangeLow": zod.number().nullish().describe('price - 1 ATR'),
   "expectedRangeHigh": zod.number().nullish().describe('price + 1 ATR'),
   "earningsToday": zod.boolean().optional(),
-  "gradeChange": zod.string().nullish().describe('Recent analyst action, e.g. \"Upgraded to Overweight by Morgan Stanley (2026-07-02)\"')
+  "gradeChange": zod.string().nullish().describe('Recent analyst action, e.g. \"Upgraded to Overweight by Morgan Stanley (2026-07-02)\"'),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2%')
 }).optional().describe('Intraday context for the current\/most-recent session (Alpaca SIP + catalysts). The \'trade today\' half of the report.')
 })
 

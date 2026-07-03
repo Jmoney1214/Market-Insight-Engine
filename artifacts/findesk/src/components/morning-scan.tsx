@@ -54,6 +54,17 @@ function CandidateRow({
             {r}
           </Badge>
         ))}
+        {c.multiTradeDays != null && (
+          <Badge
+            variant="outline"
+            className={cn(
+              "text-[10px] font-mono-numbers",
+              c.multiTradeDays >= 7 ? "text-bullish border-bullish/40" : "text-muted-foreground",
+            )}
+          >
+            {c.multiTradeDays}/10d ≥2%
+          </Badge>
+        )}
         {c.atrPct != null && (
           <Badge variant="outline" className="text-[10px] font-mono-numbers text-muted-foreground">
             ATR {c.atrPct}%

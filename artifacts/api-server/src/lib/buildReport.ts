@@ -10,7 +10,7 @@ import { hasLiveData, hasFmp, hasAlpaca } from "./providers/config.js";
 import { logger } from "./logger.js";
 import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
-import { sma, rsi, atr, support, resistance, changeOverBars } from "./providers/indicators.js";
+import { sma, rsi, atr, rangeStats, support, resistance, changeOverBars } from "./providers/indicators.js";
 
 function todayNY(offsetDays = 0): string {
   return new Date(Date.now() + offsetDays * 86_400_000).toLocaleDateString("en-CA", {
@@ -56,6 +56,8 @@ type TodaySetup = {
   expectedRangeHigh: number | null;
   earningsToday: boolean;
   gradeChange: string | null;
+  avgDailyRangePct: number | null;
+  multiTradeDays: number | null;
 };
 
 type Report = ReturnType<typeof generateMockReport> & {
@@ -377,6 +379,8 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     const gapPct = round(((snapshot.price - snapshot.prevClose) / snapshot.prevClose) * 100);
     let atrPct: number | null = null;
     let rvol: number | null = null;
+    let avgDailyRangePct: number | null = null;
+    let multiTradeDays: number | null = null;
     if (bars && bars.closes.length > 15) {
       const a = atr(bars.highs, bars.lows, bars.closes, 14);
       atrPct = a != null ? round((a / snapshot.price) * 100) : null;
@@ -384,6 +388,11 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
         const recent = bars.volumes.slice(-21, -1);
         const avgVol = recent.length > 0 ? recent.reduce((x, y) => x + y, 0) / recent.length : 0;
         rvol = avgVol > 0 ? round(snapshot.sessionVolume / avgVol) : null;
+      }
+      const rs = rangeStats(bars.highs, bars.lows, bars.closes, 10, 2);
+      if (rs) {
+        avgDailyRangePct = round(rs.avgRangePct, 1);
+        multiTradeDays = rs.daysAboveThreshold;
       }
     }
     const gradeDate = latestGrade?.publishedDate?.slice(0, 10) ?? "";
@@ -405,6 +414,8 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
         latestGrade && gradeIsFresh && latestGrade.gradingCompany
           ? `${latestGrade.action.includes("up") ? "Upgraded" : latestGrade.action.includes("down") ? "Downgraded" : `Rated ${latestGrade.newGrade}`} by ${latestGrade.gradingCompany} (${gradeDate})`
           : null,
+      avgDailyRangePct,
+      multiTradeDays,
     };
   }
 

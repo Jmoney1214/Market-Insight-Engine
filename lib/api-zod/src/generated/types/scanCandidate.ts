@@ -22,7 +22,17 @@ export interface ScanCandidate {
   atrPct?: number | null;
   /** @nullable */
   rsi?: number | null;
-  /** 0-100 composite (volatility, liquidity, gap, catalysts) */
+  /**
+     * Average (high-low)/close % over the last 10 sessions
+     * @nullable
+     */
+  avgDailyRangePct?: number | null;
+  /**
+     * Sessions out of the last 10 that ranged >=2% — the "multiple trades today" signal
+     * @nullable
+     */
+  multiTradeDays?: number | null;
+  /** 0-100 composite (repeatable range, liquidity, gap, catalysts) */
   score: number;
   reasons: string[];
 }
