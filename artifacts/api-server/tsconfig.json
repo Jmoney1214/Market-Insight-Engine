@@ -10,10 +10,22 @@
   "include": ["src"],
   "references": [
     {
+      "path": "../../lib/copilot-committee"
+    },
+    {
       "path": "../../lib/db"
     },
     {
       "path": "../../lib/api-zod"
+    },
+    {
+      "path": "../../lib/integrations-openai-ai-server"
+    },
+    {
+      "path": "../../lib/integrations-gemini-ai"
+    },
+    {
+      "path": "../../lib/integrations-anthropic-ai"
     }
   ]
 }

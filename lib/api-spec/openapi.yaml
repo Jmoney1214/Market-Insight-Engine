@@ -16,6 +16,8 @@ tags:
     description: Watchlist management
   - name: scan
     description: Market scanning
+  - name: copilot
+    description: Trading Desk Copilot research helper (no order execution)
 
 paths:
   /scan/premarket:
@@ -85,7 +87,7 @@ paths:
       operationId: analyzeTicker
       tags: [analysis]
       summary: Run AI analysis on a ticker
-      description: Triggers a full analyst report for the given ticker (returns mock data in MVP)
+      description: Triggers a full analyst report for the given ticker using live market data and AI-generated analysis
       requestBody:
         required: true
         content:
@@ -206,8 +208,381 @@ paths:
         "204":
           description: Removed
 
+  /copilot/healthz:
+    get:
+      operationId: copilotHealthCheck
+      tags: [copilot]
+      summary: Copilot service health check
+      description: Returns health status for the Trading Desk Copilot service
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopilotHealth"
+
+  /copilot/event:
+    get:
+      operationId: getCopilotEvent
+      tags: [copilot]
+      summary: Build the canonical deterministic copilot event for a symbol
+      description: >-
+        Computes one deterministic copilot event from bars/quote. Research and
+        helper only: never returns order intent or any execution signal.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [fixture, yahoo_delayed]
+            default: fixture
+          description: "Data source; fixtures require no API keys"
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [LIVE, REPLAY, RESEARCH]
+      responses:
+        "200":
+          description: Canonical copilot event
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopilotEvent"
+        "404":
+          description: Unknown fixture symbol
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/explain:
+    get:
+      operationId: explainCopilotEvent
+      tags: [copilot]
+      summary: Explain a deterministic copilot event with the read-only analyst committee
+      description: >-
+        Runs the multi-agent analyst committee over the deterministic copilot
+        event for a symbol. The committee only explains, critiques, and
+        summarizes the deterministic read: it never creates signals, approves
+        trades, overrides hard blocks, or invents data. When the event is
+        hard-blocked the recommendation can only be a defensive value.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: source
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [fixture, yahoo_delayed]
+            default: fixture
+          description: "Data source; fixtures require no API keys"
+        - name: mode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [LIVE, REPLAY, RESEARCH]
+      responses:
+        "200":
+          description: Read-only analyst committee explanation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitteeRead"
+        "404":
+          description: Unknown fixture symbol
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/journal:
+    get:
+      operationId: listJournalEntries
+      tags: [copilot]
+      summary: List journal entries
+      responses:
+        "200":
+          description: Journal entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/JournalEntry"
+    post:
+      operationId: createJournalEntry
+      tags: [copilot]
+      summary: Create a journal entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JournalEntryInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JournalEntry"
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/journal/{id}:
+    delete:
+      operationId: deleteJournalEntry
+      tags: [copilot]
+      summary: Delete a journal entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /copilot/strategies:
+    get:
+      operationId: listStrategies
+      tags: [copilot]
+      summary: List strategy registry entries
+      responses:
+        "200":
+          description: Strategy registry entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StrategyRegistryEntry"
+
+  /copilot/validation:
+    get:
+      operationId: listValidationStates
+      tags: [copilot]
+      summary: "Deprecated: strategy validation states (projection of the edge scoreboard)"
+      description: >-
+        Compatibility adapter that projects the deterministic edge scoreboard into
+        the legacy validation-state shape. Prefer GET /copilot/scoreboard.
+      responses:
+        "200":
+          description: Validation states
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ValidationState"
+
+  /copilot/scoreboard:
+    get:
+      operationId: getScoreboard
+      tags: [copilot]
+      summary: Deterministic edge scoreboard computed from journaled outcomes
+      responses:
+        "200":
+          description: Edge scores, one row per primary-edge hypothesis
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeScore"
+
+  /copilot/history:
+    get:
+      operationId: listHistoryEvents
+      tags: [copilot]
+      summary: List historical copilot events
+      responses:
+        "200":
+          description: History events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEvent"
+
+  /copilot/replay/session:
+    get:
+      operationId: getReplaySession
+      tags: [copilot]
+      summary: Load replay session metadata for a symbol/date
+      description: >-
+        Returns metadata for a fixture-backed replay session (total steps, bar
+        interval, session bounds). Research/practice only: replay never executes,
+        simulates, routes, or paper-trades. Real paid historical feeds are out of
+        scope (adapter hooks only).
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: false
+          schema:
+            type: string
+          description: "ISO date (YYYY-MM-DD); defaults to the symbol's available session"
+      responses:
+        "200":
+          description: Replay session metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReplaySession"
+        "404":
+          description: No replayable session for this symbol/date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/replay/event:
+    get:
+      operationId: getReplayEvent
+      tags: [copilot]
+      summary: Build the deterministic copilot event at a replay step
+      description: >-
+        Computes one deterministic copilot event for a single replay step by
+        replaying bars[0..step] through the SAME pipeline used for live reads.
+        Returns the canonical CopilotEvent shape with mode REPLAY. Never returns
+        order intent or any execution signal.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+          description: "ISO date (YYYY-MM-DD) of the replay session"
+        - name: step
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+          description: "0-based replay step (0 .. totalSteps-1)"
+      responses:
+        "200":
+          description: Canonical copilot event for the replay step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CopilotEvent"
+        "404":
+          description: Invalid replay symbol/date/step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /copilot/replay/explain:
+    get:
+      operationId: explainReplayEvent
+      tags: [copilot]
+      summary: Explain the replay-step event with the read-only analyst committee
+      description: >-
+        Runs the same multi-agent analyst committee over the deterministic
+        replay-step event. The committee only explains, critiques, and
+        summarizes: it never creates signals, approves trades, overrides hard
+        blocks, or invents data.
+      parameters:
+        - name: symbol
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: step
+          in: query
+          required: true
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Read-only analyst committee explanation for the replay step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommitteeRead"
+        "404":
+          description: Invalid replay symbol/date/step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
 components:
   schemas:
+    ReplaySession:
+      type: object
+      description: Fixture-backed replay session metadata. Research/practice only; never executes, simulates, or paper-trades.
+      required:
+        - symbol
+        - date
+        - availableDates
+        - dataSource
+        - totalSteps
+        - barSeconds
+        - startTime
+        - endTime
+      properties:
+        symbol:
+          type: string
+        date:
+          type: string
+          description: "ISO date (YYYY-MM-DD) of the replayable session"
+        availableDates:
+          type: array
+          items:
+            type: string
+          description: "Every ISO date this symbol can be replayed for (for the date picker)"
+        dataSource:
+          type: string
+        totalSteps:
+          type: integer
+          description: "Valid replay steps are 0-based: 0 .. totalSteps-1"
+        barSeconds:
+          type: integer
+        startTime:
+          type: integer
+          description: "Epoch seconds of the first bar"
+        endTime:
+          type: integer
+          description: "Epoch seconds of the last bar"
     HealthStatus:
       type: object
       properties:
@@ -780,4 +1155,720 @@ components:
         ticker:
           type: string
         notes:
+          type: string
+
+    CopilotHealth:
+      type: object
+      required: [status, service]
+      properties:
+        status:
+          type: string
+        service:
+          type: string
+
+    CopilotBar:
+      type: object
+      description: A single OHLCV price bar. `t` is epoch seconds at the bar open.
+      required: [t, o, h, l, c, v]
+      properties:
+        t:
+          type: number
+          description: Epoch seconds at the bar open
+        o:
+          type: number
+          description: Open
+        h:
+          type: number
+          description: High
+        l:
+          type: number
+          description: Low
+        c:
+          type: number
+          description: Close
+        v:
+          type: number
+          description: Volume
+
+    CopilotEvent:
+      type: object
+      description: Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
+      required:
+        - eventId
+        - symbol
+        - timestamp
+        - mode
+        - dataSource
+        - alertLevel
+        - l5Blocked
+        - snapshot
+        - marketQuality
+        - triggers
+        - triggerStack
+        - gates
+        - hardBlocks
+        - riskReward
+        - position
+        - feedQuality
+        - warnings
+        - bars
+      properties:
+        eventId:
+          type: string
+        symbol:
+          type: string
+        timestamp:
+          type: string
+          description: ISO 8601 event timestamp
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+          description: "LIVE | REPLAY | RESEARCH"
+        dataSource:
+          type: string
+          description: "Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed)"
+        alertLevel:
+          type: ["string", "null"]
+          enum: ["L1", "L2", "L3", "L4", "L5", null]
+          description: "Deterministic alert ladder level L1..L5, or null"
+        l5Blocked:
+          type: boolean
+          description: "True when a hard L5 safety block is active"
+        snapshot:
+          $ref: "#/components/schemas/MarketSnapshot"
+        marketQuality:
+          $ref: "#/components/schemas/MarketQuality"
+        triggers:
+          type: array
+          items:
+            $ref: "#/components/schemas/CopilotTrigger"
+        triggerStack:
+          $ref: "#/components/schemas/TriggerStack"
+        gates:
+          $ref: "#/components/schemas/GateVerdicts"
+        hardBlocks:
+          type: array
+          description: "Non-overridable L5 hard-block codes; empty when not blocked"
+          items:
+            type: string
+        riskReward:
+          $ref: "#/components/schemas/RiskReward"
+        position:
+          $ref: "#/components/schemas/PositionRead"
+        feedQuality:
+          $ref: "#/components/schemas/FeedQuality"
+        warnings:
+          type: array
+          items:
+            type: string
+        bars:
+          type: array
+          description: "OHLCV bars underlying this event, oldest first; empty on data failure."
+          items:
+            $ref: "#/components/schemas/CopilotBar"
+
+    AgentRead:
+      type: object
+      description: One specialist analyst's read. Explanatory only; never an instruction to transact.
+      required:
+        - agent
+        - status
+        - bias
+        - confidence
+        - headline
+        - supportingFactors
+        - warnings
+        - riskVerdict
+        - maxRecommendation
+      properties:
+        agent:
+          type: string
+          enum:
+            - technical
+            - pattern
+            - regime
+            - order_flow
+            - catalyst
+            - position
+            - memory
+            - bull_case
+            - bear_case
+            - risk_critic
+        status:
+          type: string
+          enum: [OK, DEGRADED, UNAVAILABLE]
+        bias:
+          type: string
+          enum: [BULLISH, BEARISH, NEUTRAL, MIXED, UNKNOWN]
+        confidence:
+          type: number
+          description: "Clamped to [0,1]"
+        headline:
+          type: string
+        supportingFactors:
+          type: array
+          items:
+            type: string
+        warnings:
+          type: array
+          items:
+            type: string
+        riskVerdict:
+          type: ["string", "null"]
+          enum: [PASS, WARN, BLOCK, null]
+          description: "Risk critic verdict; null for every other agent"
+        maxRecommendation:
+          type: ["string", "null"]
+          enum:
+            - WATCH
+            - WAIT
+            - AVOID
+            - POSSIBLE_LONG_ZONE
+            - POSSIBLE_SHORT_ZONE
+            - THESIS_VALID
+            - THESIS_WEAKENING
+            - TRAIL_STOP
+            - TAKE_PARTIALS
+            - EXIT_WARNING
+            - THESIS_INVALIDATED
+            - DO_NOT_ADD
+            - null
+          description: "Risk critic recommendation ceiling; null for every other agent"
+
+    DashboardRead:
+      type: object
+      description: The single synthesized, dashboard-safe read. Research/helper output only.
+      required:
+        - oneSentenceRead
+        - recommendation
+        - confidence
+        - whatSupports
+        - whatArguesAgainst
+        - whatConfirms
+        - whatInvalidates
+        - positionGuidance
+        - riskNotes
+      properties:
+        oneSentenceRead:
+          type: string
+        recommendation:
+          type: string
+          enum:
+            - WATCH
+            - WAIT
+            - AVOID
+            - POSSIBLE_LONG_ZONE
+            - POSSIBLE_SHORT_ZONE
+            - THESIS_VALID
+            - THESIS_WEAKENING
+            - TRAIL_STOP
+            - TAKE_PARTIALS
+            - EXIT_WARNING
+            - THESIS_INVALIDATED
+            - DO_NOT_ADD
+        confidence:
+          type: number
+          description: "Clamped to [0,1]"
+        whatSupports:
+          type: array
+          items:
+            type: string
+        whatArguesAgainst:
+          type: array
+          items:
+            type: string
+        whatConfirms:
+          type: array
+          items:
+            type: string
+        whatInvalidates:
+          type: array
+          items:
+            type: string
+        positionGuidance:
+          type: array
+          items:
+            type: string
+        riskNotes:
+          type: array
+          items:
+            type: string
+
+    CommitteeRead:
+      type: object
+      description: Full read-only analyst committee response for one deterministic event.
+      required:
+        - status
+        - source
+        - eventId
+        - symbol
+        - alertLevel
+        - l5Blocked
+        - provider
+        - degraded
+        - agents
+        - dashboardRead
+        - warnings
+      properties:
+        status:
+          type: string
+          enum: [OK, FALLBACK, ERROR]
+        source:
+          type: string
+          enum: [multi_agent_committee, deterministic_fallback]
+        eventId:
+          type: string
+        symbol:
+          type: string
+        alertLevel:
+          type: ["string", "null"]
+          enum: ["L1", "L2", "L3", "L4", "L5", null]
+        l5Blocked:
+          type: boolean
+        provider:
+          type: string
+        degraded:
+          type: boolean
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentRead"
+        dashboardRead:
+          $ref: "#/components/schemas/DashboardRead"
+        warnings:
+          type: array
+          items:
+            type: string
+
+    MarketSnapshot:
+      type: object
+      required:
+        - price
+        - vwap
+        - rvol
+        - atr
+        - openingRangeHigh
+        - openingRangeLow
+        - volumeExpansion
+        - priceLocation
+        - spread
+        - change1d
+      properties:
+        price:
+          type: ["number", "null"]
+        vwap:
+          type: ["number", "null"]
+        rvol:
+          type: ["number", "null"]
+        atr:
+          type: ["number", "null"]
+        openingRangeHigh:
+          type: ["number", "null"]
+        openingRangeLow:
+          type: ["number", "null"]
+        volumeExpansion:
+          type: ["boolean", "null"]
+        priceLocation:
+          type: ["string", "null"]
+        spread:
+          type: ["number", "null"]
+        change1d:
+          type: ["number", "null"]
+
+    MarketQuality:
+      type: object
+      required: [spreadOk, quoteFresh, liquidityOk, notes]
+      properties:
+        spreadOk:
+          type: ["boolean", "null"]
+        quoteFresh:
+          type: ["boolean", "null"]
+        liquidityOk:
+          type: ["boolean", "null"]
+        notes:
+          type: ["string", "null"]
+
+    CopilotTrigger:
+      type: object
+      required: [name, category, detected]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          enum: [primary_edge, entry_refinement]
+          description: "primary_edge | entry_refinement"
+        detected:
+          type: boolean
+        detail:
+          type: ["string", "null"]
+
+    TriggerStack:
+      type: object
+      required: [stackName, category, credibility, detectedTriggers]
+      properties:
+        stackName:
+          type: string
+        category:
+          type: ["string", "null"]
+          enum: [primary_edge, entry_refinement, null]
+        credibility:
+          type: number
+          description: "Deterministic credibility score in [0,1]"
+        detectedTriggers:
+          type: array
+          items:
+            type: string
+
+    GateVerdict:
+      type: object
+      required: [status, reason]
+      properties:
+        status:
+          type: string
+          enum: [PASS, WARN, BLOCK]
+        reason:
+          type: string
+
+    GateVerdicts:
+      type: object
+      required:
+        - data
+        - staleness
+        - spread
+        - marketQuality
+        - credibility
+        - validation
+      properties:
+        data:
+          $ref: "#/components/schemas/GateVerdict"
+        staleness:
+          $ref: "#/components/schemas/GateVerdict"
+        spread:
+          $ref: "#/components/schemas/GateVerdict"
+        marketQuality:
+          $ref: "#/components/schemas/GateVerdict"
+        credibility:
+          $ref: "#/components/schemas/GateVerdict"
+        validation:
+          $ref: "#/components/schemas/GateVerdict"
+
+    RiskReward:
+      type: object
+      description: Research-only structural preview. Never an order, instruction, or signal to transact.
+      required:
+        - direction
+        - entry
+        - invalidation
+        - target
+        - ratio
+        - riskPerShare
+        - notes
+      properties:
+        direction:
+          type: ["string", "null"]
+          enum: [LONG, SHORT, null]
+        entry:
+          type: ["number", "null"]
+        invalidation:
+          type: ["number", "null"]
+        target:
+          type: ["number", "null"]
+        ratio:
+          type: ["number", "null"]
+        riskPerShare:
+          type: ["number", "null"]
+        notes:
+          type: string
+
+    PositionRead:
+      type: object
+      description: Manual position read for research and journaling only.
+      required: [status, side, unrealizedR, thesisStatus, notes]
+      properties:
+        status:
+          type: string
+          enum: [FLAT, IN_POSITION]
+        side:
+          type: ["string", "null"]
+          enum: [LONG, SHORT, null]
+        unrealizedR:
+          type: ["number", "null"]
+        thesisStatus:
+          type: string
+          enum: [VALID, WEAKENING, INVALIDATED, UNKNOWN]
+        notes:
+          type: string
+
+    FeedQuality:
+      type: object
+      required:
+        - source
+        - quoteAgeSeconds
+        - barAgeSeconds
+        - spreadBps
+        - completeness
+        - isStale
+        - verdict
+        - notes
+      properties:
+        source:
+          type: string
+        quoteAgeSeconds:
+          type: ["number", "null"]
+        barAgeSeconds:
+          type: ["number", "null"]
+        spreadBps:
+          type: ["number", "null"]
+        completeness:
+          type: number
+        isStale:
+          type: boolean
+        verdict:
+          type: string
+          enum: [OK, DEGRADED, BLOCKED]
+        notes:
+          type: ["string", "null"]
+
+    JournalEntry:
+      type: object
+      required: [id, mode, symbol, createdAt]
+      properties:
+        id:
+          type: integer
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+          description: "LIVE | REPLAY | RESEARCH"
+        symbol:
+          type: string
+        eventTimestamp:
+          type: ["string", "null"]
+        eventSnapshot:
+          type: ["object", "null"]
+          additionalProperties: true
+        manualOutcome:
+          type: ["object", "null"]
+          additionalProperties: true
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    JournalEntryInput:
+      type: object
+      required: [mode, symbol]
+      properties:
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+          description: "LIVE | REPLAY | RESEARCH"
+        symbol:
+          type: string
+        eventTimestamp:
+          type: string
+        eventSnapshot:
+          type: object
+          additionalProperties: true
+        manualOutcome:
+          type: object
+          additionalProperties: true
+        notes:
+          type: string
+
+    CostModel:
+      type: object
+      required: [commissionPerShare, slippageBps, spreadBps]
+      properties:
+        commissionPerShare:
+          type: number
+        slippageBps:
+          type: number
+        spreadBps:
+          type: number
+
+    StrategyRegistryEntry:
+      type: object
+      description: A Strategy Lab definition — a primary-edge hypothesis or a non-promotable entry-refinement feature.
+      required:
+        - hypothesisName
+        - primaryEdgeType
+        - category
+        - promotable
+        - requiredData
+        - universe
+        - setupConditions
+        - entryRefinementFeatures
+        - invalidationRules
+        - targetRules
+        - holdingPeriod
+        - costModel
+        - minimumSampleCount
+        - note
+      properties:
+        hypothesisName:
+          type: string
+        primaryEdgeType:
+          type: string
+        category:
+          type: string
+          enum: [primary_edge, entry_refinement]
+        promotable:
+          type: boolean
+        requiredData:
+          type: array
+          items:
+            type: string
+        universe:
+          type: string
+        setupConditions:
+          type: array
+          items:
+            type: string
+        entryRefinementFeatures:
+          type: array
+          items:
+            type: string
+        invalidationRules:
+          type: array
+          items:
+            type: string
+        targetRules:
+          type: array
+          items:
+            type: string
+        holdingPeriod:
+          type: string
+        costModel:
+          $ref: "#/components/schemas/CostModel"
+        minimumSampleCount:
+          type: integer
+        note:
+          type: ["string", "null"]
+
+    EdgeScore:
+      type: object
+      description: Deterministic measured edge metrics + validation status for one primary-edge hypothesis.
+      required:
+        - hypothesisName
+        - primaryEdgeType
+        - validationStatus
+        - sampleCount
+        - countableSampleCount
+        - forwardSampleCount
+        - paperSampleCount
+        - backtestSampleCount
+        - winRate
+        - averageR
+        - expectancyR
+        - profitFactor
+        - maxDrawdownR
+        - avgMfeR
+        - avgMaeR
+        - avgTimeToTargetBars
+        - avgTimeToStopBars
+        - bestRegime
+        - worstRegime
+        - bestTimeWindow
+        - worstTimeWindow
+        - note
+      properties:
+        hypothesisName:
+          type: string
+        primaryEdgeType:
+          type: string
+        validationStatus:
+          type: string
+          enum:
+            - unproven
+            - paper_pending
+            - backtested_only
+            - backtested_pending_forward
+            - paper_validated
+            - no_edge
+            - insufficient_sample
+        sampleCount:
+          type: integer
+        countableSampleCount:
+          type: integer
+        forwardSampleCount:
+          type: integer
+        paperSampleCount:
+          type: integer
+        backtestSampleCount:
+          type: integer
+        winRate:
+          type: ["number", "null"]
+        averageR:
+          type: ["number", "null"]
+        expectancyR:
+          type: ["number", "null"]
+        profitFactor:
+          type: ["number", "null"]
+        maxDrawdownR:
+          type: ["number", "null"]
+        avgMfeR:
+          type: ["number", "null"]
+        avgMaeR:
+          type: ["number", "null"]
+        avgTimeToTargetBars:
+          type: ["number", "null"]
+        avgTimeToStopBars:
+          type: ["number", "null"]
+        bestRegime:
+          type: ["string", "null"]
+        worstRegime:
+          type: ["string", "null"]
+        bestTimeWindow:
+          type: ["string", "null"]
+        worstTimeWindow:
+          type: ["string", "null"]
+        note:
+          type: ["string", "null"]
+
+    ValidationState:
+      type: object
+      required: [id, strategyName, validationStatus, sampleCount, metrics, updatedAt]
+      properties:
+        id:
+          type: integer
+        strategyName:
+          type: string
+        validationStatus:
+          type: string
+          enum:
+            - unproven
+            - paper_pending
+            - backtested_only
+            - backtested_pending_forward
+            - paper_validated
+            - no_edge
+            - insufficient_sample
+        sampleCount:
+          type: integer
+        metrics:
+          type: object
+          additionalProperties: true
+        updatedAt:
+          type: string
+
+    HistoryEvent:
+      type: object
+      required: [id, mode, eventSnapshot, createdAt]
+      properties:
+        id:
+          type: integer
+        eventId:
+          type: ["string", "null"]
+        symbol:
+          type: ["string", "null"]
+        mode:
+          type: string
+          enum: [LIVE, REPLAY, RESEARCH]
+        alertLevel:
+          type: ["string", "null"]
+          enum: ["L1", "L2", "L3", "L4", "L5", null]
+        eventSnapshot:
+          $ref: "#/components/schemas/CopilotEvent"
+        createdAt:
           type: string

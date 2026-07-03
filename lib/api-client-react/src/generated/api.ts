@@ -22,12 +22,27 @@ import type {
 import type {
   AnalyzeInput,
   ApiError,
+  CommitteeRead,
+  CopilotEvent,
+  CopilotHealth,
+  EdgeScore,
+  ExplainCopilotEventParams,
+  ExplainReplayEventParams,
+  GetCopilotEventParams,
   GetPremarketScanParams,
+  GetReplayEventParams,
+  GetReplaySessionParams,
   HealthStatus,
+  HistoryEvent,
+  JournalEntry,
+  JournalEntryInput,
+  ReplaySession,
   Report,
   ReportSummary,
   ScanResult,
   ScorecardSummary,
+  StrategyRegistryEntry,
+  ValidationState,
   WatchlistEntry,
   WatchlistInput
 } from './api.schemas';
@@ -296,7 +311,7 @@ export const getAnalyzeTickerUrl = () => {
 }
 
 /**
- * Triggers a full analyst report for the given ticker (returns mock data in MVP)
+ * Triggers a full analyst report for the given ticker using live market data and AI-generated analysis
  * @summary Run AI analysis on a ticker
  */
 export const analyzeTicker = async (analyzeInput: AnalyzeInput, options?: RequestInit): Promise<Report> => {
@@ -800,4 +815,1034 @@ export const useRemoveFromWatchlist = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getRemoveFromWatchlistMutationOptions(options));
     }
+
+export const getCopilotHealthCheckUrl = () => {
+
+
+
+
+  return `/api/copilot/healthz`
+}
+
+/**
+ * Returns health status for the Trading Desk Copilot service
+ * @summary Copilot service health check
+ */
+export const copilotHealthCheck = async ( options?: RequestInit): Promise<CopilotHealth> => {
+
+  return customFetch<CopilotHealth>(getCopilotHealthCheckUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getCopilotHealthCheckQueryKey = () => {
+    return [
+    `/api/copilot/healthz`
+    ] as const;
+    }
+
+
+export const getCopilotHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof copilotHealthCheck>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof copilotHealthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getCopilotHealthCheckQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof copilotHealthCheck>>> = ({ signal }) => copilotHealthCheck({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof copilotHealthCheck>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type CopilotHealthCheckQueryResult = NonNullable<Awaited<ReturnType<typeof copilotHealthCheck>>>
+export type CopilotHealthCheckQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Copilot service health check
+ */
+
+export function useCopilotHealthCheck<TData = Awaited<ReturnType<typeof copilotHealthCheck>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof copilotHealthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getCopilotHealthCheckQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetCopilotEventUrl = (params: GetCopilotEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/event?${stringifiedParams}` : `/api/copilot/event`
+}
+
+/**
+ * Computes one deterministic copilot event from bars/quote. Research and helper only: never returns order intent or any execution signal.
+ * @summary Build the canonical deterministic copilot event for a symbol
+ */
+export const getCopilotEvent = async (params: GetCopilotEventParams, options?: RequestInit): Promise<CopilotEvent> => {
+
+  return customFetch<CopilotEvent>(getGetCopilotEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCopilotEventQueryKey = (params?: GetCopilotEventParams,) => {
+    return [
+    `/api/copilot/event`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError>>(params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCopilotEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCopilotEvent>>> = ({ signal }) => getCopilotEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCopilotEventQueryResult = NonNullable<Awaited<ReturnType<typeof getCopilotEvent>>>
+export type GetCopilotEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Build the canonical deterministic copilot event for a symbol
+ */
+
+export function useGetCopilotEvent<TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError>>(
+ params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCopilotEventQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getExplainCopilotEventUrl = (params: ExplainCopilotEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/explain?${stringifiedParams}` : `/api/copilot/explain`
+}
+
+/**
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value.
+ * @summary Explain a deterministic copilot event with the read-only analyst committee
+ */
+export const explainCopilotEvent = async (params: ExplainCopilotEventParams, options?: RequestInit): Promise<CommitteeRead> => {
+
+  return customFetch<CommitteeRead>(getExplainCopilotEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExplainCopilotEventQueryKey = (params?: ExplainCopilotEventParams,) => {
+    return [
+    `/api/copilot/explain`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExplainCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError>>(params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExplainCopilotEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof explainCopilotEvent>>> = ({ signal }) => explainCopilotEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExplainCopilotEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainCopilotEvent>>>
+export type ExplainCopilotEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Explain a deterministic copilot event with the read-only analyst committee
+ */
+
+export function useExplainCopilotEvent<TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError>>(
+ params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExplainCopilotEventQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListJournalEntriesUrl = () => {
+
+
+
+
+  return `/api/copilot/journal`
+}
+
+/**
+ * @summary List journal entries
+ */
+export const listJournalEntries = async ( options?: RequestInit): Promise<JournalEntry[]> => {
+
+  return customFetch<JournalEntry[]>(getListJournalEntriesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListJournalEntriesQueryKey = () => {
+    return [
+    `/api/copilot/journal`
+    ] as const;
+    }
+
+
+export const getListJournalEntriesQueryOptions = <TData = Awaited<ReturnType<typeof listJournalEntries>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListJournalEntriesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listJournalEntries>>> = ({ signal }) => listJournalEntries({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listJournalEntries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListJournalEntriesQueryResult = NonNullable<Awaited<ReturnType<typeof listJournalEntries>>>
+export type ListJournalEntriesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List journal entries
+ */
+
+export function useListJournalEntries<TData = Awaited<ReturnType<typeof listJournalEntries>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListJournalEntriesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateJournalEntryUrl = () => {
+
+
+
+
+  return `/api/copilot/journal`
+}
+
+/**
+ * @summary Create a journal entry
+ */
+export const createJournalEntry = async (journalEntryInput: JournalEntryInput, options?: RequestInit): Promise<JournalEntry> => {
+
+  return customFetch<JournalEntry>(getCreateJournalEntryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      journalEntryInput,)
+  }
+);}
+
+
+
+
+export const getCreateJournalEntryMutationOptions = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext> => {
+
+const mutationKey = ['createJournalEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createJournalEntry>>, {data: BodyType<JournalEntryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createJournalEntry(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateJournalEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createJournalEntry>>>
+    export type CreateJournalEntryMutationBody = BodyType<JournalEntryInput>
+    export type CreateJournalEntryMutationError = ErrorType<ApiError>
+
+    /**
+ * @summary Create a journal entry
+ */
+export const useCreateJournalEntry = <TError = ErrorType<ApiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createJournalEntry>>,
+        TError,
+        {data: BodyType<JournalEntryInput>},
+        TContext
+      > => {
+      return useMutation(getCreateJournalEntryMutationOptions(options));
+    }
+
+export const getDeleteJournalEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/copilot/journal/${id}`
+}
+
+/**
+ * @summary Delete a journal entry
+ */
+export const deleteJournalEntry = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteJournalEntryUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteJournalEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJournalEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteJournalEntry>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteJournalEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteJournalEntry>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteJournalEntry(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteJournalEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteJournalEntry>>>
+
+    export type DeleteJournalEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a journal entry
+ */
+export const useDeleteJournalEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJournalEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteJournalEntry>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteJournalEntryMutationOptions(options));
+    }
+
+export const getListStrategiesUrl = () => {
+
+
+
+
+  return `/api/copilot/strategies`
+}
+
+/**
+ * @summary List strategy registry entries
+ */
+export const listStrategies = async ( options?: RequestInit): Promise<StrategyRegistryEntry[]> => {
+
+  return customFetch<StrategyRegistryEntry[]>(getListStrategiesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStrategiesQueryKey = () => {
+    return [
+    `/api/copilot/strategies`
+    ] as const;
+    }
+
+
+export const getListStrategiesQueryOptions = <TData = Awaited<ReturnType<typeof listStrategies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStrategiesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStrategies>>> = ({ signal }) => listStrategies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStrategies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStrategiesQueryResult = NonNullable<Awaited<ReturnType<typeof listStrategies>>>
+export type ListStrategiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List strategy registry entries
+ */
+
+export function useListStrategies<TData = Awaited<ReturnType<typeof listStrategies>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStrategiesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListValidationStatesUrl = () => {
+
+
+
+
+  return `/api/copilot/validation`
+}
+
+/**
+ * Compatibility adapter that projects the deterministic edge scoreboard into the legacy validation-state shape. Prefer GET /copilot/scoreboard.
+ * @summary Deprecated: strategy validation states (projection of the edge scoreboard)
+ */
+export const listValidationStates = async ( options?: RequestInit): Promise<ValidationState[]> => {
+
+  return customFetch<ValidationState[]>(getListValidationStatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListValidationStatesQueryKey = () => {
+    return [
+    `/api/copilot/validation`
+    ] as const;
+    }
+
+
+export const getListValidationStatesQueryOptions = <TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listValidationStates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListValidationStatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listValidationStates>>> = ({ signal }) => listValidationStates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listValidationStates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListValidationStatesQueryResult = NonNullable<Awaited<ReturnType<typeof listValidationStates>>>
+export type ListValidationStatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Deprecated: strategy validation states (projection of the edge scoreboard)
+ */
+
+export function useListValidationStates<TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listValidationStates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListValidationStatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetScoreboardUrl = () => {
+
+
+
+
+  return `/api/copilot/scoreboard`
+}
+
+/**
+ * @summary Deterministic edge scoreboard computed from journaled outcomes
+ */
+export const getScoreboard = async ( options?: RequestInit): Promise<EdgeScore[]> => {
+
+  return customFetch<EdgeScore[]>(getGetScoreboardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetScoreboardQueryKey = () => {
+    return [
+    `/api/copilot/scoreboard`
+    ] as const;
+    }
+
+
+export const getGetScoreboardQueryOptions = <TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetScoreboardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getScoreboard>>> = ({ signal }) => getScoreboard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetScoreboardQueryResult = NonNullable<Awaited<ReturnType<typeof getScoreboard>>>
+export type GetScoreboardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Deterministic edge scoreboard computed from journaled outcomes
+ */
+
+export function useGetScoreboard<TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetScoreboardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListHistoryEventsUrl = () => {
+
+
+
+
+  return `/api/copilot/history`
+}
+
+/**
+ * @summary List historical copilot events
+ */
+export const listHistoryEvents = async ( options?: RequestInit): Promise<HistoryEvent[]> => {
+
+  return customFetch<HistoryEvent[]>(getListHistoryEventsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListHistoryEventsQueryKey = () => {
+    return [
+    `/api/copilot/history`
+    ] as const;
+    }
+
+
+export const getListHistoryEventsQueryOptions = <TData = Awaited<ReturnType<typeof listHistoryEvents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistoryEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListHistoryEventsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listHistoryEvents>>> = ({ signal }) => listHistoryEvents({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listHistoryEvents>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListHistoryEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listHistoryEvents>>>
+export type ListHistoryEventsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List historical copilot events
+ */
+
+export function useListHistoryEvents<TData = Awaited<ReturnType<typeof listHistoryEvents>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistoryEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListHistoryEventsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetReplaySessionUrl = (params: GetReplaySessionParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/replay/session?${stringifiedParams}` : `/api/copilot/replay/session`
+}
+
+/**
+ * Returns metadata for a fixture-backed replay session (total steps, bar interval, session bounds). Research/practice only: replay never executes, simulates, routes, or paper-trades. Real paid historical feeds are out of scope (adapter hooks only).
+ * @summary Load replay session metadata for a symbol/date
+ */
+export const getReplaySession = async (params: GetReplaySessionParams, options?: RequestInit): Promise<ReplaySession> => {
+
+  return customFetch<ReplaySession>(getGetReplaySessionUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReplaySessionQueryKey = (params?: GetReplaySessionParams,) => {
+    return [
+    `/api/copilot/replay/session`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReplaySessionQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReplaySession>>> = ({ signal }) => getReplaySession(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReplaySessionQueryResult = NonNullable<Awaited<ReturnType<typeof getReplaySession>>>
+export type GetReplaySessionQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Load replay session metadata for a symbol/date
+ */
+
+export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(
+ params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReplaySessionQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetReplayEventUrl = (params: GetReplayEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/replay/event?${stringifiedParams}` : `/api/copilot/replay/event`
+}
+
+/**
+ * Computes one deterministic copilot event for a single replay step by replaying bars[0..step] through the SAME pipeline used for live reads. Returns the canonical CopilotEvent shape with mode REPLAY. Never returns order intent or any execution signal.
+ * @summary Build the deterministic copilot event at a replay step
+ */
+export const getReplayEvent = async (params: GetReplayEventParams, options?: RequestInit): Promise<CopilotEvent> => {
+
+  return customFetch<CopilotEvent>(getGetReplayEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReplayEventQueryKey = (params?: GetReplayEventParams,) => {
+    return [
+    `/api/copilot/replay/event`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReplayEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReplayEvent>>> = ({ signal }) => getReplayEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof getReplayEvent>>>
+export type GetReplayEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Build the deterministic copilot event at a replay step
+ */
+
+export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(
+ params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReplayEventQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getExplainReplayEventUrl = (params: ExplainReplayEventParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/copilot/replay/explain?${stringifiedParams}` : `/api/copilot/replay/explain`
+}
+
+/**
+ * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data.
+ * @summary Explain the replay-step event with the read-only analyst committee
+ */
+export const explainReplayEvent = async (params: ExplainReplayEventParams, options?: RequestInit): Promise<CommitteeRead> => {
+
+  return customFetch<CommitteeRead>(getExplainReplayEventUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExplainReplayEventQueryKey = (params?: ExplainReplayEventParams,) => {
+    return [
+    `/api/copilot/replay/explain`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExplainReplayEventQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof explainReplayEvent>>> = ({ signal }) => explainReplayEvent(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExplainReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainReplayEvent>>>
+export type ExplainReplayEventQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Explain the replay-step event with the read-only analyst committee
+ */
+
+export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(
+ params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExplainReplayEventQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 

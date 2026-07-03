@@ -5,6 +5,25 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
+/**
+ * Fixture-backed replay session metadata. Research/practice only; never executes, simulates, or paper-trades.
+ */
+export interface ReplaySession {
+  symbol: string;
+  /** ISO date (YYYY-MM-DD) of the replayable session */
+  date: string;
+  /** Every ISO date this symbol can be replayed for (for the date picker) */
+  availableDates: string[];
+  dataSource: string;
+  /** Valid replay steps are 0-based: 0 .. totalSteps-1 */
+  totalSteps: number;
+  barSeconds: number;
+  /** Epoch seconds of the first bar */
+  startTime: number;
+  /** Epoch seconds of the last bar */
+  endTime: number;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -384,10 +403,761 @@ export interface WatchlistInput {
   notes?: string;
 }
 
+export interface CopilotHealth {
+  status: string;
+  service: string;
+}
+
+/**
+ * A single OHLCV price bar. `t` is epoch seconds at the bar open.
+ */
+export interface CopilotBar {
+  /** Epoch seconds at the bar open */
+  t: number;
+  /** Open */
+  o: number;
+  /** High */
+  h: number;
+  /** Low */
+  l: number;
+  /** Close */
+  c: number;
+  /** Volume */
+  v: number;
+}
+
+/**
+ * LIVE | REPLAY | RESEARCH
+ */
+export type CopilotEventMode = typeof CopilotEventMode[keyof typeof CopilotEventMode];
+
+
+export const CopilotEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * Deterministic alert ladder level L1..L5, or null
+ * @nullable
+ */
+export type CopilotEventAlertLevel = typeof CopilotEventAlertLevel[keyof typeof CopilotEventAlertLevel] | null;
+
+
+export const CopilotEventAlertLevel = {
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+export interface MarketSnapshot {
+  /** @nullable */
+  price: number | null;
+  /** @nullable */
+  vwap: number | null;
+  /** @nullable */
+  rvol: number | null;
+  /** @nullable */
+  atr: number | null;
+  /** @nullable */
+  openingRangeHigh: number | null;
+  /** @nullable */
+  openingRangeLow: number | null;
+  /** @nullable */
+  volumeExpansion: boolean | null;
+  /** @nullable */
+  priceLocation: string | null;
+  /** @nullable */
+  spread: number | null;
+  /** @nullable */
+  change1d: number | null;
+}
+
+export interface MarketQuality {
+  /** @nullable */
+  spreadOk: boolean | null;
+  /** @nullable */
+  quoteFresh: boolean | null;
+  /** @nullable */
+  liquidityOk: boolean | null;
+  /** @nullable */
+  notes: string | null;
+}
+
+/**
+ * primary_edge | entry_refinement
+ */
+export type CopilotTriggerCategory = typeof CopilotTriggerCategory[keyof typeof CopilotTriggerCategory];
+
+
+export const CopilotTriggerCategory = {
+  primary_edge: 'primary_edge',
+  entry_refinement: 'entry_refinement',
+} as const;
+
+export interface CopilotTrigger {
+  name: string;
+  /** primary_edge | entry_refinement */
+  category: CopilotTriggerCategory;
+  detected: boolean;
+  /** @nullable */
+  detail?: string | null;
+}
+
+/**
+ * @nullable
+ */
+export type TriggerStackCategory = typeof TriggerStackCategory[keyof typeof TriggerStackCategory] | null;
+
+
+export const TriggerStackCategory = {
+  primary_edge: 'primary_edge',
+  entry_refinement: 'entry_refinement',
+} as const;
+
+export interface TriggerStack {
+  stackName: string;
+  /** @nullable */
+  category: TriggerStackCategory;
+  /** Deterministic credibility score in [0,1] */
+  credibility: number;
+  detectedTriggers: string[];
+}
+
+export type GateVerdictStatus = typeof GateVerdictStatus[keyof typeof GateVerdictStatus];
+
+
+export const GateVerdictStatus = {
+  PASS: 'PASS',
+  WARN: 'WARN',
+  BLOCK: 'BLOCK',
+} as const;
+
+export interface GateVerdict {
+  status: GateVerdictStatus;
+  reason: string;
+}
+
+export interface GateVerdicts {
+  data: GateVerdict;
+  staleness: GateVerdict;
+  spread: GateVerdict;
+  marketQuality: GateVerdict;
+  credibility: GateVerdict;
+  validation: GateVerdict;
+}
+
+/**
+ * @nullable
+ */
+export type RiskRewardDirection = typeof RiskRewardDirection[keyof typeof RiskRewardDirection] | null;
+
+
+export const RiskRewardDirection = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+/**
+ * Research-only structural preview. Never an order, instruction, or signal to transact.
+ */
+export interface RiskReward {
+  /** @nullable */
+  direction: RiskRewardDirection;
+  /** @nullable */
+  entry: number | null;
+  /** @nullable */
+  invalidation: number | null;
+  /** @nullable */
+  target: number | null;
+  /** @nullable */
+  ratio: number | null;
+  /** @nullable */
+  riskPerShare: number | null;
+  notes: string;
+}
+
+export type PositionReadStatus = typeof PositionReadStatus[keyof typeof PositionReadStatus];
+
+
+export const PositionReadStatus = {
+  FLAT: 'FLAT',
+  IN_POSITION: 'IN_POSITION',
+} as const;
+
+/**
+ * @nullable
+ */
+export type PositionReadSide = typeof PositionReadSide[keyof typeof PositionReadSide] | null;
+
+
+export const PositionReadSide = {
+  LONG: 'LONG',
+  SHORT: 'SHORT',
+} as const;
+
+export type PositionReadThesisStatus = typeof PositionReadThesisStatus[keyof typeof PositionReadThesisStatus];
+
+
+export const PositionReadThesisStatus = {
+  VALID: 'VALID',
+  WEAKENING: 'WEAKENING',
+  INVALIDATED: 'INVALIDATED',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+/**
+ * Manual position read for research and journaling only.
+ */
+export interface PositionRead {
+  status: PositionReadStatus;
+  /** @nullable */
+  side: PositionReadSide;
+  /** @nullable */
+  unrealizedR: number | null;
+  thesisStatus: PositionReadThesisStatus;
+  notes: string;
+}
+
+export type FeedQualityVerdict = typeof FeedQualityVerdict[keyof typeof FeedQualityVerdict];
+
+
+export const FeedQualityVerdict = {
+  OK: 'OK',
+  DEGRADED: 'DEGRADED',
+  BLOCKED: 'BLOCKED',
+} as const;
+
+export interface FeedQuality {
+  source: string;
+  /** @nullable */
+  quoteAgeSeconds: number | null;
+  /** @nullable */
+  barAgeSeconds: number | null;
+  /** @nullable */
+  spreadBps: number | null;
+  completeness: number;
+  isStale: boolean;
+  verdict: FeedQualityVerdict;
+  /** @nullable */
+  notes: string | null;
+}
+
+/**
+ * Canonical deterministic copilot event. Source of truth for the analyst layer; never carries order intent.
+ */
+export interface CopilotEvent {
+  eventId: string;
+  symbol: string;
+  /** ISO 8601 event timestamp */
+  timestamp: string;
+  /** LIVE | REPLAY | RESEARCH */
+  mode: CopilotEventMode;
+  /** Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed) */
+  dataSource: string;
+  /**
+     * Deterministic alert ladder level L1..L5, or null
+     * @nullable
+     */
+  alertLevel: CopilotEventAlertLevel;
+  /** True when a hard L5 safety block is active */
+  l5Blocked: boolean;
+  snapshot: MarketSnapshot;
+  marketQuality: MarketQuality;
+  triggers: CopilotTrigger[];
+  triggerStack: TriggerStack;
+  gates: GateVerdicts;
+  /** Non-overridable L5 hard-block codes; empty when not blocked */
+  hardBlocks: string[];
+  riskReward: RiskReward;
+  position: PositionRead;
+  feedQuality: FeedQuality;
+  warnings: string[];
+  /** OHLCV bars underlying this event, oldest first; empty on data failure. */
+  bars: CopilotBar[];
+}
+
+export type AgentReadAgent = typeof AgentReadAgent[keyof typeof AgentReadAgent];
+
+
+export const AgentReadAgent = {
+  technical: 'technical',
+  pattern: 'pattern',
+  regime: 'regime',
+  order_flow: 'order_flow',
+  catalyst: 'catalyst',
+  position: 'position',
+  memory: 'memory',
+  bull_case: 'bull_case',
+  bear_case: 'bear_case',
+  risk_critic: 'risk_critic',
+} as const;
+
+export type AgentReadStatus = typeof AgentReadStatus[keyof typeof AgentReadStatus];
+
+
+export const AgentReadStatus = {
+  OK: 'OK',
+  DEGRADED: 'DEGRADED',
+  UNAVAILABLE: 'UNAVAILABLE',
+} as const;
+
+export type AgentReadBias = typeof AgentReadBias[keyof typeof AgentReadBias];
+
+
+export const AgentReadBias = {
+  BULLISH: 'BULLISH',
+  BEARISH: 'BEARISH',
+  NEUTRAL: 'NEUTRAL',
+  MIXED: 'MIXED',
+  UNKNOWN: 'UNKNOWN',
+} as const;
+
+/**
+ * Risk critic verdict; null for every other agent
+ * @nullable
+ */
+export type AgentReadRiskVerdict = typeof AgentReadRiskVerdict[keyof typeof AgentReadRiskVerdict] | null;
+
+
+export const AgentReadRiskVerdict = {
+  PASS: 'PASS',
+  WARN: 'WARN',
+  BLOCK: 'BLOCK',
+} as const;
+
+/**
+ * Risk critic recommendation ceiling; null for every other agent
+ * @nullable
+ */
+export type AgentReadMaxRecommendation = typeof AgentReadMaxRecommendation[keyof typeof AgentReadMaxRecommendation] | null;
+
+
+export const AgentReadMaxRecommendation = {
+  WATCH: 'WATCH',
+  WAIT: 'WAIT',
+  AVOID: 'AVOID',
+  POSSIBLE_LONG_ZONE: 'POSSIBLE_LONG_ZONE',
+  POSSIBLE_SHORT_ZONE: 'POSSIBLE_SHORT_ZONE',
+  THESIS_VALID: 'THESIS_VALID',
+  THESIS_WEAKENING: 'THESIS_WEAKENING',
+  TRAIL_STOP: 'TRAIL_STOP',
+  TAKE_PARTIALS: 'TAKE_PARTIALS',
+  EXIT_WARNING: 'EXIT_WARNING',
+  THESIS_INVALIDATED: 'THESIS_INVALIDATED',
+  DO_NOT_ADD: 'DO_NOT_ADD',
+} as const;
+
+/**
+ * One specialist analyst's read. Explanatory only; never an instruction to transact.
+ */
+export interface AgentRead {
+  agent: AgentReadAgent;
+  status: AgentReadStatus;
+  bias: AgentReadBias;
+  /** Clamped to [0,1] */
+  confidence: number;
+  headline: string;
+  supportingFactors: string[];
+  warnings: string[];
+  /**
+     * Risk critic verdict; null for every other agent
+     * @nullable
+     */
+  riskVerdict: AgentReadRiskVerdict;
+  /**
+     * Risk critic recommendation ceiling; null for every other agent
+     * @nullable
+     */
+  maxRecommendation: AgentReadMaxRecommendation;
+}
+
+export type DashboardReadRecommendation = typeof DashboardReadRecommendation[keyof typeof DashboardReadRecommendation];
+
+
+export const DashboardReadRecommendation = {
+  WATCH: 'WATCH',
+  WAIT: 'WAIT',
+  AVOID: 'AVOID',
+  POSSIBLE_LONG_ZONE: 'POSSIBLE_LONG_ZONE',
+  POSSIBLE_SHORT_ZONE: 'POSSIBLE_SHORT_ZONE',
+  THESIS_VALID: 'THESIS_VALID',
+  THESIS_WEAKENING: 'THESIS_WEAKENING',
+  TRAIL_STOP: 'TRAIL_STOP',
+  TAKE_PARTIALS: 'TAKE_PARTIALS',
+  EXIT_WARNING: 'EXIT_WARNING',
+  THESIS_INVALIDATED: 'THESIS_INVALIDATED',
+  DO_NOT_ADD: 'DO_NOT_ADD',
+} as const;
+
+/**
+ * The single synthesized, dashboard-safe read. Research/helper output only.
+ */
+export interface DashboardRead {
+  oneSentenceRead: string;
+  recommendation: DashboardReadRecommendation;
+  /** Clamped to [0,1] */
+  confidence: number;
+  whatSupports: string[];
+  whatArguesAgainst: string[];
+  whatConfirms: string[];
+  whatInvalidates: string[];
+  positionGuidance: string[];
+  riskNotes: string[];
+}
+
+export type CommitteeReadStatus = typeof CommitteeReadStatus[keyof typeof CommitteeReadStatus];
+
+
+export const CommitteeReadStatus = {
+  OK: 'OK',
+  FALLBACK: 'FALLBACK',
+  ERROR: 'ERROR',
+} as const;
+
+export type CommitteeReadSource = typeof CommitteeReadSource[keyof typeof CommitteeReadSource];
+
+
+export const CommitteeReadSource = {
+  multi_agent_committee: 'multi_agent_committee',
+  deterministic_fallback: 'deterministic_fallback',
+} as const;
+
+/**
+ * @nullable
+ */
+export type CommitteeReadAlertLevel = typeof CommitteeReadAlertLevel[keyof typeof CommitteeReadAlertLevel] | null;
+
+
+export const CommitteeReadAlertLevel = {
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+/**
+ * Full read-only analyst committee response for one deterministic event.
+ */
+export interface CommitteeRead {
+  status: CommitteeReadStatus;
+  source: CommitteeReadSource;
+  eventId: string;
+  symbol: string;
+  /** @nullable */
+  alertLevel: CommitteeReadAlertLevel;
+  l5Blocked: boolean;
+  provider: string;
+  degraded: boolean;
+  agents: AgentRead[];
+  dashboardRead: DashboardRead;
+  warnings: string[];
+}
+
+/**
+ * LIVE | REPLAY | RESEARCH
+ */
+export type JournalEntryMode = typeof JournalEntryMode[keyof typeof JournalEntryMode];
+
+
+export const JournalEntryMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * @nullable
+ */
+export type JournalEntryEventSnapshot = { [key: string]: unknown } | null;
+
+/**
+ * @nullable
+ */
+export type JournalEntryManualOutcome = { [key: string]: unknown } | null;
+
+export interface JournalEntry {
+  id: number;
+  /** LIVE | REPLAY | RESEARCH */
+  mode: JournalEntryMode;
+  symbol: string;
+  /** @nullable */
+  eventTimestamp?: string | null;
+  /** @nullable */
+  eventSnapshot?: JournalEntryEventSnapshot;
+  /** @nullable */
+  manualOutcome?: JournalEntryManualOutcome;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+}
+
+/**
+ * LIVE | REPLAY | RESEARCH
+ */
+export type JournalEntryInputMode = typeof JournalEntryInputMode[keyof typeof JournalEntryInputMode];
+
+
+export const JournalEntryInputMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+export type JournalEntryInputEventSnapshot = { [key: string]: unknown };
+
+export type JournalEntryInputManualOutcome = { [key: string]: unknown };
+
+export interface JournalEntryInput {
+  /** LIVE | REPLAY | RESEARCH */
+  mode: JournalEntryInputMode;
+  symbol: string;
+  eventTimestamp?: string;
+  eventSnapshot?: JournalEntryInputEventSnapshot;
+  manualOutcome?: JournalEntryInputManualOutcome;
+  notes?: string;
+}
+
+export interface CostModel {
+  commissionPerShare: number;
+  slippageBps: number;
+  spreadBps: number;
+}
+
+export type StrategyRegistryEntryCategory = typeof StrategyRegistryEntryCategory[keyof typeof StrategyRegistryEntryCategory];
+
+
+export const StrategyRegistryEntryCategory = {
+  primary_edge: 'primary_edge',
+  entry_refinement: 'entry_refinement',
+} as const;
+
+/**
+ * A Strategy Lab definition — a primary-edge hypothesis or a non-promotable entry-refinement feature.
+ */
+export interface StrategyRegistryEntry {
+  hypothesisName: string;
+  primaryEdgeType: string;
+  category: StrategyRegistryEntryCategory;
+  promotable: boolean;
+  requiredData: string[];
+  universe: string;
+  setupConditions: string[];
+  entryRefinementFeatures: string[];
+  invalidationRules: string[];
+  targetRules: string[];
+  holdingPeriod: string;
+  costModel: CostModel;
+  minimumSampleCount: number;
+  /** @nullable */
+  note: string | null;
+}
+
+export type EdgeScoreValidationStatus = typeof EdgeScoreValidationStatus[keyof typeof EdgeScoreValidationStatus];
+
+
+export const EdgeScoreValidationStatus = {
+  unproven: 'unproven',
+  paper_pending: 'paper_pending',
+  backtested_only: 'backtested_only',
+  backtested_pending_forward: 'backtested_pending_forward',
+  paper_validated: 'paper_validated',
+  no_edge: 'no_edge',
+  insufficient_sample: 'insufficient_sample',
+} as const;
+
+/**
+ * Deterministic measured edge metrics + validation status for one primary-edge hypothesis.
+ */
+export interface EdgeScore {
+  hypothesisName: string;
+  primaryEdgeType: string;
+  validationStatus: EdgeScoreValidationStatus;
+  sampleCount: number;
+  countableSampleCount: number;
+  forwardSampleCount: number;
+  paperSampleCount: number;
+  backtestSampleCount: number;
+  /** @nullable */
+  winRate: number | null;
+  /** @nullable */
+  averageR: number | null;
+  /** @nullable */
+  expectancyR: number | null;
+  /** @nullable */
+  profitFactor: number | null;
+  /** @nullable */
+  maxDrawdownR: number | null;
+  /** @nullable */
+  avgMfeR: number | null;
+  /** @nullable */
+  avgMaeR: number | null;
+  /** @nullable */
+  avgTimeToTargetBars: number | null;
+  /** @nullable */
+  avgTimeToStopBars: number | null;
+  /** @nullable */
+  bestRegime: string | null;
+  /** @nullable */
+  worstRegime: string | null;
+  /** @nullable */
+  bestTimeWindow: string | null;
+  /** @nullable */
+  worstTimeWindow: string | null;
+  /** @nullable */
+  note: string | null;
+}
+
+export type ValidationStateValidationStatus = typeof ValidationStateValidationStatus[keyof typeof ValidationStateValidationStatus];
+
+
+export const ValidationStateValidationStatus = {
+  unproven: 'unproven',
+  paper_pending: 'paper_pending',
+  backtested_only: 'backtested_only',
+  backtested_pending_forward: 'backtested_pending_forward',
+  paper_validated: 'paper_validated',
+  no_edge: 'no_edge',
+  insufficient_sample: 'insufficient_sample',
+} as const;
+
+export type ValidationStateMetrics = { [key: string]: unknown };
+
+export interface ValidationState {
+  id: number;
+  strategyName: string;
+  validationStatus: ValidationStateValidationStatus;
+  sampleCount: number;
+  metrics: ValidationStateMetrics;
+  updatedAt: string;
+}
+
+export type HistoryEventMode = typeof HistoryEventMode[keyof typeof HistoryEventMode];
+
+
+export const HistoryEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * @nullable
+ */
+export type HistoryEventAlertLevel = typeof HistoryEventAlertLevel[keyof typeof HistoryEventAlertLevel] | null;
+
+
+export const HistoryEventAlertLevel = {
+  L1: 'L1',
+  L2: 'L2',
+  L3: 'L3',
+  L4: 'L4',
+  L5: 'L5',
+} as const;
+
+export interface HistoryEvent {
+  id: number;
+  /** @nullable */
+  eventId?: string | null;
+  /** @nullable */
+  symbol?: string | null;
+  mode: HistoryEventMode;
+  /** @nullable */
+  alertLevel?: HistoryEventAlertLevel;
+  eventSnapshot: CopilotEvent;
+  createdAt: string;
+}
+
 export type GetPremarketScanParams = {
 /**
  * Bypass the short-lived scan cache
  */
 refresh?: boolean;
+};
+
+export type GetCopilotEventParams = {
+symbol: string;
+/**
+ * Data source; fixtures require no API keys
+ */
+source?: GetCopilotEventSource;
+mode?: GetCopilotEventMode;
+};
+
+export type GetCopilotEventSource = typeof GetCopilotEventSource[keyof typeof GetCopilotEventSource];
+
+
+export const GetCopilotEventSource = {
+  fixture: 'fixture',
+  yahoo_delayed: 'yahoo_delayed',
+} as const;
+
+export type GetCopilotEventMode = typeof GetCopilotEventMode[keyof typeof GetCopilotEventMode];
+
+
+export const GetCopilotEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+export type ExplainCopilotEventParams = {
+symbol: string;
+/**
+ * Data source; fixtures require no API keys
+ */
+source?: ExplainCopilotEventSource;
+mode?: ExplainCopilotEventMode;
+};
+
+export type ExplainCopilotEventSource = typeof ExplainCopilotEventSource[keyof typeof ExplainCopilotEventSource];
+
+
+export const ExplainCopilotEventSource = {
+  fixture: 'fixture',
+  yahoo_delayed: 'yahoo_delayed',
+} as const;
+
+export type ExplainCopilotEventMode = typeof ExplainCopilotEventMode[keyof typeof ExplainCopilotEventMode];
+
+
+export const ExplainCopilotEventMode = {
+  LIVE: 'LIVE',
+  REPLAY: 'REPLAY',
+  RESEARCH: 'RESEARCH',
+} as const;
+
+export type GetReplaySessionParams = {
+symbol: string;
+/**
+ * ISO date (YYYY-MM-DD); defaults to the symbol's available session
+ */
+date?: string;
+};
+
+export type GetReplayEventParams = {
+symbol: string;
+/**
+ * ISO date (YYYY-MM-DD) of the replay session
+ */
+date: string;
+/**
+ * 0-based replay step (0 .. totalSteps-1)
+ * @minimum 0
+ */
+step: number;
+};
+
+export type ExplainReplayEventParams = {
+symbol: string;
+date: string;
+/**
+ * @minimum 0
+ */
+step: number;
 };
 

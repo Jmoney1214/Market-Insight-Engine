@@ -1,0 +1,81 @@
+// Public API for the deterministic copilot core.
+
+export * from "./types";
+export * from "./constants";
+
+export { buildCopilotEvent } from "./event";
+
+export {
+  computeFeatures,
+  computeVwap,
+  computeRvol,
+  computeOpeningRange,
+  computeSpreadBps,
+  classifyPriceLocation,
+} from "./features";
+
+export {
+  detectTriggers,
+  buildTriggerStack,
+  inferDirection,
+  newlyFiredTriggers,
+} from "./triggers";
+
+export { evaluateGates } from "./gates";
+export type { GateResult } from "./gates";
+
+export { computeRiskReward } from "./riskReward";
+export { evaluatePosition } from "./position";
+export { computeFeedQuality } from "./feedQuality";
+export { sanitizeDeep, sanitizeNumber } from "./sanitize";
+export {
+  atr,
+  mean,
+  sum,
+  round,
+  trueRange,
+  highest,
+  lowest,
+  swingHighs,
+  swingLows,
+  lastSwingHigh,
+  lastSwingLow,
+} from "./detectors";
+export type { SwingPoint } from "./detectors";
+
+export { FIXTURES, getFixture, listFixtures } from "./fixtures";
+export type { Fixture } from "./fixtures";
+
+export {
+  REPLAY_DATA_SOURCE,
+  getReplaySession,
+  buildReplayInput,
+} from "./replay";
+export type { ReplaySession } from "./replay";
+
+export {
+  PRIMARY_EDGE_HYPOTHESES,
+  ENTRY_REFINEMENT_FEATURES,
+  STRATEGY_REGISTRY,
+  getStrategy,
+  canonicalHypothesisName,
+  isPrimaryEdge,
+  isEntryRefinement,
+  isPromotable,
+} from "./strategyLab";
+export type { StrategyDefinition, CostModel } from "./strategyLab";
+
+export {
+  DEFAULT_THRESHOLDS,
+  modeToSampleKind,
+  journalOutcomeToSample,
+  computeEdgeScore,
+  computeScoreboard,
+} from "./edgeScoreboard";
+export type {
+  OutcomeConfidence,
+  SampleKind,
+  TradeSample,
+  EdgeThresholds,
+  EdgeScore,
+} from "./edgeScoreboard";

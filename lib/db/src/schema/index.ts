@@ -1,3 +1,7 @@
 export * from "./reports";
 export * from "./watchlist";
 export * from "./scorecard";
+export * from "./journalEntries";
+export * from "./strategyRegistry";
+export * from "./validationState";
+export * from "./historyLog";
