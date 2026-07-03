@@ -219,13 +219,84 @@ async function getYahooCrumb(): Promise<{
   }
 }
 
+type NasdaqEarningsSurpriseResponse = {
+  data?: {
+    chart?: Array<{ x?: string | number }>;
+    earningsSurpriseTable?: {
+      rows?: Array<{ dateReported?: string }>;
+    };
+  } | null;
+};
+
 /**
- * Most recent PAST earnings timestamp (epoch seconds) for the symbol, used by
- * the post-earnings-drift detector. Keyless (crumb/cookie, no API key) and
- * best-effort: any failure — or when the only known earnings date is in the
- * future — resolves to null so the detector stays dormant.
+ * Parse Nasdaq's `M/D/YYYY` report-date string into epoch seconds (UTC
+ * midnight). Date-level precision is sufficient for the drift detector: UTC
+ * midnight of the report day always precedes that day's session open.
  */
-async function fetchEarningsTime(symbol: string): Promise<number | null> {
+function parseNasdaqDateReported(value: string): number | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(value.trim());
+  if (!m) return null;
+  const [, month, day, year] = m;
+  const ms = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
+
+/** Given candidate epoch-second timestamps, return the most recent PAST one. */
+function latestPastTimestamp(candidates: number[]): number | null {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const past = candidates.filter(
+    (t) => Number.isFinite(t) && t > 0 && t <= nowSec,
+  );
+  return past.length > 0 ? Math.max(...past) : null;
+}
+
+/**
+ * Primary earnings-calendar source: Nasdaq's keyless earnings-surprise
+ * endpoint, which lists the last several ACTUAL quarterly report dates (unlike
+ * Yahoo's calendarEvents, which usually only exposes the next upcoming date).
+ * Best-effort: returns null on any failure or when no past report is listed
+ * (e.g. ETFs and non-reporting symbols return "No record found").
+ */
+async function fetchNasdaqEarningsTime(symbol: string): Promise<number | null> {
+  try {
+    const url = `https://api.nasdaq.com/api/company/${encodeURIComponent(
+      symbol,
+    )}/earnings-surprise`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": RESEARCH_USER_AGENT, Accept: "application/json" },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as NasdaqEarningsSurpriseResponse;
+    const data = json.data;
+    if (!data) return null;
+
+    const candidates: number[] = [];
+    for (const row of data.earningsSurpriseTable?.rows ?? []) {
+      if (typeof row.dateReported === "string") {
+        const t = parseNasdaqDateReported(row.dateReported);
+        if (t !== null) candidates.push(t);
+      }
+    }
+    // The chart series carries the same report dates as raw epoch seconds;
+    // used as a secondary parse in case the table is absent or reformatted.
+    for (const point of data.chart ?? []) {
+      const t = typeof point.x === "string" ? Number(point.x) : point.x;
+      if (typeof t === "number" && Number.isFinite(t)) candidates.push(t);
+    }
+    return latestPastTimestamp(candidates);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fallback earnings source: Yahoo's crumb/cookie-gated quoteSummary
+ * calendarEvents module. Frequently only exposes the NEXT report date, so it
+ * mostly helps right after a report (when that date has just become a past
+ * date). Best-effort: returns null on any failure.
+ */
+async function fetchYahooEarningsTime(symbol: string): Promise<number | null> {
   try {
     const creds = await getYahooCrumb();
     if (!creds) return null;
@@ -241,18 +312,27 @@ async function fetchEarningsTime(symbol: string): Promise<number | null> {
     const dates =
       json.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate ??
       [];
-    const nowSec = Math.floor(Date.now() / 1000);
-    const past = dates
+    const candidates = dates
       .map((d) => d.raw)
-      .filter(
-        (raw): raw is number =>
-          typeof raw === "number" && Number.isFinite(raw) && raw <= nowSec,
-      );
-    if (past.length === 0) return null;
-    return Math.max(...past);
+      .filter((raw): raw is number => typeof raw === "number");
+    return latestPastTimestamp(candidates);
   } catch {
     return null;
   }
+}
+
+/**
+ * Most recent PAST earnings timestamp (epoch seconds) for the symbol, used by
+ * the post-earnings-drift detector. Keyless throughout: Nasdaq's
+ * earnings-surprise calendar (actual past report dates) is the primary source,
+ * with Yahoo's crumb-gated calendarEvents as fallback. Best-effort: when
+ * neither source yields a past report date, resolves to null so the detector
+ * stays dormant rather than guessing.
+ */
+async function fetchEarningsTime(symbol: string): Promise<number | null> {
+  const fromNasdaq = await fetchNasdaqEarningsTime(symbol);
+  if (fromNasdaq !== null) return fromNasdaq;
+  return fetchYahooEarningsTime(symbol);
 }
 
 /**

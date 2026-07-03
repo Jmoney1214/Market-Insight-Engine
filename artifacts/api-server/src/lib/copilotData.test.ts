@@ -3,9 +3,10 @@
 // tested in copilot-core against a directly-supplied context; these tests pin
 // the api-server side of that contract: fetchIntradayInput must actually
 // populate `benchmarkReturnPct` (from the SPY chart series) and `earningsTime`
-// (from the crumb-gated quoteSummary earnings source), and must degrade both
-// to null — without failing the primary symbol read — when those best-effort
-// secondary fetches break. All network access is mocked; no real fetch occurs.
+// (from the Nasdaq earnings-surprise calendar, falling back to Yahoo's
+// crumb-gated quoteSummary), and must degrade both to null — without failing
+// the primary symbol read — when those best-effort secondary fetches break.
+// All network access is mocked; no real fetch occurs.
 
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { fetchIntradayInput, CopilotDataError } from "./copilotData.js";
@@ -75,7 +76,47 @@ const PAST_EARNINGS = NOW_SEC - 3 * 86_400;
 const OLDER_EARNINGS = NOW_SEC - 90 * 86_400;
 const FUTURE_EARNINGS = NOW_SEC + 30 * 86_400;
 
-function earningsPayload(raws: number[]) {
+/** Format an epoch-seconds timestamp as Nasdaq's `M/D/YYYY` (UTC). */
+function toNasdaqDate(epochSec: number): string {
+  const d = new Date(epochSec * 1000);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}/${d.getUTCFullYear()}`;
+}
+
+/** Epoch seconds at UTC midnight of the given epoch-seconds timestamp. */
+function utcMidnight(epochSec: number): number {
+  const d = new Date(epochSec * 1000);
+  return Math.floor(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / 1000,
+  );
+}
+
+/** Nasdaq earnings-surprise payload with the given report timestamps. */
+function nasdaqEarningsPayload(reportTimes: number[]) {
+  return {
+    data: {
+      symbol: "test",
+      chart: reportTimes.map((t) => ({ x: String(t), y: "0.10" })),
+      earningsSurpriseTable: {
+        rows: reportTimes.map((t) => ({
+          fiscalQtrEnd: "Mar 2026",
+          dateReported: toNasdaqDate(t),
+          eps: 1.23,
+        })),
+      },
+    },
+    message: null,
+    status: { rCode: 200 },
+  };
+}
+
+/** Nasdaq's "No record found" shape (ETFs and non-reporting symbols). */
+const NASDAQ_NO_RECORD = {
+  data: null,
+  message: null,
+  status: { rCode: 200, bCodeMessage: [{ code: 1002 }] },
+};
+
+function yahooEarningsPayload(raws: number[]) {
   return {
     quoteSummary: {
       result: [
@@ -106,7 +147,7 @@ afterEach(() => {
 });
 
 describe("fetchIntradayInput context sourcing", () => {
-  it("attaches benchmarkReturnPct from the SPY series and earningsTime from the earnings source", async () => {
+  it("attaches benchmarkReturnPct from the SPY series and earningsTime from the Nasdaq calendar", async () => {
     const fetchMock = installFetchRouter([
       // SPY benchmark: session open 100, regularMarketPrice 101 -> +1.00%
       [
@@ -128,11 +169,12 @@ describe("fetchIntradayInput context sourcing", () => {
             }),
           ),
       ],
-      ...crumbRoutes,
       [
-        "quoteSummary",
+        "api.nasdaq.com",
         () =>
-          jsonResponse(earningsPayload([OLDER_EARNINGS, PAST_EARNINGS, FUTURE_EARNINGS])),
+          jsonResponse(
+            nasdaqEarningsPayload([OLDER_EARNINGS, PAST_EARNINGS, FUTURE_EARNINGS]),
+          ),
       ],
     ]);
 
@@ -146,12 +188,86 @@ describe("fetchIntradayInput context sourcing", () => {
 
     // Relative-strength context: (101 - 100) / 100 = +1.00%
     expect(input.benchmarkReturnPct).toBe(1);
-    // Post-earnings context: most recent PAST date wins; future dates ignored.
+    // Post-earnings context: most recent PAST report wins; future rows are
+    // ignored. The raw chart epoch (PAST_EARNINGS) beats the date-level parse.
     expect(input.earningsTime).toBe(PAST_EARNINGS);
 
-    // The crumb-gated earnings source must have been exercised with the crumb.
+    // The Nasdaq calendar must be the source hit; no Yahoo crumb fallback.
     const urls = fetchMock.mock.calls.map((c) => String(c[0]));
-    expect(urls.some((u) => u.includes("quoteSummary/AAPL"))).toBe(true);
+    expect(
+      urls.some((u) => u.includes("api.nasdaq.com/api/company/AAPL/earnings-surprise")),
+    ).toBe(true);
+    expect(urls.some((u) => u.includes("fc.yahoo.com"))).toBe(false);
+    expect(urls.some((u) => u.includes("quoteSummary"))).toBe(false);
+  });
+
+  it("parses earningsTime from the Nasdaq dateReported table when the chart series is absent", async () => {
+    installFetchRouter([
+      [
+        "/v8/finance/chart/SPY",
+        () =>
+          jsonResponse(
+            chartPayload({ open0: 100, lastClose: 101, regularMarketPrice: 101 }),
+          ),
+      ],
+      [
+        "/v8/finance/chart/MSFT",
+        () =>
+          jsonResponse(
+            chartPayload({ open0: 400, lastClose: 405, regularMarketPrice: 405 }),
+          ),
+      ],
+      [
+        "api.nasdaq.com",
+        () =>
+          jsonResponse({
+            data: {
+              earningsSurpriseTable: {
+                rows: [
+                  { dateReported: toNasdaqDate(PAST_EARNINGS) },
+                  { dateReported: toNasdaqDate(OLDER_EARNINGS) },
+                  { dateReported: "not a date" },
+                ],
+              },
+            },
+          }),
+      ],
+    ]);
+
+    const input = await fetchIntradayInput("MSFT");
+
+    // Table dates are day-granular: expect UTC midnight of the report day.
+    expect(input.earningsTime).toBe(utcMidnight(PAST_EARNINGS));
+  });
+
+  it("falls back to the Yahoo crumb-gated source when Nasdaq has no record", async () => {
+    const fetchMock = installFetchRouter([
+      [
+        "/v8/finance/chart/SPY",
+        () =>
+          jsonResponse(
+            chartPayload({ open0: 100, lastClose: 101, regularMarketPrice: 101 }),
+          ),
+      ],
+      [
+        "/v8/finance/chart/AAPL",
+        () =>
+          jsonResponse(
+            chartPayload({ open0: 200, lastClose: 205, regularMarketPrice: 205 }),
+          ),
+      ],
+      ["api.nasdaq.com", () => jsonResponse(NASDAQ_NO_RECORD)],
+      ...crumbRoutes,
+      [
+        "quoteSummary",
+        () => jsonResponse(yahooEarningsPayload([PAST_EARNINGS, FUTURE_EARNINGS])),
+      ],
+    ]);
+
+    const input = await fetchIntradayInput("AAPL");
+
+    expect(input.earningsTime).toBe(PAST_EARNINGS);
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
     expect(
       urls.find((u) => u.includes("quoteSummary"))?.includes("crumb=test-crumb"),
     ).toBe(true);
@@ -171,7 +287,11 @@ describe("fetchIntradayInput context sourcing", () => {
             chartPayload({ open0: 50, lastClose: 51, regularMarketPrice: 51.2 }),
           ),
       ],
-      // Earnings source: cookie seed rejects at the network layer -> null.
+      // Both earnings sources reject at the network layer -> null.
+      [
+        "api.nasdaq.com",
+        () => Promise.reject(new TypeError("network down")),
+      ],
       [
         "fc.yahoo.com",
         () => Promise.reject(new TypeError("network down")),
@@ -187,7 +307,7 @@ describe("fetchIntradayInput context sourcing", () => {
     expect(input.earningsTime).toBeNull();
   });
 
-  it("degrades earningsTime to null when the crumb handshake yields no cookie", async () => {
+  it("degrades earningsTime to null when Nasdaq fails and the crumb handshake yields no cookie", async () => {
     installFetchRouter([
       [
         "/v8/finance/chart/SPY",
@@ -203,6 +323,7 @@ describe("fetchIntradayInput context sourcing", () => {
             chartPayload({ open0: 10, lastClose: 11, regularMarketPrice: 11 }),
           ),
       ],
+      ["api.nasdaq.com", () => new Response("blocked", { status: 403 })],
       // Seed responds OK but sets no cookie -> crumb acquisition fails -> null.
       ["fc.yahoo.com", () => new Response("", { status: 200 })],
     ]);
@@ -213,7 +334,7 @@ describe("fetchIntradayInput context sourcing", () => {
     expect(input.benchmarkReturnPct).toBe(2);
   });
 
-  it("degrades earningsTime to null when only future earnings dates exist", async () => {
+  it("degrades earningsTime to null when both sources only know future earnings dates", async () => {
     installFetchRouter([
       [
         "/v8/finance/chart/SPY",
@@ -229,8 +350,9 @@ describe("fetchIntradayInput context sourcing", () => {
             chartPayload({ open0: 300, lastClose: 305, regularMarketPrice: 305 }),
           ),
       ],
+      ["api.nasdaq.com", () => jsonResponse(nasdaqEarningsPayload([FUTURE_EARNINGS]))],
       ...crumbRoutes,
-      ["quoteSummary", () => jsonResponse(earningsPayload([FUTURE_EARNINGS]))],
+      ["quoteSummary", () => jsonResponse(yahooEarningsPayload([FUTURE_EARNINGS]))],
     ]);
 
     const input = await fetchIntradayInput("TSLA");
@@ -250,8 +372,9 @@ describe("fetchIntradayInput context sourcing", () => {
             chartPayload({ open0: 100, lastClose: 101, regularMarketPrice: 101 }),
           ),
       ],
+      ["api.nasdaq.com", () => jsonResponse(NASDAQ_NO_RECORD)],
       ...crumbRoutes,
-      ["quoteSummary", () => jsonResponse(earningsPayload([PAST_EARNINGS]))],
+      ["quoteSummary", () => jsonResponse(yahooEarningsPayload([PAST_EARNINGS]))],
     ]);
 
     const input = await fetchIntradayInput("spy");
@@ -275,8 +398,7 @@ describe("fetchIntradayInput context sourcing", () => {
           ),
       ],
       ["/v8/finance/chart/BAD", () => new Response("", { status: 404 })],
-      ...crumbRoutes,
-      ["quoteSummary", () => jsonResponse(earningsPayload([PAST_EARNINGS]))],
+      ["api.nasdaq.com", () => jsonResponse(nasdaqEarningsPayload([PAST_EARNINGS]))],
     ]);
 
     await expect(fetchIntradayInput("BAD")).rejects.toBeInstanceOf(
