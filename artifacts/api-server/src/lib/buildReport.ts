@@ -88,7 +88,7 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     hasFmp ? fmp.getDcf(ticker) : Promise.resolve(null),
     hasFmp ? fmp.getPriceTarget(ticker) : Promise.resolve(null),
     hasFmp ? fmp.getRating(ticker) : Promise.resolve(null),
-    hasFmp ? fmp.getStockNews(ticker, 6) : Promise.resolve(null),
+    hasFmp && !hasAlpaca ? fmp.getStockNews(ticker, 6) : Promise.resolve(null),
     hasAlpaca ? alpaca.getSnapshot(ticker) : Promise.resolve(null),
     hasAlpaca ? alpaca.getDailyBars(ticker) : Promise.resolve(null),
     hasAlpaca ? alpaca.getNews(ticker, 10) : Promise.resolve(null),
