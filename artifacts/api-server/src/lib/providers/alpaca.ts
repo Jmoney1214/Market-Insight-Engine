@@ -87,16 +87,82 @@ export async function getNews(symbol: string, limit = 10): Promise<AlpacaNewsIte
   }));
 }
 
+export type BatchSnapshot = {
+  symbol: string;
+  /** Latest trade price (includes pre/post-market on SIP). */
+  price: number;
+  /** Close of the last fully completed session (gap reference). */
+  refClose: number;
+  /** % move vs the last completed session close. */
+  gapPct: number;
+  lastTradeAt: string;
+};
+
+/**
+ * Batch snapshots for many symbols (chunked). Gap reference is pre/post-market
+ * aware: when the latest trade is on a newer calendar day than the last daily
+ * bar (pre-market), the gap is vs that bar's close; intraday it is vs the
+ * previous session's close.
+ */
+export async function getSnapshots(symbols: string[]): Promise<Map<string, BatchSnapshot> | null> {
+  const out = new Map<string, BatchSnapshot>();
+  for (let i = 0; i < symbols.length; i += 100) {
+    const chunk = symbols.slice(i, i + 100);
+    const url = new URL(`${DATA_BASE}/snapshots`);
+    url.searchParams.set("symbols", chunk.join(","));
+    url.searchParams.set("feed", alpacaFeed);
+    const data = await alpacaGet<Record<string, any>>(url);
+    if (!data) continue;
+    for (const [sym, s] of Object.entries(data)) {
+      const trade = s?.["latestTrade"];
+      const daily = s?.["dailyBar"];
+      const prevDaily = s?.["prevDailyBar"];
+      const price = Number(trade?.p ?? daily?.c ?? 0);
+      if (!price) continue;
+      const tradeDay = String(trade?.t ?? "").slice(0, 10);
+      const barDay = String(daily?.t ?? "").slice(0, 10);
+      const refClose = Number(tradeDay > barDay ? daily?.c : prevDaily?.c ?? daily?.c) || 0;
+      if (!refClose) continue;
+      out.set(sym, {
+        symbol: sym,
+        price,
+        refClose,
+        gapPct: ((price - refClose) / refClose) * 100,
+        lastTradeAt: String(trade?.t ?? ""),
+      });
+    }
+  }
+  return out.size > 0 ? out : null;
+}
+
+/** One news call covering many symbols; returns headline map keyed by symbol. */
+export async function getNewsMulti(symbols: string[], limit = 50): Promise<Map<string, string> | null> {
+  if (symbols.length === 0) return null;
+  const url = new URL("https://data.alpaca.markets/v1beta1/news");
+  url.searchParams.set("symbols", symbols.slice(0, 100).join(","));
+  url.searchParams.set("limit", String(limit));
+  url.searchParams.set("sort", "desc");
+  const data = await alpacaGet<{ news?: Array<Record<string, any>> }>(url);
+  if (!data?.news) return null;
+  const map = new Map<string, string>();
+  for (const n of data.news) {
+    for (const sym of (n["symbols"] ?? []) as string[]) {
+      if (!map.has(sym)) map.set(sym, String(n["headline"] ?? ""));
+    }
+  }
+  return map;
+}
+
 export type DailyBars = {
   closes: number[];
   highs: number[];
   lows: number[];
 };
 
-/** Up to ~500 calendar days of daily bars (enough for SMA200 + 52w change). */
-export async function getDailyBars(symbol: string): Promise<DailyBars | null> {
+/** Daily bars for the last `days` calendar days (default ~500, enough for SMA200 + 52w). */
+export async function getDailyBars(symbol: string, days = 500): Promise<DailyBars | null> {
   const start = new Date();
-  start.setDate(start.getDate() - 500);
+  start.setDate(start.getDate() - days);
   const url = new URL(`${DATA_BASE}/${encodeURIComponent(symbol)}/bars`);
   url.searchParams.set("timeframe", "1Day");
   url.searchParams.set("feed", alpacaFeed);

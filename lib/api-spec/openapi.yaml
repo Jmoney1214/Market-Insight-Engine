@@ -14,8 +14,41 @@ tags:
     description: Ticker analysis and reports
   - name: watchlist
     description: Watchlist management
+  - name: scan
+    description: Market scanning
 
 paths:
+  /scan/premarket:
+    get:
+      operationId: getPremarketScan
+      tags: [scan]
+      summary: Morning market scan
+      description: >
+        Scans a liquid under-$150 universe for the day's best intraday candidates
+        and the largest gappers up/down, ranked by gap, volatility, liquidity and
+        catalysts (earnings, analyst grade changes, news). Evidence-ranked, not a
+        prediction guarantee.
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Bypass the short-lived scan cache
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "503":
+          description: Market data providers not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -291,6 +324,60 @@ components:
           type: ["number", "null"]
         estimatedEpsAvg:
           type: ["number", "null"]
+
+    ScanResult:
+      type: object
+      required: [generatedAt, universeSize, priceCeiling, topIntraday, likelyJump, likelyFall, note]
+      properties:
+        generatedAt:
+          type: string
+        universeSize:
+          type: integer
+        priceCeiling:
+          type: number
+        note:
+          type: string
+          description: Honest framing of what the scan is (evidence ranking, not prophecy)
+        topIntraday:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+        likelyJump:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+        likelyFall:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+
+    ScanCandidate:
+      type: object
+      required: [symbol, price, gapPct, score, reasons]
+      properties:
+        symbol:
+          type: string
+        companyName:
+          type: ["string", "null"]
+        price:
+          type: number
+        gapPct:
+          type: number
+          description: "% vs last completed session close (pre/post-market aware)"
+        avgVolume:
+          type: ["number", "null"]
+        atrPct:
+          type: ["number", "null"]
+          description: 14-day ATR as % of price (intraday range potential)
+        rsi:
+          type: ["number", "null"]
+        score:
+          type: number
+          description: 0-100 composite (volatility, liquidity, gap, catalysts)
+        reasons:
+          type: array
+          items:
+            type: string
 
     CompanySnapshot:
       type: object

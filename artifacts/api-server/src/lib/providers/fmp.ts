@@ -221,6 +221,71 @@ export async function getRatingsSummary(symbol: string): Promise<FmpRatingsSumma
   };
 }
 
+export type FmpScreenerRow = {
+  symbol: string;
+  companyName: string;
+  price: number;
+  volume: number;
+  marketCap: number;
+  beta: number;
+};
+
+/**
+ * Liquid trading universe under `maxPrice`: active US large/mid caps with real
+ * volume. Used as the pre-market scan universe.
+ */
+export async function getScreenerUniverse(maxPrice: number, limit = 500): Promise<FmpScreenerRow[] | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("company-screener", {
+    priceLowerThan: maxPrice,
+    priceMoreThan: 3,
+    volumeMoreThan: 2_000_000,
+    marketCapMoreThan: 500_000_000,
+    isActivelyTrading: "true",
+    exchange: "NASDAQ,NYSE",
+    limit,
+  });
+  if (!Array.isArray(rows)) return null;
+  return rows
+    .filter((r) => !r["isEtf"] && !r["isFund"])
+    .map((r) => ({
+      symbol: String(r["symbol"] ?? ""),
+      companyName: String(r["companyName"] ?? ""),
+      price: Number(r["price"] ?? 0),
+      volume: Number(r["volume"] ?? 0),
+      marketCap: Number(r["marketCap"] ?? 0),
+      beta: Number(r["beta"] ?? 1),
+    }))
+    .filter((r) => r.symbol && r.price > 0);
+}
+
+/** Symbols with earnings scheduled in [from, to] (YYYY-MM-DD). */
+export async function getEarningsCalendar(from: string, to: string): Promise<Set<string> | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("earnings-calendar", { from, to });
+  if (!Array.isArray(rows)) return null;
+  return new Set(rows.map((r) => String(r["symbol"] ?? "")).filter(Boolean));
+}
+
+export type FmpGradeChange = {
+  symbol: string;
+  action: string;
+  newGrade: string;
+  gradingCompany: string;
+  publishedDate: string;
+};
+
+/** Latest analyst grade changes across the market (upgrades/downgrades feed). */
+export async function getLatestGradeChanges(limit = 150): Promise<FmpGradeChange[] | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("grades-latest-news", { limit });
+  if (!Array.isArray(rows)) return null;
+  return rows.map((r) => ({
+    symbol: String(r["symbol"] ?? ""),
+    action: String(r["action"] ?? "").toLowerCase(),
+    newGrade: String(r["newGrade"] ?? ""),
+    gradingCompany: String(r["gradingCompany"] ?? ""),
+    publishedDate: String(r["publishedDate"] ?? ""),
+  }));
+}
+
 export type FmpEstimate = { fiscalYear: string; revenueAvg: number; epsAvg: number };
 
 /** Analyst estimates — gated behind a higher FMP tier; returns null gracefully if denied. */

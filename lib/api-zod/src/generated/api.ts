@@ -9,6 +9,56 @@ import * as zod from 'zod';
 
 
 /**
+ * Scans a liquid under-$150 universe for the day's best intraday candidates and the largest gappers up/down, ranked by gap, volatility, liquidity and catalysts (earnings, analyst grade changes, news). Evidence-ranked, not a prediction guarantee.
+
+ * @summary Morning market scan
+ */
+export const GetPremarketScanQueryParams = zod.object({
+  "refresh": zod.coerce.boolean().optional().describe('Bypass the short-lived scan cache')
+})
+
+export const GetPremarketScanResponse = zod.object({
+  "generatedAt": zod.string(),
+  "universeSize": zod.number(),
+  "priceCeiling": zod.number(),
+  "note": zod.string().describe('Honest framing of what the scan is (evidence ranking, not prophecy)'),
+  "topIntraday": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "avgVolume": zod.number().nullish(),
+  "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
+  "rsi": zod.number().nullish(),
+  "score": zod.number().describe('0-100 composite (volatility, liquidity, gap, catalysts)'),
+  "reasons": zod.array(zod.string())
+})),
+  "likelyJump": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "avgVolume": zod.number().nullish(),
+  "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
+  "rsi": zod.number().nullish(),
+  "score": zod.number().describe('0-100 composite (volatility, liquidity, gap, catalysts)'),
+  "reasons": zod.array(zod.string())
+})),
+  "likelyFall": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "avgVolume": zod.number().nullish(),
+  "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
+  "rsi": zod.number().nullish(),
+  "score": zod.number().describe('0-100 composite (volatility, liquidity, gap, catalysts)'),
+  "reasons": zod.array(zod.string())
+}))
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

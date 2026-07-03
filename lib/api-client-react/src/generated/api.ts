@@ -22,9 +22,11 @@ import type {
 import type {
   AnalyzeInput,
   ApiError,
+  GetPremarketScanParams,
   HealthStatus,
   Report,
   ReportSummary,
+  ScanResult,
   WatchlistEntry,
   WatchlistInput
 } from './api.schemas';
@@ -38,6 +40,92 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+
+
+export const getGetPremarketScanUrl = (params?: GetPremarketScanParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/scan/premarket?${stringifiedParams}` : `/api/scan/premarket`
+}
+
+/**
+ * Scans a liquid under-$150 universe for the day's best intraday candidates and the largest gappers up/down, ranked by gap, volatility, liquidity and catalysts (earnings, analyst grade changes, news). Evidence-ranked, not a prediction guarantee.
+
+ * @summary Morning market scan
+ */
+export const getPremarketScan = async (params?: GetPremarketScanParams, options?: RequestInit): Promise<ScanResult> => {
+
+  return customFetch<ScanResult>(getGetPremarketScanUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPremarketScanQueryKey = (params?: GetPremarketScanParams,) => {
+    return [
+    `/api/scan/premarket`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetPremarketScanQueryOptions = <TData = Awaited<ReturnType<typeof getPremarketScan>>, TError = ErrorType<ApiError>>(params?: GetPremarketScanParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPremarketScan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPremarketScanQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPremarketScan>>> = ({ signal }) => getPremarketScan(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPremarketScan>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPremarketScanQueryResult = NonNullable<Awaited<ReturnType<typeof getPremarketScan>>>
+export type GetPremarketScanQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Morning market scan
+ */
+
+export function useGetPremarketScan<TData = Awaited<ReturnType<typeof getPremarketScan>>, TError = ErrorType<ApiError>>(
+ params?: GetPremarketScanParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPremarketScan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPremarketScanQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
 
 
 

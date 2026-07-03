@@ -2,6 +2,7 @@ import { FileBarChart, Scale, GitBranch } from "lucide-react";
 import { TickerSearch } from "@/components/ticker-search";
 import { RecentReports } from "@/components/recent-reports";
 import { Watchlist } from "@/components/watchlist";
+import { MorningScan } from "@/components/morning-scan";
 
 const FEATURES = [
   { icon: FileBarChart, title: "10-section reports", desc: "Snapshot, catalysts, filings, and financials in one view." },
@@ -36,6 +37,10 @@ export default function Home() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="pb-8">
+        <MorningScan />
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 pb-12">

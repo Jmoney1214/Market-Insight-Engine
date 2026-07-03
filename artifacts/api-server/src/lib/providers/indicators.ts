@@ -46,6 +46,25 @@ export function resistance(highs: number[], lookback = 60): number | null {
   return Math.max(...highs.slice(-lookback));
 }
 
+/** Wilder's ATR over `period` (default 14). Arrays ordered oldest -> newest. */
+export function atr(highs: number[], lows: number[], closes: number[], period = 14): number | null {
+  const n = Math.min(highs.length, lows.length, closes.length);
+  if (n < period + 1) return null;
+  const trs: number[] = [];
+  for (let i = 1; i < n; i++) {
+    trs.push(
+      Math.max(
+        highs[i]! - lows[i]!,
+        Math.abs(highs[i]! - closes[i - 1]!),
+        Math.abs(lows[i]! - closes[i - 1]!),
+      ),
+    );
+  }
+  let a = trs.slice(0, period).reduce((x, y) => x + y, 0) / period;
+  for (let i = period; i < trs.length; i++) a = (a * (period - 1) + trs[i]!) / period;
+  return a;
+}
+
 /** % change between the close ~`bars` ago and the latest close. */
 export function changeOverBars(closes: number[], bars: number): number | null {
   if (closes.length <= bars) return null;

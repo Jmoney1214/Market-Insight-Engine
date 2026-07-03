@@ -247,6 +247,38 @@ export interface Report {
   fundamentals?: Fundamentals;
 }
 
+export interface ScanCandidate {
+  symbol: string;
+  /** @nullable */
+  companyName?: string | null;
+  price: number;
+  /** % vs last completed session close (pre/post-market aware) */
+  gapPct: number;
+  /** @nullable */
+  avgVolume?: number | null;
+  /**
+     * 14-day ATR as % of price (intraday range potential)
+     * @nullable
+     */
+  atrPct?: number | null;
+  /** @nullable */
+  rsi?: number | null;
+  /** 0-100 composite (volatility, liquidity, gap, catalysts) */
+  score: number;
+  reasons: string[];
+}
+
+export interface ScanResult {
+  generatedAt: string;
+  universeSize: number;
+  priceCeiling: number;
+  /** Honest framing of what the scan is (evidence ranking, not prophecy) */
+  note: string;
+  topIntraday: ScanCandidate[];
+  likelyJump: ScanCandidate[];
+  likelyFall: ScanCandidate[];
+}
+
 export interface WatchlistEntry {
   id: number;
   ticker: string;
@@ -259,4 +291,11 @@ export interface WatchlistInput {
   ticker: string;
   notes?: string;
 }
+
+export type GetPremarketScanParams = {
+/**
+ * Bypass the short-lived scan cache
+ */
+refresh?: boolean;
+};
 
