@@ -19,6 +19,7 @@ import { useReplayStore } from "@/hooks/use-replay-store";
 import { useTriggerAlerts } from "@/hooks/use-trigger-alerts";
 
 import { LiveBoardPanel } from "@/components/LiveBoardPanel";
+import { SymbolPicker, FIXTURE_SYMBOLS } from "@/components/SymbolPicker";
 import { TriggerBanner } from "@/components/TriggerBanner";
 import { FinalReadPanel } from "@/components/FinalReadPanel";
 import { AnalystCommitteePanel } from "@/components/AnalystCommitteePanel";
@@ -181,9 +182,16 @@ export default function Terminal() {
     ? explain.provider.toUpperCase()
     : "READY";
 
+  const isFixtureSymbol = (FIXTURE_SYMBOLS as readonly string[]).includes(
+    symbol,
+  );
+
   const selectMode = (m: (typeof MODES)[number]) => {
-    if (m === "REPLAY") enterReplay();
-    else if (m === "RESEARCH") exitReplay();
+    if (m === "REPLAY") {
+      // Replay only exists for bundled fixtures; fall back to the default.
+      if (!isFixtureSymbol) setSymbol(FIXTURE_SYMBOLS[0]);
+      enterReplay();
+    } else if (m === "RESEARCH") exitReplay();
   };
 
   return (
@@ -235,17 +243,11 @@ export default function Terminal() {
 
         <div className="flex items-center gap-3 shrink-0">
           <div className="flex items-center gap-2">
-            <select
-              className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-              value={symbol}
-              onChange={(e) => setSymbol(e.target.value)}
-              aria-label="Symbol"
-            >
-              <option value="AAPL">AAPL</option>
-              <option value="MSFT">MSFT</option>
-              <option value="TSLA">TSLA</option>
-              <option value="NODATA">NODATA</option>
-            </select>
+            <SymbolPicker
+              symbol={symbol}
+              onChange={setSymbol}
+              restricted={isReplay || source === "fixture"}
+            />
 
             {isReplay ? (
               <select
@@ -274,7 +276,14 @@ export default function Terminal() {
               <select
                 className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
                 value={source}
-                onChange={(e) => setSource(e.target.value as any)}
+                onChange={(e) => {
+                  const next = e.target.value as typeof source;
+                  // Fixtures only exist for the bundled symbols.
+                  if (next === "fixture" && !isFixtureSymbol) {
+                    setSymbol(FIXTURE_SYMBOLS[0]);
+                  }
+                  setSource(next);
+                }}
                 aria-label="Data source"
                 title="Data source"
               >
@@ -403,7 +412,7 @@ export default function Terminal() {
         ) : (
           <button
             type="button"
-            onClick={enterReplay}
+            onClick={() => selectMode("REPLAY")}
             className="flex items-center gap-2 text-muted-foreground/70 hover:text-foreground transition-colors"
             title="Enter replay mode"
           >

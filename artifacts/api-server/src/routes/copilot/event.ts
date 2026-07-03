@@ -23,7 +23,8 @@ router.get("/event", async (req, res) => {
 
   const { symbol, source, mode } = parsed.data;
   const symbolUpper = symbol.toUpperCase().trim();
-  if (!symbolUpper || !/^[A-Z.\-]{1,6}$/.test(symbolUpper)) {
+  // Permissive enough for real Yahoo symbols: BRK-B, BTC-USD, ^GSPC, ES=F, 7203.T
+  if (!symbolUpper || !/^[A-Z0-9.\-=^]{1,12}$/.test(symbolUpper)) {
     res.status(400).json({ error: "Invalid symbol" });
     return;
   }
