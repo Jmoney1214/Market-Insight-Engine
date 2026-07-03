@@ -18,4 +18,14 @@ router.get("/scan/premarket", async (req, res) => {
   }
 });
 
+router.get("/scan/scorecard", async (_req, res) => {
+  try {
+    const { getScorecard } = await import("../lib/scorecard.js");
+    res.json(await getScorecard());
+  } catch (err) {
+    logger.error({ err: String(err) }, "Scorecard fetch failed");
+    res.status(500).json({ error: "Scorecard unavailable" });
+  }
+});
+
 export default router;

@@ -27,6 +27,7 @@ import type {
   Report,
   ReportSummary,
   ScanResult,
+  ScorecardSummary,
   WatchlistEntry,
   WatchlistInput
 } from './api.schemas';
@@ -117,6 +118,85 @@ export function useGetPremarketScan<TData = Awaited<ReturnType<typeof getPremark
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPremarketScanQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetScanScorecardUrl = () => {
+
+
+
+
+  return `/api/scan/scorecard`
+}
+
+/**
+ * Measured hit rates for past scan picks: each morning's picks are recorded, then graded after the close against the session's actual bar (intraday = ranged >=2%, jump = closed up, fall = closed down).
+
+ * @summary Scan accountability scorecard
+ */
+export const getScanScorecard = async ( options?: RequestInit): Promise<ScorecardSummary> => {
+
+  return customFetch<ScorecardSummary>(getGetScanScorecardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetScanScorecardQueryKey = () => {
+    return [
+    `/api/scan/scorecard`
+    ] as const;
+    }
+
+
+export const getGetScanScorecardQueryOptions = <TData = Awaited<ReturnType<typeof getScanScorecard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScanScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetScanScorecardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getScanScorecard>>> = ({ signal }) => getScanScorecard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getScanScorecard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetScanScorecardQueryResult = NonNullable<Awaited<ReturnType<typeof getScanScorecard>>>
+export type GetScanScorecardQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Scan accountability scorecard
+ */
+
+export function useGetScanScorecard<TData = Awaited<ReturnType<typeof getScanScorecard>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScanScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetScanScorecardQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

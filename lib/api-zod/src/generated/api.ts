@@ -65,6 +65,33 @@ export const GetPremarketScanResponse = zod.object({
 
 
 /**
+ * Measured hit rates for past scan picks: each morning's picks are recorded, then graded after the close against the session's actual bar (intraday = ranged >=2%, jump = closed up, fall = closed down).
+
+ * @summary Scan accountability scorecard
+ */
+export const GetScanScorecardResponse = zod.object({
+  "asOf": zod.string(),
+  "lists": zod.array(zod.object({
+  "list": zod.string().describe('intraday | jump | fall'),
+  "graded": zod.number(),
+  "hits": zod.number(),
+  "hitRate": zod.number().describe('percent of graded picks that hit')
+})),
+  "recent": zod.array(zod.object({
+  "scanDate": zod.string(),
+  "symbol": zod.string(),
+  "list": zod.string(),
+  "score": zod.number(),
+  "gapPct": zod.number(),
+  "priceAtScan": zod.number(),
+  "changePct": zod.number().nullish(),
+  "rangePct": zod.number().nullish(),
+  "hit": zod.boolean().nullish()
+}))
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

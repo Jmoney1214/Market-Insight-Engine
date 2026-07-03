@@ -341,6 +341,36 @@ export interface ScanResult {
   likelyFall: ScanCandidate[];
 }
 
+export interface ScorecardListStats {
+  /** intraday | jump | fall */
+  list: string;
+  graded: number;
+  hits: number;
+  /** percent of graded picks that hit */
+  hitRate: number;
+}
+
+export interface ScorecardEntry {
+  scanDate: string;
+  symbol: string;
+  list: string;
+  score: number;
+  gapPct: number;
+  priceAtScan: number;
+  /** @nullable */
+  changePct?: number | null;
+  /** @nullable */
+  rangePct?: number | null;
+  /** @nullable */
+  hit?: boolean | null;
+}
+
+export interface ScorecardSummary {
+  asOf: string;
+  lists: ScorecardListStats[];
+  recent: ScorecardEntry[];
+}
+
 export interface WatchlistEntry {
   id: number;
   ticker: string;

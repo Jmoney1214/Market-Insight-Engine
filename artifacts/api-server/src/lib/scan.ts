@@ -79,31 +79,59 @@ function nyClock(): { minutes: number; isWeekday: boolean } {
 const SCHEDULER_INTERVAL_MS = 5 * 60 * 1000;
 const WINDOW_START = 7 * 60; // 7:00 ET — research is ready well before 8:30
 const WINDOW_END = 16 * 60; // 4:00 ET — keep movers fresh through the close
+const RECORD_START = 8 * 60 + 15; // record the actionable pre-open picks (8:15-9:30)
+const RECORD_END = 9 * 60 + 30;
+const GRADE_AFTER = 16 * 60 + 15; // grade once the session bar is final
+
+function todayNYDate(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+}
 
 /**
- * Proactive hunter: refreshes the scan every 5 minutes on weekdays from
- * 7:00 ET through the close, so the dashboard is already loaded with the
- * morning's research the moment it's opened. Costs ~10 provider calls per
- * refresh — negligible against the 750/min budget.
+ * Proactive hunter + accountability loop, every 5 minutes on weekdays:
+ *  - 07:00-16:00 ET: refresh the scan so the dashboard opens pre-researched.
+ *  - 08:15-09:30 ET: record the morning picks to the scorecard (idempotent).
+ *  - after 16:15 ET (throttled hourly): grade pending picks vs the actual
+ *    session bar, building the measured hit rate.
+ * ~10 provider calls per refresh — negligible against the 750/min budget.
  */
 export function startScanScheduler(): void {
   if (!scanAvailable()) {
     logger.info("Scan scheduler not started (provider keys missing)");
     return;
   }
+  let lastGradeAttempt = 0;
   const tick = async () => {
     const { minutes, isWeekday } = nyClock();
-    if (!isWeekday || minutes < WINDOW_START || minutes >= WINDOW_END) return;
+    if (!isWeekday) return;
+    const { recordScanPicks, gradePending } = await import("./scorecard.js");
+
+    if (minutes >= WINDOW_START && minutes < WINDOW_END) {
+      try {
+        const result = await runPremarketScan(true);
+        logger.info("Scheduled scan refreshed");
+        if (minutes >= RECORD_START && minutes <= RECORD_END) {
+          await recordScanPicks(result, todayNYDate());
+        }
+      } catch (err) {
+        logger.warn({ err: String(err) }, "Scheduled scan failed");
+      }
+      return;
+    }
+
+    // Outside market hours: grade anything pending (today after 16:15, or older days).
+    if (Date.now() - lastGradeAttempt < 60 * 60 * 1000) return;
+    lastGradeAttempt = Date.now();
+    const maxDate = minutes >= GRADE_AFTER ? todayNYDate() : new Date(Date.now() - 86_400_000).toLocaleDateString("en-CA", { timeZone: "America/New_York" });
     try {
-      await runPremarketScan(true);
-      logger.info("Scheduled scan refreshed");
+      await gradePending(maxDate);
     } catch (err) {
-      logger.warn({ err: String(err) }, "Scheduled scan failed");
+      logger.warn({ err: String(err) }, "Scorecard grading pass failed");
     }
   };
   setInterval(tick, SCHEDULER_INTERVAL_MS).unref();
   void tick(); // warm immediately if we boot inside the window
-  logger.info("Scan scheduler started (weekdays 07:00-16:00 ET, every 5 min)");
+  logger.info("Scan scheduler started (weekdays: refresh 07:00-16:00 ET, record 08:15-09:30, grade after close)");
 }
 
 export async function runPremarketScan(refresh = false): Promise<ScanResult> {

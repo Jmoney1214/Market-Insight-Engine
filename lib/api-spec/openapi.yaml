@@ -49,6 +49,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
+  /scan/scorecard:
+    get:
+      operationId: getScanScorecard
+      tags: [scan]
+      summary: Scan accountability scorecard
+      description: >
+        Measured hit rates for past scan picks: each morning's picks are recorded,
+        then graded after the close against the session's actual bar
+        (intraday = ranged >=2%, jump = closed up, fall = closed down).
+      responses:
+        "200":
+          description: Scorecard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScorecardSummary"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -395,6 +412,59 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ScanCandidate"
+
+    ScorecardSummary:
+      type: object
+      required: [asOf, lists, recent]
+      properties:
+        asOf:
+          type: string
+        lists:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScorecardListStats"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScorecardEntry"
+
+    ScorecardListStats:
+      type: object
+      required: [list, graded, hits, hitRate]
+      properties:
+        list:
+          type: string
+          description: "intraday | jump | fall"
+        graded:
+          type: integer
+        hits:
+          type: integer
+        hitRate:
+          type: number
+          description: percent of graded picks that hit
+
+    ScorecardEntry:
+      type: object
+      required: [scanDate, symbol, list, score, gapPct, priceAtScan]
+      properties:
+        scanDate:
+          type: string
+        symbol:
+          type: string
+        list:
+          type: string
+        score:
+          type: number
+        gapPct:
+          type: number
+        priceAtScan:
+          type: number
+        changePct:
+          type: ["number", "null"]
+        rangePct:
+          type: ["number", "null"]
+        hit:
+          type: ["boolean", "null"]
 
     ScanCandidate:
       type: object

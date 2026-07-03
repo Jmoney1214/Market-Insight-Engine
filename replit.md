@@ -6,6 +6,7 @@ _Replace the heading above with the project's name, and this line with one sente
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
 - `pnpm run typecheck` — full typecheck across all packages
+- `pnpm run test` — run unit tests (Vitest; indicators, scorecard grading, report fallback)
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
@@ -49,7 +50,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- After pulling schema changes (e.g. the `scan_scorecard` table), run `pnpm --filter @workspace/db run push` before starting the server — the scorecard writes fail (non-fatally, logged) until the table exists.
+- The scan scheduler (refresh 07:00–16:00 ET, record picks 08:15–09:30, grade after 16:15) runs inside the api-server process. On autoscale it only runs while an instance is alive; use a reserved VM for guaranteed pre-open scans.
 
 ## Pointers
 

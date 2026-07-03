@@ -172,6 +172,29 @@ export async function getNewsMulti(symbols: string[], limit = 50): Promise<Map<s
   return map;
 }
 
+export type SessionBar = { open: number; high: number; low: number; close: number; volume: number };
+
+/** The completed daily bar for one specific session date (YYYY-MM-DD), or null if none. */
+export async function getSessionBar(symbol: string, date: string): Promise<SessionBar | null> {
+  const url = new URL(`${DATA_BASE}/${encodeURIComponent(symbol)}/bars`);
+  url.searchParams.set("timeframe", "1Day");
+  url.searchParams.set("feed", alpacaFeed);
+  url.searchParams.set("adjustment", "split");
+  url.searchParams.set("start", date);
+  url.searchParams.set("end", `${date}T23:59:59Z`);
+  url.searchParams.set("limit", "2");
+  const data = await alpacaGet<{ bars?: Array<Record<string, number | string>> }>(url);
+  const bar = data?.bars?.find((b) => String(b["t"]).slice(0, 10) === date);
+  if (!bar) return null;
+  return {
+    open: Number(bar["o"]),
+    high: Number(bar["h"]),
+    low: Number(bar["l"]),
+    close: Number(bar["c"]),
+    volume: Number(bar["v"]),
+  };
+}
+
 export type DailyBars = {
   closes: number[];
   highs: number[];
