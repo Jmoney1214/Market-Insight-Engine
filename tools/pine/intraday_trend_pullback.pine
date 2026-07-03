@@ -1,0 +1,118 @@
+//@version=5
+// =============================================================================
+// Intraday Trend-Pullback — VWAP + HTF regime + ATR risk management
+// -----------------------------------------------------------------------------
+// Design rationale (from FinDesk backtest findings):
+//   * Single lagging triggers (MA cross / RSI) are NOT standalone alpha and get
+//     whipsawed in chop. Their measurable value was regime filtering + drawdown
+//     control. So this strategy:
+//       1. Only trades WITH a higher-timeframe trend (regime gate).
+//       2. Enters on PULLBACKS inside that trend (better R:R than chasing).
+//       3. Uses VWAP as the intraday fair-value bias.
+//       4. Sizes by RISK (ATR stop), not fixed qty — risk-first, not signal-first.
+//       5. Never holds overnight; flattens at the session close.
+//   * Commissions + slippage are modeled so results aren't fantasy.
+//
+// NOT financial advice. A template to validate in TradingView's Strategy Tester,
+// then walk-forward test, before risking capital. Defaults are starting points.
+// =============================================================================
+
+strategy("Intraday Trend-Pullback (VWAP + HTF + ATR)", overlay=true,
+     initial_capital=10000,
+     currency=currency.USD,
+     commission_type=strategy.commission.percent, commission_value=0.02, // ~2bps/side
+     slippage=2,
+     pyramiding=0,
+     calc_on_every_tick=false,
+     process_orders_on_close=true)
+
+// ------------------------------- Inputs --------------------------------------
+grpTrend = "Regime / Trend"
+htfTF     = input.timeframe("60",  "Higher-timeframe for regime", group=grpTrend)
+htfLen    = input.int(50, "HTF EMA length", minval=5, group=grpTrend)
+fastLen   = input.int(9,  "Chart fast EMA", minval=2, group=grpTrend)
+slowLen   = input.int(21, "Chart slow EMA", minval=3, group=grpTrend)
+useVWAP   = input.bool(true, "Require price on correct side of VWAP", group=grpTrend)
+
+grpEntry = "Entry (pullback)"
+rsiLen        = input.int(14, "RSI length", minval=2, group=grpEntry)
+rsiLongTrig   = input.float(45, "Long: RSI crosses up through", group=grpEntry)
+rsiShortTrig  = input.float(55, "Short: RSI crosses down through", group=grpEntry)
+allowShorts   = input.bool(true, "Allow shorts", group=grpEntry)
+
+grpRisk = "Risk management"
+atrLen       = input.int(14, "ATR length", minval=2, group=grpRisk)
+atrStopMult  = input.float(1.5, "Stop = ATR ×", minval=0.2, step=0.1, group=grpRisk)
+rr           = input.float(1.5, "Reward:Risk (target = stop × RR)", minval=0.3, step=0.1, group=grpRisk)
+riskPct      = input.float(0.5, "Risk per trade (% of equity)", minval=0.05, step=0.05, group=grpRisk)
+useTrail     = input.bool(false, "Trail stop at ATR × (0 = off)", group=grpRisk)
+trailMult    = input.float(2.0, "Trail ATR ×", minval=0.2, step=0.1, group=grpRisk)
+
+grpSess = "Session"
+tradeSession = input.session("0945-1550", "Entry window (exchange time)", group=grpSess)
+flatSession  = input.session("1551-1600", "Force-flat window", group=grpSess)
+maxTrades    = input.int(3, "Max entries per day (0 = unlimited)", minval=0, group=grpSess)
+
+// ------------------------------ Indicators -----------------------------------
+emaFast = ta.ema(close, fastLen)
+emaSlow = ta.ema(close, slowLen)
+rsi     = ta.rsi(close, rsiLen)
+atr     = ta.atr(atrLen)
+vwap    = ta.vwap(hlc3)
+
+// Higher-timeframe trend, non-repainting (confirmed HTF bar only).
+htfEma = request.security(syminfo.tickerid, htfTF, ta.ema(close, htfLen),
+     lookahead=barmerge.lookahead_off)
+
+// ------------------------------- Regime --------------------------------------
+vwapOkLong  = not useVWAP or close > vwap
+vwapOkShort = not useVWAP or close < vwap
+trendUp = close > htfEma and emaFast > emaSlow and vwapOkLong
+trendDn = close < htfEma and emaFast < emaSlow and vwapOkShort
+
+// -------------------------- Session bookkeeping ------------------------------
+inEntryWindow = not na(time(timeframe.period, tradeSession))
+inFlatWindow  = not na(time(timeframe.period, flatSession))
+newDay = ta.change(time("D")) != 0
+var int tradesToday = 0
+if newDay
+    tradesToday := 0
+tradesLeft = maxTrades == 0 or tradesToday < maxTrades
+
+// ------------------------------- Signals -------------------------------------
+longSignal  = trendUp and ta.crossover(rsi, rsiLongTrig)
+shortSignal = allowShorts and trendDn and ta.crossunder(rsi, rsiShortTrig)
+
+// ----------------------------- Order handling --------------------------------
+// Risk-based position size: risk (equity × riskPct%) / stop distance (ATR × mult).
+stopDist = atr * atrStopMult
+qty      = stopDist > 0 ? (strategy.equity * riskPct / 100.0) / stopDist : na
+
+canEnter = inEntryWindow and tradesLeft and stopDist > 0 and not na(qty) and qty > 0
+
+if canEnter and longSignal and strategy.position_size <= 0
+    strategy.entry("Long", strategy.long, qty=qty)
+    strategy.exit("Long Exit", "Long", stop=close - stopDist, limit=close + stopDist * rr,
+         trail_points=useTrail ? (atr * trailMult) / syminfo.mintick : na,
+         trail_offset=useTrail ? (atr * trailMult) / syminfo.mintick : na)
+    tradesToday += 1
+
+if canEnter and shortSignal and strategy.position_size >= 0
+    strategy.entry("Short", strategy.short, qty=qty)
+    strategy.exit("Short Exit", "Short", stop=close + stopDist, limit=close - stopDist * rr,
+         trail_points=useTrail ? (atr * trailMult) / syminfo.mintick : na,
+         trail_offset=useTrail ? (atr * trailMult) / syminfo.mintick : na)
+    tradesToday += 1
+
+// No overnight risk: flatten everything at the session-close window.
+if inFlatWindow and strategy.position_size != 0
+    strategy.close_all(comment="EOD flat")
+
+// -------------------------------- Plots --------------------------------------
+plot(emaFast, "EMA fast", color=color.new(color.aqua, 0))
+plot(emaSlow, "EMA slow", color=color.new(color.orange, 0))
+plot(vwap,    "VWAP", color=color.new(color.yellow, 0), style=plot.style_stepline)
+plot(htfEma,  "HTF EMA", color=color.new(color.fuchsia, 0), linewidth=2)
+bgcolor(trendUp ? color.new(color.green, 90) : trendDn ? color.new(color.red, 90) : na)
+plotshape(longSignal,  "Long",  shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.tiny)
+plotshape(shortSignal, "Short", shape.triangledown, location.abovebar, color.new(color.red, 0),   size=size.tiny)
