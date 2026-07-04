@@ -12,6 +12,7 @@
  * liquidity) plus *catalysts* over naked momentum.
  */
 import { hasFmp, hasAlpaca } from "./providers/config.js";
+import { replayEnvSet } from "./replay.js";
 import { logger } from "./logger.js";
 import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
@@ -96,6 +97,10 @@ function todayNYDate(): string {
  * ~10 provider calls per refresh — negligible against the 750/min budget.
  */
 export function startScanScheduler(): void {
+  if (replayEnvSet()) {
+    logger.info("Scan scheduler not started (SCAN_AS_OF replay mode — frozen clock, no recording/grading)");
+    return;
+  }
   if (!scanAvailable()) {
     logger.info("Scan scheduler not started (provider keys missing)");
     return;
@@ -135,6 +140,13 @@ export function startScanScheduler(): void {
 }
 
 export async function runPremarketScan(refresh = false): Promise<ScanResult> {
+  // Trading-day simulation: SCAN_AS_OF freezes the board at a historical moment.
+  // Checked by presence (not validity) so a malformed value errors loudly
+  // instead of silently serving the live scan mid-drill.
+  if (replayEnvSet()) {
+    const { runPitReplayScan } = await import("./replay.js");
+    return runPitReplayScan(refresh);
+  }
   if (!refresh && cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.result;
 
   // 1. Universe — liquid US names under the ceiling (ETFs/funds excluded).
