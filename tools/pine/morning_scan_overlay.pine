@@ -1,0 +1,97 @@
+//@version=5
+// =============================================================================
+// FinDesk Morning Scan — chart overlay (indicator, not a strategy)
+// -----------------------------------------------------------------------------
+// Recreates the Morning Scan's per-ticker evidence on a TradingView chart, so a
+// FinDesk pick can be inspected bar-by-bar with the same numbers the scanner
+// used at 8:30 ET:
+//   - Gap % vs prior session close (pre-market aware when ETH is ON)
+//   - Cumulative PRE-MARKET volume (the conviction signal)
+//   - Multi-trade profile: sessions of the last 10 that ranged >= 2%
+//   - Avg daily range %, ATR14 % of price, daily RSI14
+//   - FinDesk composite score (ex-catalyst: TradingView has no earnings/news
+//     feed here, so the 20% catalyst term is omitted — chart score reads a
+//     touch lower than the dashboard's)
+//   - List eligibility: TOP INTRADAY profile / LIKELY JUMP / LIKELY FALL
+//
+// USE ON AN INTRADAY CHART (1-15 min) with Extended Trading Hours ON
+// (right-click chart -> Settings -> Symbol -> Extended trading hours),
+// otherwise the gap and pre-market volume can't be seen.
+// Research overlay only — not financial advice.
+// =============================================================================
+indicator("FinDesk Morning Scan Overlay", overlay = true)
+
+gapThresh   = input.float(1.5, "Gapper threshold %", minval = 0.1)
+rangeThresh = input.float(2.0, "Multi-trade day range %", minval = 0.5)
+mtdLookback = input.int(10, "Multi-trade lookback (days)", minval = 5, maxval = 20)
+priceCeil   = input.float(150, "Price ceiling $", minval = 1)
+showPrevCls = input.bool(true, "Plot prior session close")
+
+// ---- Daily stats from COMPLETED sessions only (non-repainting [1] idiom) ----
+rangePctD = (high - low) / close * 100
+[prevClose, mtd, avgRangePct, atrPct, rsiD, dollarVol20] =
+     request.security(syminfo.tickerid, "D",
+         [close[1],
+          math.sum(rangePctD >= rangeThresh ? 1 : 0, mtdLookback)[1],
+          ta.sma(rangePctD, mtdLookback)[1],
+          ta.atr(14)[1] / close[1] * 100,
+          ta.rsi(close, 14)[1],
+          ta.sma(volume, 20)[1] * close[1]],
+         lookahead = barmerge.lookahead_on)
+
+// ---- Live gap & pre-market volume (needs ETH visible) ------------------------
+gapPct = (close - prevClose) / prevClose * 100
+var float pmVol = 0.0
+newDay = ta.change(time("D")) != 0
+if newDay
+    pmVol := 0.0
+if session.ispremarket
+    pmVol += volume
+
+// ---- FinDesk composite score (ex-catalyst) -----------------------------------
+clamp01(x) => math.max(0.0, math.min(1.0, x))
+volatility = 0.55 * clamp01(mtd / 8.0) + 0.45 * clamp01(atrPct / 5.0)
+liquidity  = clamp01(math.log10(math.max(dollarVol20, 1.0)) / math.log10(5e9))
+gapMag     = clamp01(math.abs(gapPct) / 5.0)
+score      = 100.0 * (0.40 * volatility + 0.25 * liquidity + 0.15 * gapMag)
+
+isJump     = gapPct >= gapThresh
+isFall     = gapPct <= -gapThresh
+multiTrade = mtd >= 7
+underCeil  = close <= priceCeil
+
+// ---- Chart drawings ----------------------------------------------------------
+plot(showPrevCls ? prevClose : na, "Prior close", color = color.new(color.yellow, 30),
+     style = plot.style_line, linewidth = 1)
+bgcolor(session.ispremarket ? color.new(color.blue, 92) : na, title = "Pre-market shading")
+
+// ---- Scan-row table (top right) ----------------------------------------------
+var table t = table.new(position.top_right, 2, 8, border_width = 1,
+     border_color = color.new(color.gray, 70), bgcolor = color.new(color.black, 20))
+f(v, p) => str.tostring(v, p)
+if barstate.islast
+    hdr = multiTrade and underCeil ? "TOP INTRADAY profile" : underCeil ? "profile: partial" : "over $" + f(priceCeil, "#") + " ceiling"
+    lst = isJump ? "LIKELY JUMP" : isFall ? "LIKELY FALL" : "no gap list"
+    gcol = gapPct >= 0 ? color.green : color.red
+    table.cell(t, 0, 0, "FinDesk scan", text_color = color.new(color.aqua, 0), text_size = size.small)
+    table.cell(t, 1, 0, hdr, text_color = multiTrade ? color.green : color.gray, text_size = size.small)
+    table.cell(t, 0, 1, "Gap vs prior close", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 1, (gapPct >= 0 ? "+" : "") + f(gapPct, "#.##") + "%  (" + lst + ")", text_color = gcol, text_size = size.small)
+    table.cell(t, 0, 2, "Pre-market volume", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 2, f(pmVol / 1000, "#") + "k", text_color = pmVol > 100000 ? color.green : color.orange, text_size = size.small)
+    table.cell(t, 0, 3, "Ranged ≥" + f(rangeThresh, "#.#") + "%", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 3, f(mtd, "#") + "/" + f(mtdLookback, "#") + " days", text_color = multiTrade ? color.green : color.gray, text_size = size.small)
+    table.cell(t, 0, 4, "Avg daily range", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 4, f(avgRangePct, "#.#") + "%/day", text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 5, "ATR14 / RSI14 (D)", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 5, f(atrPct, "#.##") + "%  /  " + f(rsiD, "#.#"), text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 6, "Avg $ volume (20d)", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 6, "$" + f(dollarVol20 / 1e6, "#") + "M", text_color = color.white, text_size = size.small)
+    table.cell(t, 0, 7, "Score (ex-catalyst)", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 7, f(score, "#.#"), text_color = score >= 70 ? color.green : color.white, text_size = size.small)
+
+// Alert when a chart symbol develops scan-grade evidence live.
+alertcondition(isJump and multiTrade, "FinDesk: jump-gapper with multi-trade profile",
+     "Gap >= threshold with multi-trade profile — scan-grade setup forming")
+alertcondition(isFall and multiTrade, "FinDesk: fall-gapper with multi-trade profile",
+     "Gap <= -threshold with multi-trade profile — scan-grade setup forming")
