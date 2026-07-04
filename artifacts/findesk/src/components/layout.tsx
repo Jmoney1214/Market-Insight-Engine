@@ -6,7 +6,7 @@ export function Layout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-[100dvh] w-full flex flex-col font-sans bg-background text-foreground">
       <div className="w-full bg-caution/10 border-b border-caution/20 px-4 py-1.5 text-center text-[11px] font-mono-numbers text-caution/90 tracking-wide">
-        Research support only — not licensed financial advice. Live quotes via Yahoo Finance · analysis by FinDesk AI. Do not trade solely on this output.
+        Research support only — not licensed financial advice. Live market data via Alpaca SIP + FMP · analysis by FinDesk. Do not trade solely on this output.
       </div>
       <AppHeader />
       <main className="flex-1 flex flex-col">{children}</main>
