@@ -40,19 +40,20 @@ rangePctD = (high - low) / close * 100
          lookahead = barmerge.lookahead_on)
 
 // ---- Live gap & pre-market volume (needs ETH visible) ------------------------
-gapPct = (close - prevClose) / prevClose * 100
+// nz-guarded: na/0 prevClose (chart start, security gap) must not poison the table
+gapPct = nz(prevClose) > 0 ? (close - prevClose) / prevClose * 100 : 0.0
 var float pmVol = 0.0
 newDay = ta.change(time("D")) != 0
 if newDay
     pmVol := 0.0
 if session.ispremarket
-    pmVol += volume
+    pmVol += nz(volume)
 
 // ---- FinDesk composite score (ex-catalyst) -----------------------------------
 clamp01(x) => math.max(0.0, math.min(1.0, x))
-volatility = 0.55 * clamp01(mtd / 8.0) + 0.45 * clamp01(atrPct / 5.0)
-liquidity  = clamp01(math.log10(math.max(dollarVol20, 1.0)) / math.log10(5e9))
-gapMag     = clamp01(math.abs(gapPct) / 5.0)
+volatility = 0.55 * clamp01(nz(mtd) / 8.0) + 0.45 * clamp01(nz(atrPct) / 5.0)
+liquidity  = clamp01(math.log10(math.max(nz(dollarVol20), 1.0)) / math.log10(5e9))
+gapMag     = clamp01(math.abs(nz(gapPct)) / 5.0)
 score      = 100.0 * (0.40 * volatility + 0.25 * liquidity + 0.15 * gapMag)
 
 isJump     = gapPct >= gapThresh
