@@ -81,7 +81,7 @@ export async function getSnapshot(symbol: string): Promise<AlpacaSnapshot | null
 export type AlpacaNewsItem = { title: string; source: string; date: string; url: string };
 
 // Alpaca returns HTML-escaped headline text; decode the common entities.
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s
     .replace(/&amp;/g, "&")
     .replace(/&quot;/g, '"')
