@@ -14,7 +14,7 @@ profitable.**
 | `intraday_trend_pullback.pine` | Trend-following | Long pullbacks (RSI reclaims 45) **with** a higher-timeframe uptrend + VWAP bias |
 | `opening_range_breakout.pine` | Momentum | Break of the first 15-min range, filtered by HTF trend |
 | `rsi_divergence.pine` | Mean-reversion | Pivot-based regular RSI divergence (counter-trend reversals) |
-| `morning_scan_overlay.pine` | **Indicator** (not a strategy) | Recreates a FinDesk Morning Scan row on the chart: gap vs prior close, pre-market volume, ≥2% multi-trade count, ATR/RSI, ex-catalyst score, list eligibility. Use on 1–15m with Extended Hours ON |
+| `morning_scan_overlay.pine` | **Indicator** (not a strategy, Pine **v6**) | Recreates a FinDesk Morning Scan row on the chart: gap vs prior close, pre-market volume, ≥2% multi-trade count, ATR/RSI, ex-catalyst score, list eligibility. Use on 1–15m with Extended Hours ON |
 
 Run all three on the same symbol/timeframe to compare a trend engine, a
 momentum engine, and a mean-reversion engine head-to-head.

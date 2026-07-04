@@ -1,4 +1,4 @@
-//@version=5
+//@version=6
 // =============================================================================
 // FinDesk Morning Scan — chart overlay (indicator, not a strategy)
 // -----------------------------------------------------------------------------
@@ -30,7 +30,7 @@ showPrevCls = input.bool(true, "Plot prior session close")
 // ---- Daily stats from COMPLETED sessions only (non-repainting [1] idiom) ----
 rangePctD = (high - low) / close * 100
 [prevClose, mtd, avgRangePct, atrPct, rsiD, dollarVol20] =
-     request.security(syminfo.tickerid, "D",
+     request.security(syminfo.tickerid, "1D",
          [close[1],
           math.sum(rangePctD >= rangeThresh ? 1 : 0, mtdLookback)[1],
           ta.sma(rangePctD, mtdLookback)[1],
@@ -43,8 +43,7 @@ rangePctD = (high - low) / close * 100
 // nz-guarded: na/0 prevClose (chart start, security gap) must not poison the table
 gapPct = nz(prevClose) > 0 ? (close - prevClose) / prevClose * 100 : 0.0
 var float pmVol = 0.0
-newDay = ta.change(time("D")) != 0
-if newDay
+if timeframe.change("1D")
     pmVol := 0.0
 if session.ispremarket
     pmVol += nz(volume)
