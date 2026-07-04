@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Sunrise, TrendingUp, TrendingDown, Crosshair, RefreshCw, Loader2 } from "lucide-react";
 import {
   useGetPremarketScan,
+  getPremarketScan,
   getGetPremarketScanQueryKey,
   useAnalyzeTicker,
   type ScanCandidate,
@@ -108,6 +109,7 @@ export function MorningScan() {
   const queryClient = useQueryClient();
   const analyze = useAnalyzeTicker();
   const [analyzing, setAnalyzing] = useState<string | null>(null);
+  const [rescanning, setRescanning] = useState(false);
 
   const { data, isLoading, isError, isFetching } = useGetPremarketScan(undefined, {
     query: { queryKey: getGetPremarketScanQueryKey(), staleTime: 5 * 60 * 1000 },
@@ -125,8 +127,20 @@ export function MorningScan() {
     );
   };
 
-  const refresh = () =>
-    queryClient.refetchQueries({ queryKey: getGetPremarketScanQueryKey() });
+  // Rescan must bypass the server's short-lived cache (?refresh=true), not just
+  // refetch the client query — otherwise within the cache window the identical
+  // payload comes back and the button appears dead.
+  const refresh = async () => {
+    setRescanning(true);
+    try {
+      const fresh = await getPremarketScan({ refresh: true });
+      queryClient.setQueryData(getGetPremarketScanQueryKey(), fresh);
+    } catch {
+      /* leave existing data in place; the button re-enables */
+    } finally {
+      setRescanning(false);
+    }
+  };
 
   return (
     <section data-testid="section-morning-scan">
@@ -141,8 +155,8 @@ export function MorningScan() {
             </span>
           )}
         </div>
-        <Button variant="outline" size="sm" onClick={refresh} disabled={isFetching} data-testid="button-scan-refresh">
-          {isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+        <Button variant="outline" size="sm" onClick={refresh} disabled={rescanning || isFetching} data-testid="button-scan-refresh">
+          {rescanning || isFetching ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
           Rescan
         </Button>
       </div>
