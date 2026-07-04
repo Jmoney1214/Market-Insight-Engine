@@ -1,8 +1,18 @@
-import { describe, it, expect } from "vitest";
-import { buildReport } from "./buildReport.js";
+import { describe, it, expect, beforeAll, vi } from "vitest";
 
-// With no provider keys in the environment, buildReport must return the full
-// mock report (graceful no-keys fallback) with placeholder flags intact.
+// With no provider keys, buildReport must return the full mock report
+// (graceful no-keys fallback) with placeholder flags intact. Real keys may
+// exist in the dev environment, so the test blanks them BEFORE importing:
+// provider config reads env at module-import time.
+
+let buildReport: typeof import("./buildReport.js").buildReport;
+
+beforeAll(async () => {
+  vi.stubEnv("FMP_API_KEY", "");
+  vi.stubEnv("ALPACA_API_KEY_ID", "");
+  vi.stubEnv("ALPACA_API_SECRET_KEY", "");
+  ({ buildReport } = await import("./buildReport.js"));
+});
 
 describe("buildReport without provider keys", () => {
   it("returns a complete mock report", async () => {

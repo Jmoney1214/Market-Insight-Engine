@@ -12,4 +12,5 @@ export type ExplainCopilotEventSource = typeof ExplainCopilotEventSource[keyof t
 export const ExplainCopilotEventSource = {
   fixture: 'fixture',
   yahoo_delayed: 'yahoo_delayed',
+  alpaca_live: 'alpaca_live',
 } as const;

@@ -1082,7 +1082,7 @@ refresh?: boolean;
 export type GetCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys
+ * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys
  */
 source?: GetCopilotEventSource;
 mode?: GetCopilotEventMode;
@@ -1094,6 +1094,7 @@ export type GetCopilotEventSource = typeof GetCopilotEventSource[keyof typeof Ge
 export const GetCopilotEventSource = {
   fixture: 'fixture',
   yahoo_delayed: 'yahoo_delayed',
+  alpaca_live: 'alpaca_live',
 } as const;
 
 export type GetCopilotEventMode = typeof GetCopilotEventMode[keyof typeof GetCopilotEventMode];
@@ -1108,7 +1109,7 @@ export const GetCopilotEventMode = {
 export type ExplainCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys
+ * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys
  */
 source?: ExplainCopilotEventSource;
 mode?: ExplainCopilotEventMode;
@@ -1120,6 +1121,7 @@ export type ExplainCopilotEventSource = typeof ExplainCopilotEventSource[keyof t
 export const ExplainCopilotEventSource = {
   fixture: 'fixture',
   yahoo_delayed: 'yahoo_delayed',
+  alpaca_live: 'alpaca_live',
 } as const;
 
 export type ExplainCopilotEventMode = typeof ExplainCopilotEventMode[keyof typeof ExplainCopilotEventMode];

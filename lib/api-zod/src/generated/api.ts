@@ -352,7 +352,7 @@ export const getCopilotEventQuerySourceDefault = `fixture`;
 
 export const GetCopilotEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
-  "source": zod.enum(['fixture', 'yahoo_delayed']).default(getCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys'),
+  "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(getCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
 })
 
@@ -467,7 +467,7 @@ export const explainCopilotEventQuerySourceDefault = `fixture`;
 
 export const ExplainCopilotEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
-  "source": zod.enum(['fixture', 'yahoo_delayed']).default(explainCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys'),
+  "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(explainCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
 })
 

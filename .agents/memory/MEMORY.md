@@ -8,3 +8,4 @@
 - [Desk measurement integrity](desk-measurement-integrity.md) — edge scoreboard: only MANUAL_CONFIRMED + whitelisted action + promotable primary edge can validate; folklore never; enforce in core not UI; no "paper" in UI
 - [Desk terminal](desk-architecture.md) — read-only research terminal (slug desk, `/desk/`); no-trading guardrail; uncached ~12s explain; fixture-backed REPLAY reuses the live pipeline
 - [Trading Desk Copilot](trading-desk-copilot.md) — new research-only product on SHARED api-server `/api/copilot/*` + single shared OpenAPI spec; permanent NO-trading/NO-execution constraint
+- [Desk live sources](desk-live-sources.md) — alpaca_live uses the data API only; feed default sip from shared config; no-keys tests must blank env pre-import (real secrets now in dev)

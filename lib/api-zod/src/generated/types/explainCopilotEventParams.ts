@@ -11,7 +11,7 @@ import type { ExplainCopilotEventSource } from './explainCopilotEventSource';
 export type ExplainCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys
+ * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys
  */
 source?: ExplainCopilotEventSource;
 mode?: ExplainCopilotEventMode;

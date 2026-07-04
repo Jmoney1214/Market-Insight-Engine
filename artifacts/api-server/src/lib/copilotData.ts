@@ -321,15 +321,55 @@ async function fetchYahooEarningsTime(symbol: string): Promise<number | null> {
   }
 }
 
+type FmpEarningsRow = { date?: string };
+
+/**
+ * Key-gated earnings source: FMP's earnings calendar (used when FMP_API_KEY is
+ * set). Tries the current "stable" API first, then the legacy v3 path for
+ * older plans. Best-effort: returns null on any failure so the keyless chain
+ * below still runs.
+ */
+async function fetchFmpEarningsTime(symbol: string): Promise<number | null> {
+  const apiKey = process.env.FMP_API_KEY;
+  if (!apiKey) return null;
+  const encoded = encodeURIComponent(symbol);
+  const urls = [
+    `https://financialmodelingprep.com/stable/earnings?symbol=${encoded}&limit=12&apikey=${apiKey}`,
+    `https://financialmodelingprep.com/api/v3/historical/earning_calendar/${encoded}?limit=12&apikey=${apiKey}`,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+      if (!res.ok) continue;
+      const json = (await res.json()) as FmpEarningsRow[] | unknown;
+      if (!Array.isArray(json)) continue;
+      const candidates: number[] = [];
+      for (const row of json as FmpEarningsRow[]) {
+        if (row && typeof row.date === "string") {
+          const ms = Date.parse(`${row.date.slice(0, 10)}T00:00:00Z`);
+          if (Number.isFinite(ms)) candidates.push(Math.floor(ms / 1000));
+        }
+      }
+      const latest = latestPastTimestamp(candidates);
+      if (latest !== null) return latest;
+    } catch {
+      // Best-effort; fall through to the next URL / keyless chain.
+    }
+  }
+  return null;
+}
+
 /**
  * Most recent PAST earnings timestamp (epoch seconds) for the symbol, used by
- * the post-earnings-drift detector. Keyless throughout: Nasdaq's
- * earnings-surprise calendar (actual past report dates) is the primary source,
- * with Yahoo's crumb-gated calendarEvents as fallback. Best-effort: when
- * neither source yields a past report date, resolves to null so the detector
- * stays dormant rather than guessing.
+ * the post-earnings-drift detector. FMP's earnings calendar is preferred when
+ * a key is configured; otherwise (or on failure) the keyless chain runs:
+ * Nasdaq's earnings-surprise calendar (actual past report dates), then Yahoo's
+ * crumb-gated calendarEvents. Best-effort: when no source yields a past report
+ * date, resolves to null so the detector stays dormant rather than guessing.
  */
-async function fetchEarningsTime(symbol: string): Promise<number | null> {
+export async function fetchEarningsTime(symbol: string): Promise<number | null> {
+  const fromFmp = await fetchFmpEarningsTime(symbol);
+  if (fromFmp !== null) return fromFmp;
   const fromNasdaq = await fetchNasdaqEarningsTime(symbol);
   if (fromNasdaq !== null) return fromNasdaq;
   return fetchYahooEarningsTime(symbol);

@@ -289,6 +289,7 @@ export default function Terminal() {
               >
                 <option value="fixture">FIXTURE</option>
                 <option value="yahoo_delayed">DELAYED</option>
+                <option value="alpaca_live">LIVE</option>
               </select>
             )}
           </div>

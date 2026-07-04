@@ -12,4 +12,5 @@ export type GetCopilotEventSource = typeof GetCopilotEventSource[keyof typeof Ge
 export const GetCopilotEventSource = {
   fixture: 'fixture',
   yahoo_delayed: 'yahoo_delayed',
+  alpaca_live: 'alpaca_live',
 } as const;

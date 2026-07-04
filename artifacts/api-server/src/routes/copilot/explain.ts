@@ -13,6 +13,10 @@ import {
   fetchIntradayInput,
   loadFixtureInput,
 } from "../../lib/copilotData.js";
+import {
+  ALPACA_SOURCE,
+  fetchAlpacaIntradayInput,
+} from "../../lib/alpacaData.js";
 
 const router: IRouter = Router();
 
@@ -46,9 +50,13 @@ router.get("/explain", async (req, res) => {
     return;
   }
 
-  // Delayed live source (labeled yahoo_delayed).
+  // Live sources: alpaca_live (real-time, key-gated) or yahoo_delayed.
+  const liveSource = source === "alpaca_live" ? ALPACA_SOURCE : INTRADAY_SOURCE;
   try {
-    const input = await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
+    const input =
+      source === "alpaca_live"
+        ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
+        : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
     const core = buildCopilotEvent(input);
     const result = await runCommittee(core, provider);
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
@@ -63,7 +71,7 @@ router.get("/explain", async (req, res) => {
       const core = buildCopilotEvent({
         symbol: symbolUpper,
         mode: mode ?? "LIVE",
-        dataSource: INTRADAY_SOURCE,
+        dataSource: liveSource,
         bars: [],
         quote: null,
       });
