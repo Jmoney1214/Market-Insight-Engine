@@ -8,17 +8,15 @@ export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     environment: "node",
-    // Force the keyless deterministic committee path (spec items 13/18/23):
-    // selectProviderId() fails closed to null (deterministic) when
-    // COPILOT_LLM_PROVIDER names a non-provider, so the committee runs without
-    // any live LLM call — fast and reproducible. The AI-integration env vars are
-    // left intact (the integration client throws at import if they are empty);
-    // the live-provider path is exercised separately by the e2e verification
-    // against the running server.
+    // COPILOT_LLM_PROVIDER=none forces the keyless deterministic committee path
+    // so copilot tests run without any live LLM call — fast and reproducible.
+    // DATABASE_URL is a placeholder: @workspace/db requires it at import time,
+    // but the pool connects lazily so unit tests never touch a real database.
     env: {
       NODE_ENV: "production",
       LOG_LEVEL: "silent",
       COPILOT_LLM_PROVIDER: "none",
+      DATABASE_URL: "postgres://vitest:vitest@localhost:5432/vitest",
     },
   },
   resolve: {

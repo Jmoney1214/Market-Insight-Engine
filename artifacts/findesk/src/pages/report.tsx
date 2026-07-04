@@ -48,16 +48,22 @@ import { ReportNav, type NavSection } from "@/components/report/report-nav";
 import { VerdictSummary } from "@/components/report/verdict-summary";
 import { ReportSection, MetricTile, KeyValue } from "@/components/report/primitives";
 import { ValuationRangeBar, RsiGauge } from "@/components/report/charts";
+import { TradingViewChart, TradingViewTechnicals, TradingViewFundamentals } from "@/components/tradingview";
+import { FundamentalsSection } from "@/components/report/fundamentals-section";
+import { TodaySetupSection } from "@/components/report/today-setup";
 
 const SECTIONS: NavSection[] = [
+  { id: "today", label: "Today" },
   { id: "verdict", label: "Verdict" },
   { id: "snapshot", label: "Snapshot" },
+  { id: "chart", label: "Chart" },
   { id: "catalysts", label: "Catalysts" },
   { id: "news", label: "News" },
   { id: "filings", label: "Filings" },
   { id: "financials", label: "Financials" },
   { id: "valuation", label: "Valuation" },
   { id: "technical", label: "Technical" },
+  { id: "fundamentals", label: "Fundamentals" },
   { id: "risks", label: "Risks" },
   { id: "scenarios", label: "Scenarios" },
   { id: "action", label: "Action" },
@@ -216,6 +222,11 @@ export default function ReportPage() {
       />
 
       <div className="flex-1 container mx-auto px-4 max-w-6xl space-y-10 py-8">
+        {/* Today's Setup FIRST — "what do I trade today" leads the report */}
+        {report.todaySetup && !report.todaySetup.isPlaceholder && (
+          <TodaySetupSection t={report.todaySetup} price={snapshot.price} />
+        )}
+
         <VerdictSummary report={report} />
 
         {/* Snapshot */}
@@ -249,6 +260,11 @@ export default function ReportPage() {
               </div>
             </CardContent>
           </Card>
+        </ReportSection>
+
+        {/* Live chart (TradingView) */}
+        <ReportSection id="chart" title="Price Chart" icon={BarChart3}>
+          <TradingViewChart symbol={report.ticker} />
         </ReportSection>
 
         {/* Catalysts */}
@@ -345,7 +361,7 @@ export default function ReportPage() {
                 </div>
                 <div className="lg:col-span-2 h-[260px] rounded-md border border-border bg-background/40 p-4">
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-3 text-center">
-                    Revenue history (millions)
+                    Revenue history ($ billions)
                   </p>
                   <ResponsiveContainer width="100%" height="85%">
                     <BarChart data={financials.revenueHistory}>
@@ -371,6 +387,9 @@ export default function ReportPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="mt-4">
+            <TradingViewFundamentals symbol={report.ticker} />
+          </div>
         </ReportSection>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
@@ -457,8 +476,16 @@ export default function ReportPage() {
                 </div>
               </CardContent>
             </Card>
+            <div className="mt-4">
+              <TradingViewTechnicals symbol={report.ticker} />
+            </div>
           </ReportSection>
         </div>
+
+        {/* Fundamentals (FMP) */}
+        {report.fundamentals && !report.fundamentals.isPlaceholder && (
+          <FundamentalsSection f={report.fundamentals} />
+        )}
 
         {/* Risks */}
         <ReportSection id="risks" title="Risk Checklist" icon={ShieldAlert}>

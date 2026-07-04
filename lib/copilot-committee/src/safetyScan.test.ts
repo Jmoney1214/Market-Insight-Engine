@@ -105,11 +105,18 @@ const FORBIDDEN_TOKENS: readonly string[] = [
   "transaction approval",
   "portfolio manager approval",
   "portfoliomanagerapproval",
-  // broker / exchange SDKs
+  // broker / exchange SDKs and trading endpoints.
+  // NOTE: Alpaca is used in this repo strictly as a read-only market-DATA
+  // vendor (data.alpaca.markets / stream.data.alpaca.markets). Its TRADING
+  // surfaces remain forbidden: "api.alpaca.markets" is the order-routing host
+  // (and a substring of the paper-trading host "paper-api.alpaca.markets"),
+  // and the SDK tokens catch any broker client integration.
   "brokerclient",
   "brokerapi",
   "brokerage",
-  "alpaca",
+  "api.alpaca.markets",
+  "alpaca-trade-api",
+  "alpacahq",
   "tradier",
   "robinhood",
   "webull",

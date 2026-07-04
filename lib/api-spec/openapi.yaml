@@ -14,10 +14,60 @@ tags:
     description: Ticker analysis and reports
   - name: watchlist
     description: Watchlist management
+  - name: scan
+    description: Market scanning
   - name: copilot
     description: Trading Desk Copilot research helper (no order execution)
 
 paths:
+  /scan/premarket:
+    get:
+      operationId: getPremarketScan
+      tags: [scan]
+      summary: Morning market scan
+      description: >
+        Scans a liquid under-$150 universe for the day's best intraday candidates
+        and the largest gappers up/down, ranked by gap, volatility, liquidity and
+        catalysts (earnings, analyst grade changes, news). Evidence-ranked, not a
+        prediction guarantee.
+      parameters:
+        - name: refresh
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: Bypass the short-lived scan cache
+      responses:
+        "200":
+          description: Scan result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScanResult"
+        "503":
+          description: Market data providers not configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /scan/scorecard:
+    get:
+      operationId: getScanScorecard
+      tags: [scan]
+      summary: Scan accountability scorecard
+      description: >
+        Measured hit rates for past scan picks: each morning's picks are recorded,
+        then graded after the close against the session's actual bar
+        (intraday = ranged >=2%, jump = closed up, fall = closed down).
+      responses:
+        "200":
+          description: Scorecard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScorecardSummary"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -616,6 +666,214 @@ components:
           $ref: "#/components/schemas/Thesis"
         actionPlan:
           $ref: "#/components/schemas/ActionPlan"
+        fundamentals:
+          $ref: "#/components/schemas/Fundamentals"
+        todaySetup:
+          $ref: "#/components/schemas/TodaySetup"
+
+    TodaySetup:
+      type: object
+      description: "Intraday context for the current/most-recent session (Alpaca SIP + catalysts). The 'trade today' half of the report."
+      required: [isPlaceholder, gapPct, prevClose]
+      properties:
+        isPlaceholder:
+          type: boolean
+        gapPct:
+          type: number
+          description: "% vs last completed session close (pre/post-market aware)"
+        prevClose:
+          type: number
+        sessionOpen:
+          type: ["number", "null"]
+        sessionHigh:
+          type: ["number", "null"]
+        sessionLow:
+          type: ["number", "null"]
+        sessionVwap:
+          type: ["number", "null"]
+        rvol:
+          type: ["number", "null"]
+          description: Session volume vs 20-day average (only when a live session is underway)
+        atrPct:
+          type: ["number", "null"]
+        expectedRangeLow:
+          type: ["number", "null"]
+          description: price - 1 ATR
+        expectedRangeHigh:
+          type: ["number", "null"]
+          description: price + 1 ATR
+        earningsToday:
+          type: boolean
+        gradeChange:
+          type: ["string", "null"]
+          description: Recent analyst action, e.g. "Upgraded to Overweight by Morgan Stanley (2026-07-02)"
+        avgDailyRangePct:
+          type: ["number", "null"]
+          description: Average (high-low)/close % over the last 10 sessions
+        multiTradeDays:
+          type: ["number", "null"]
+          description: Sessions out of the last 10 that ranged >=2%
+
+    Fundamentals:
+      type: object
+      description: "Rich fundamentals data (FMP). Present when a fundamentals key is configured."
+      required: [isPlaceholder]
+      properties:
+        isPlaceholder:
+          type: boolean
+        fiscalYear:
+          type: ["string", "null"]
+        totalAssets:
+          type: ["number", "null"]
+        totalDebt:
+          type: ["number", "null"]
+        netDebt:
+          type: ["number", "null"]
+        cashAndShortTermInvestments:
+          type: ["number", "null"]
+        totalEquity:
+          type: ["number", "null"]
+        operatingCashFlow:
+          type: ["number", "null"]
+        capitalExpenditure:
+          type: ["number", "null"]
+        freeCashFlow:
+          type: ["number", "null"]
+        dividendsPaid:
+          type: ["number", "null"]
+        stockBuybacks:
+          type: ["number", "null"]
+        ratingConsensus:
+          type: ["string", "null"]
+        ratingStrongBuy:
+          type: ["number", "null"]
+        ratingBuy:
+          type: ["number", "null"]
+        ratingHold:
+          type: ["number", "null"]
+        ratingSell:
+          type: ["number", "null"]
+        ratingStrongSell:
+          type: ["number", "null"]
+        estimateFiscalYear:
+          type: ["string", "null"]
+        estimatedRevenueAvg:
+          type: ["number", "null"]
+        estimatedEpsAvg:
+          type: ["number", "null"]
+
+    ScanResult:
+      type: object
+      required: [generatedAt, universeSize, priceCeiling, topIntraday, likelyJump, likelyFall, note]
+      properties:
+        generatedAt:
+          type: string
+        universeSize:
+          type: integer
+        priceCeiling:
+          type: number
+        note:
+          type: string
+          description: Honest framing of what the scan is (evidence ranking, not prophecy)
+        topIntraday:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+        likelyJump:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+        likelyFall:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScanCandidate"
+
+    ScorecardSummary:
+      type: object
+      required: [asOf, lists, recent]
+      properties:
+        asOf:
+          type: string
+        lists:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScorecardListStats"
+        recent:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScorecardEntry"
+
+    ScorecardListStats:
+      type: object
+      required: [list, graded, hits, hitRate]
+      properties:
+        list:
+          type: string
+          description: "intraday | jump | fall"
+        graded:
+          type: integer
+        hits:
+          type: integer
+        hitRate:
+          type: number
+          description: percent of graded picks that hit
+
+    ScorecardEntry:
+      type: object
+      required: [scanDate, symbol, list, score, gapPct, priceAtScan]
+      properties:
+        scanDate:
+          type: string
+        symbol:
+          type: string
+        list:
+          type: string
+        score:
+          type: number
+        gapPct:
+          type: number
+        priceAtScan:
+          type: number
+        changePct:
+          type: ["number", "null"]
+        rangePct:
+          type: ["number", "null"]
+        hit:
+          type: ["boolean", "null"]
+
+    ScanCandidate:
+      type: object
+      required: [symbol, price, gapPct, score, reasons]
+      properties:
+        symbol:
+          type: string
+        companyName:
+          type: ["string", "null"]
+        price:
+          type: number
+        gapPct:
+          type: number
+          description: "% vs last completed session close (pre/post-market aware)"
+        avgVolume:
+          type: ["number", "null"]
+        atrPct:
+          type: ["number", "null"]
+          description: 14-day ATR as % of price (intraday range potential)
+        rsi:
+          type: ["number", "null"]
+        avgDailyRangePct:
+          type: ["number", "null"]
+          description: Average (high-low)/close % over the last 10 sessions
+        multiTradeDays:
+          type: ["number", "null"]
+          description: Sessions out of the last 10 that ranged >=2% — the "multiple trades today" signal
+        score:
+          type: number
+          description: 0-100 composite (repeatable range, liquidity, gap, catalysts)
+        reasons:
+          type: array
+          items:
+            type: string
 
     CompanySnapshot:
       type: object

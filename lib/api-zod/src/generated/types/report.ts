@@ -10,10 +10,12 @@ import type { CatalystSummary } from './catalystSummary';
 import type { CompanySnapshot } from './companySnapshot';
 import type { FilingsSummary } from './filingsSummary';
 import type { FinancialOverview } from './financialOverview';
+import type { Fundamentals } from './fundamentals';
 import type { NewsSummary } from './newsSummary';
 import type { RiskChecklist } from './riskChecklist';
 import type { TechnicalTrend } from './technicalTrend';
 import type { Thesis } from './thesis';
+import type { TodaySetup } from './todaySetup';
 import type { ValuationFramework } from './valuationFramework';
 
 export interface Report {
@@ -36,4 +38,6 @@ export interface Report {
   risks: RiskChecklist;
   thesis: Thesis;
   actionPlan: ActionPlan;
+  fundamentals?: Fundamentals;
+  todaySetup?: TodaySetup;
 }

@@ -1,0 +1,84 @@
+//@version=5
+// =============================================================================
+// Intraday RSI Divergence (mean-reversion) — pivot-based, ATR risk
+// -----------------------------------------------------------------------------
+// Regular bullish divergence  : price makes a lower low,  RSI a higher low  -> long
+// Regular bearish divergence   : price makes a higher high, RSI a lower high -> short
+// This is a COUNTER-trend reversal idea, the opposite temperament to the ORB /
+// trend-pullback scripts — included so you can compare a mean-reversion engine
+// against momentum ones in the same tester.
+//
+// NOTE: divergence confirms `pivotRight` bars late (a pivot needs bars to its
+// right to exist), so entries are inherently delayed — that lag is real, not a bug.
+//
+// NOT financial advice. Validate in TradingView's Strategy Tester + walk-forward.
+// =============================================================================
+strategy("Intraday RSI Divergence (ATR)", overlay=true,
+     initial_capital=10000, currency=currency.USD,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2, pyramiding=0, calc_on_every_tick=false, process_orders_on_close=true)
+
+// -------- Divergence detection --------
+rsiLen  = input.int(14, "RSI length", minval=2)
+pivL    = input.int(5, "Pivot lookback left",  minval=1)
+pivR    = input.int(5, "Pivot lookback right", minval=1)
+rngLow  = input.int(5,  "Min bars between pivots", minval=1)
+rngHigh = input.int(60, "Max bars between pivots", minval=2)
+allowShorts = input.bool(true, "Allow shorts (bearish divergence)")
+
+// -------- Session / risk --------
+tradeSession = input.session("0945-1550", "Entry window")
+flatSession  = input.session("1551-1600", "Force-flat window")
+maxTrades    = input.int(3, "Max entries per day (0 = unlimited)", minval=0)
+atrLen       = input.int(14, "ATR length", minval=2)
+atrStopMult  = input.float(1.5, "Stop = ATR ×", minval=0.2, step=0.1)
+rr           = input.float(1.5, "Reward:Risk", minval=0.3, step=0.1)
+riskPct      = input.float(0.5, "Risk per trade (% equity)", minval=0.05, step=0.05)
+
+rsi = ta.rsi(close, rsiLen)
+atr = ta.atr(atrLen)
+
+_inRange(cond) =>
+    bars = ta.barssince(cond)
+    rngLow <= bars and bars <= rngHigh
+
+plFound = not na(ta.pivotlow(rsi, pivL, pivR))
+phFound = not na(ta.pivothigh(rsi, pivL, pivR))
+
+// Bullish: RSI higher-low while price lower-low (values read at the pivot, pivR bars back)
+rsiHL   = rsi[pivR] > ta.valuewhen(plFound, rsi[pivR], 1) and _inRange(plFound[1])
+priceLL = low[pivR] < ta.valuewhen(plFound, low[pivR], 1)
+bullDiv = plFound and rsiHL and priceLL
+
+// Bearish: RSI lower-high while price higher-high
+rsiLH   = rsi[pivR] < ta.valuewhen(phFound, rsi[pivR], 1) and _inRange(phFound[1])
+priceHH = high[pivR] > ta.valuewhen(phFound, high[pivR], 1)
+bearDiv = phFound and rsiLH and priceHH
+
+inTrade = not na(time(timeframe.period, tradeSession))
+inFlat  = not na(time(timeframe.period, flatSession))
+newDay  = ta.change(time("D")) != 0
+var int tradesToday = 0
+if newDay
+    tradesToday := 0
+
+tradesLeft = maxTrades == 0 or tradesToday < maxTrades
+stopDist   = atr * atrStopMult
+qty        = stopDist > 0 ? (strategy.equity * riskPct / 100.0) / stopDist : na
+canEnter   = inTrade and tradesLeft and stopDist > 0 and not na(qty) and qty > 0
+
+if bullDiv and canEnter and strategy.position_size <= 0
+    strategy.entry("Div Long", strategy.long, qty=qty)
+    strategy.exit("Div Long X", "Div Long", stop=close - stopDist, limit=close + stopDist * rr)
+    tradesToday += 1
+
+if allowShorts and bearDiv and canEnter and strategy.position_size >= 0
+    strategy.entry("Div Short", strategy.short, qty=qty)
+    strategy.exit("Div Short X", "Div Short", stop=close + stopDist, limit=close - stopDist * rr)
+    tradesToday += 1
+
+if inFlat and strategy.position_size != 0
+    strategy.close_all(comment="EOD flat")
+
+plotshape(bullDiv, "Bull div", shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.small, offset=-pivR)
+plotshape(bearDiv, "Bear div", shape.triangledown, location.abovebar, color.new(color.red, 0),   size=size.small, offset=-pivR)

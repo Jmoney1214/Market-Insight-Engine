@@ -196,6 +196,104 @@ export interface ActionPlan {
   disclaimer: string;
 }
 
+/**
+ * Rich fundamentals data (FMP). Present when a fundamentals key is configured.
+ */
+export interface Fundamentals {
+  isPlaceholder: boolean;
+  /** @nullable */
+  fiscalYear?: string | null;
+  /** @nullable */
+  totalAssets?: number | null;
+  /** @nullable */
+  totalDebt?: number | null;
+  /** @nullable */
+  netDebt?: number | null;
+  /** @nullable */
+  cashAndShortTermInvestments?: number | null;
+  /** @nullable */
+  totalEquity?: number | null;
+  /** @nullable */
+  operatingCashFlow?: number | null;
+  /** @nullable */
+  capitalExpenditure?: number | null;
+  /** @nullable */
+  freeCashFlow?: number | null;
+  /** @nullable */
+  dividendsPaid?: number | null;
+  /** @nullable */
+  stockBuybacks?: number | null;
+  /** @nullable */
+  ratingConsensus?: string | null;
+  /** @nullable */
+  ratingStrongBuy?: number | null;
+  /** @nullable */
+  ratingBuy?: number | null;
+  /** @nullable */
+  ratingHold?: number | null;
+  /** @nullable */
+  ratingSell?: number | null;
+  /** @nullable */
+  ratingStrongSell?: number | null;
+  /** @nullable */
+  estimateFiscalYear?: string | null;
+  /** @nullable */
+  estimatedRevenueAvg?: number | null;
+  /** @nullable */
+  estimatedEpsAvg?: number | null;
+}
+
+/**
+ * Intraday context for the current/most-recent session (Alpaca SIP + catalysts). The 'trade today' half of the report.
+ */
+export interface TodaySetup {
+  isPlaceholder: boolean;
+  /** % vs last completed session close (pre/post-market aware) */
+  gapPct: number;
+  prevClose: number;
+  /** @nullable */
+  sessionOpen?: number | null;
+  /** @nullable */
+  sessionHigh?: number | null;
+  /** @nullable */
+  sessionLow?: number | null;
+  /** @nullable */
+  sessionVwap?: number | null;
+  /**
+     * Session volume vs 20-day average (only when a live session is underway)
+     * @nullable
+     */
+  rvol?: number | null;
+  /** @nullable */
+  atrPct?: number | null;
+  /**
+     * price - 1 ATR
+     * @nullable
+     */
+  expectedRangeLow?: number | null;
+  /**
+     * price + 1 ATR
+     * @nullable
+     */
+  expectedRangeHigh?: number | null;
+  earningsToday?: boolean;
+  /**
+     * Recent analyst action, e.g. "Upgraded to Overweight by Morgan Stanley (2026-07-02)"
+     * @nullable
+     */
+  gradeChange?: string | null;
+  /**
+     * Average (high-low)/close % over the last 10 sessions
+     * @nullable
+     */
+  avgDailyRangePct?: number | null;
+  /**
+     * Sessions out of the last 10 that ranged >=2%
+     * @nullable
+     */
+  multiTradeDays?: number | null;
+}
+
 export interface Report {
   id: number;
   ticker: string;
@@ -216,6 +314,80 @@ export interface Report {
   risks: RiskChecklist;
   thesis: Thesis;
   actionPlan: ActionPlan;
+  fundamentals?: Fundamentals;
+  todaySetup?: TodaySetup;
+}
+
+export interface ScanCandidate {
+  symbol: string;
+  /** @nullable */
+  companyName?: string | null;
+  price: number;
+  /** % vs last completed session close (pre/post-market aware) */
+  gapPct: number;
+  /** @nullable */
+  avgVolume?: number | null;
+  /**
+     * 14-day ATR as % of price (intraday range potential)
+     * @nullable
+     */
+  atrPct?: number | null;
+  /** @nullable */
+  rsi?: number | null;
+  /**
+     * Average (high-low)/close % over the last 10 sessions
+     * @nullable
+     */
+  avgDailyRangePct?: number | null;
+  /**
+     * Sessions out of the last 10 that ranged >=2% — the "multiple trades today" signal
+     * @nullable
+     */
+  multiTradeDays?: number | null;
+  /** 0-100 composite (repeatable range, liquidity, gap, catalysts) */
+  score: number;
+  reasons: string[];
+}
+
+export interface ScanResult {
+  generatedAt: string;
+  universeSize: number;
+  priceCeiling: number;
+  /** Honest framing of what the scan is (evidence ranking, not prophecy) */
+  note: string;
+  topIntraday: ScanCandidate[];
+  likelyJump: ScanCandidate[];
+  likelyFall: ScanCandidate[];
+}
+
+export interface ScorecardListStats {
+  /** intraday | jump | fall */
+  list: string;
+  graded: number;
+  hits: number;
+  /** percent of graded picks that hit */
+  hitRate: number;
+}
+
+export interface ScorecardEntry {
+  scanDate: string;
+  symbol: string;
+  list: string;
+  score: number;
+  gapPct: number;
+  priceAtScan: number;
+  /** @nullable */
+  changePct?: number | null;
+  /** @nullable */
+  rangePct?: number | null;
+  /** @nullable */
+  hit?: boolean | null;
+}
+
+export interface ScorecardSummary {
+  asOf: string;
+  lists: ScorecardListStats[];
+  recent: ScorecardEntry[];
 }
 
 export interface WatchlistEntry {
@@ -899,6 +1071,13 @@ export interface HistoryEvent {
   eventSnapshot: CopilotEvent;
   createdAt: string;
 }
+
+export type GetPremarketScanParams = {
+/**
+ * Bypass the short-lived scan cache
+ */
+refresh?: boolean;
+};
 
 export type GetCopilotEventParams = {
 symbol: string;

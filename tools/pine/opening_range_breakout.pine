@@ -1,0 +1,80 @@
+//@version=5
+// =============================================================================
+// Intraday Opening-Range Breakout (ORB) — HTF trend filter + ATR risk
+// -----------------------------------------------------------------------------
+// Idea: the first N minutes of the session set the day's range. A break of that
+// range, in the direction of the higher-timeframe trend, is a momentum entry.
+// Consistent with the FinDesk findings: trade WITH the regime, size by risk,
+// hard stops/targets, flat by the close.
+//
+// NOT financial advice. Validate in TradingView's Strategy Tester + walk-forward.
+// =============================================================================
+strategy("Intraday ORB (HTF + ATR)", overlay=true,
+     initial_capital=10000, currency=currency.USD,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=2, pyramiding=0, calc_on_every_tick=false, process_orders_on_close=true)
+
+// -------- Session --------
+orSession    = input.session("0930-0945", "Opening-range window")
+tradeSession = input.session("0945-1550", "Breakout entry window")
+flatSession  = input.session("1551-1600", "Force-flat window")
+maxTrades    = input.int(1, "Max entries per day (0 = unlimited)", minval=0)
+
+// -------- Regime / risk --------
+allowShorts = input.bool(true,  "Allow shorts")
+useHTF      = input.bool(true,  "Only break with HTF trend")
+htfTF       = input.timeframe("60", "HTF for regime")
+htfLen      = input.int(50, "HTF EMA length", minval=5)
+atrLen      = input.int(14, "ATR length", minval=2)
+atrStopMult = input.float(1.0, "Stop = ATR ×", minval=0.2, step=0.1)
+rr          = input.float(2.0, "Reward:Risk", minval=0.3, step=0.1)
+riskPct     = input.float(0.5, "Risk per trade (% equity)", minval=0.05, step=0.05)
+
+atr    = ta.atr(atrLen)
+htfEma = request.security(syminfo.tickerid, htfTF, ta.ema(close, htfLen), lookahead=barmerge.lookahead_off)
+
+inOR    = not na(time(timeframe.period, orSession))
+inTrade = not na(time(timeframe.period, tradeSession))
+inFlat  = not na(time(timeframe.period, flatSession))
+newDay  = ta.change(time("D")) != 0
+
+var float orHigh = na
+var float orLow  = na
+var int tradesToday = 0
+if newDay
+    orHigh := na
+    orLow  := na
+    tradesToday := 0
+if inOR
+    orHigh := na(orHigh) ? high : math.max(orHigh, high)
+    orLow  := na(orLow)  ? low  : math.min(orLow, low)
+
+orReady = not inOR and not na(orHigh) and not na(orLow)
+trendUp = not useHTF or close > htfEma
+trendDn = not useHTF or close < htfEma
+
+longBreak  = orReady and inTrade and ta.crossover(close, orHigh)  and trendUp
+shortBreak = allowShorts and orReady and inTrade and ta.crossunder(close, orLow) and trendDn
+
+tradesLeft = maxTrades == 0 or tradesToday < maxTrades
+stopDist   = atr * atrStopMult
+qty        = stopDist > 0 ? (strategy.equity * riskPct / 100.0) / stopDist : na
+canEnter   = tradesLeft and stopDist > 0 and not na(qty) and qty > 0
+
+if longBreak and canEnter and strategy.position_size <= 0
+    strategy.entry("ORB Long", strategy.long, qty=qty)
+    strategy.exit("ORB Long X", "ORB Long", stop=close - stopDist, limit=close + stopDist * rr)
+    tradesToday += 1
+
+if shortBreak and canEnter and strategy.position_size >= 0
+    strategy.entry("ORB Short", strategy.short, qty=qty)
+    strategy.exit("ORB Short X", "ORB Short", stop=close + stopDist, limit=close - stopDist * rr)
+    tradesToday += 1
+
+if inFlat and strategy.position_size != 0
+    strategy.close_all(comment="EOD flat")
+
+plot(orReady ? orHigh : na, "OR High", color=color.new(color.green, 0), style=plot.style_linebr, linewidth=2)
+plot(orReady ? orLow  : na, "OR Low",  color=color.new(color.red, 0),   style=plot.style_linebr, linewidth=2)
+plot(htfEma, "HTF EMA", color=color.new(color.fuchsia, 0), linewidth=2)
+bgcolor(inOR ? color.new(color.blue, 88) : na, title="Opening range")

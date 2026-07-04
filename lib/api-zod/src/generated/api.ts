@@ -9,6 +9,89 @@ import * as zod from 'zod';
 
 
 /**
+ * Scans a liquid under-$150 universe for the day's best intraday candidates and the largest gappers up/down, ranked by gap, volatility, liquidity and catalysts (earnings, analyst grade changes, news). Evidence-ranked, not a prediction guarantee.
+
+ * @summary Morning market scan
+ */
+export const GetPremarketScanQueryParams = zod.object({
+  "refresh": zod.coerce.boolean().optional().describe('Bypass the short-lived scan cache')
+})
+
+export const GetPremarketScanResponse = zod.object({
+  "generatedAt": zod.string(),
+  "universeSize": zod.number(),
+  "priceCeiling": zod.number(),
+  "note": zod.string().describe('Honest framing of what the scan is (evidence ranking, not prophecy)'),
+  "topIntraday": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "avgVolume": zod.number().nullish(),
+  "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
+  "rsi": zod.number().nullish(),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
+  "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
+  "reasons": zod.array(zod.string())
+})),
+  "likelyJump": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "avgVolume": zod.number().nullish(),
+  "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
+  "rsi": zod.number().nullish(),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
+  "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
+  "reasons": zod.array(zod.string())
+})),
+  "likelyFall": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "avgVolume": zod.number().nullish(),
+  "atrPct": zod.number().nullish().describe('14-day ATR as % of price (intraday range potential)'),
+  "rsi": zod.number().nullish(),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
+  "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
+  "reasons": zod.array(zod.string())
+}))
+})
+
+
+/**
+ * Measured hit rates for past scan picks: each morning's picks are recorded, then graded after the close against the session's actual bar (intraday = ranged >=2%, jump = closed up, fall = closed down).
+
+ * @summary Scan accountability scorecard
+ */
+export const GetScanScorecardResponse = zod.object({
+  "asOf": zod.string(),
+  "lists": zod.array(zod.object({
+  "list": zod.string().describe('intraday | jump | fall'),
+  "graded": zod.number(),
+  "hits": zod.number(),
+  "hitRate": zod.number().describe('percent of graded picks that hit')
+})),
+  "recent": zod.array(zod.object({
+  "scanDate": zod.string(),
+  "symbol": zod.string(),
+  "list": zod.string(),
+  "score": zod.number(),
+  "gapPct": zod.number(),
+  "priceAtScan": zod.number(),
+  "changePct": zod.number().nullish(),
+  "rangePct": zod.number().nullish(),
+  "hit": zod.boolean().nullish()
+}))
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */
@@ -170,7 +253,47 @@ export const GetReportResponse = zod.object({
   "timeHorizon": zod.string(),
   "keyMonitors": zod.array(zod.string()),
   "disclaimer": zod.string()
-})
+}),
+  "fundamentals": zod.object({
+  "isPlaceholder": zod.boolean(),
+  "fiscalYear": zod.string().nullish(),
+  "totalAssets": zod.number().nullish(),
+  "totalDebt": zod.number().nullish(),
+  "netDebt": zod.number().nullish(),
+  "cashAndShortTermInvestments": zod.number().nullish(),
+  "totalEquity": zod.number().nullish(),
+  "operatingCashFlow": zod.number().nullish(),
+  "capitalExpenditure": zod.number().nullish(),
+  "freeCashFlow": zod.number().nullish(),
+  "dividendsPaid": zod.number().nullish(),
+  "stockBuybacks": zod.number().nullish(),
+  "ratingConsensus": zod.string().nullish(),
+  "ratingStrongBuy": zod.number().nullish(),
+  "ratingBuy": zod.number().nullish(),
+  "ratingHold": zod.number().nullish(),
+  "ratingSell": zod.number().nullish(),
+  "ratingStrongSell": zod.number().nullish(),
+  "estimateFiscalYear": zod.string().nullish(),
+  "estimatedRevenueAvg": zod.number().nullish(),
+  "estimatedEpsAvg": zod.number().nullish()
+}).optional().describe('Rich fundamentals data (FMP). Present when a fundamentals key is configured.'),
+  "todaySetup": zod.object({
+  "isPlaceholder": zod.boolean(),
+  "gapPct": zod.number().describe('% vs last completed session close (pre\/post-market aware)'),
+  "prevClose": zod.number(),
+  "sessionOpen": zod.number().nullish(),
+  "sessionHigh": zod.number().nullish(),
+  "sessionLow": zod.number().nullish(),
+  "sessionVwap": zod.number().nullish(),
+  "rvol": zod.number().nullish().describe('Session volume vs 20-day average (only when a live session is underway)'),
+  "atrPct": zod.number().nullish(),
+  "expectedRangeLow": zod.number().nullish().describe('price - 1 ATR'),
+  "expectedRangeHigh": zod.number().nullish().describe('price + 1 ATR'),
+  "earningsToday": zod.boolean().optional(),
+  "gradeChange": zod.string().nullish().describe('Recent analyst action, e.g. \"Upgraded to Overweight by Morgan Stanley (2026-07-02)\"'),
+  "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
+  "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2%')
+}).optional().describe('Intraday context for the current\/most-recent session (Alpaca SIP + catalysts). The \'trade today\' half of the report.')
 })
 
 
