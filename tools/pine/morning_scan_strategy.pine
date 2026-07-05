@@ -1,0 +1,141 @@
+//@version=6
+// =============================================================================
+// FinDesk Morning Scan Strategy — opening-range breakout on scan-qualified days
+// -----------------------------------------------------------------------------
+// The tradeable companion to morning_scan_overlay.pine. It only trades on days
+// the FinDesk Morning Scan would have surfaced this symbol, then enters on an
+// opening-range breakout with defined risk:
+//
+//   DAY FILTER (the scan): multi-trade profile (>= mtdMin of the last
+//   mtdLookback sessions ranged >= rangeThresh %), pre-market volume >= pmVolMin
+//   (the conviction signal), price under priceCeil.
+//
+//   DIRECTION (the gap): long only if the day is NOT a scan-grade fall day
+//   (gap <= -gapThresh); short only if NOT a scan-grade jump day. Optionally
+//   require full gap alignment to trade only the jump/fall lists.
+//
+//   ENTRY: bar close breaks the first orMinutes' high (long) or low (short),
+//   inside the entry window, position flat, under the daily trade cap.
+//
+//   EXIT: ATR stop + reward:risk limit target on every trade, and a hard
+//   flatten in the close window — no overnight risk.
+//
+//   SIZING: risk a fixed % of equity per trade divided by the stop distance,
+//   capped at 100% of equity notional.
+//
+// USE ON AN INTRADAY CHART (1-15 min) with Extended Trading Hours ON so the
+// gap and pre-market volume are computable. If you must run with ETH off,
+// set "Min pre-market volume" to 0 (the filter would otherwise block all
+// entries because pre-market bars are invisible).
+//
+// Educational template to validate in the Strategy Tester — walk-forward test
+// before trusting. NOT financial advice, NOT proven profitable.
+// =============================================================================
+strategy("FinDesk Morning Scan Strategy", overlay = true,
+     initial_capital = 25000,
+     commission_type = strategy.commission.percent, commission_value = 0.02,
+     slippage = 2,
+     calc_on_every_tick = false,
+     margin_long = 100, margin_short = 100)
+
+// ---- Scan inputs (same meaning as the overlay) --------------------------------
+gapThresh    = input.float(1.5, "Gapper threshold %", minval = 0.1, group = "Scan filter")
+rangeThresh  = input.float(2.0, "Multi-trade day range %", minval = 0.5, group = "Scan filter")
+mtdLookback  = input.int(10, "Multi-trade lookback (days)", minval = 5, maxval = 20, group = "Scan filter")
+mtdMin       = input.int(7, "Min multi-trade days", minval = 1, maxval = 20, group = "Scan filter")
+pmVolMin     = input.float(100000, "Min pre-market volume (shares, 0 = off)", minval = 0, group = "Scan filter")
+priceCeil    = input.float(150, "Price ceiling $", minval = 1, group = "Scan filter")
+gapAlignOnly = input.bool(false, "Trade only gap-aligned days (jump/fall lists)", group = "Scan filter")
+
+// ---- Trade inputs --------------------------------------------------------------
+orMinutes   = input.int(15, "Opening range (minutes)", minval = 5, maxval = 60, group = "Execution")
+entrySess   = input.session("0945-1130", "Entry window (ET)", group = "Execution")
+flatSess    = input.session("1550-1600", "Flatten window (ET)", group = "Execution")
+atrStopMult = input.float(1.5, "ATR stop multiple", minval = 0.5, group = "Execution")
+rrTarget    = input.float(2.0, "Reward : risk target", minval = 0.5, group = "Execution")
+riskPct     = input.float(1.0, "Risk % of equity per trade", minval = 0.1, maxval = 5, group = "Execution")
+maxTrades   = input.int(2, "Max trades per day", minval = 1, maxval = 10, group = "Execution")
+
+// ---- Daily stats from COMPLETED sessions only (non-repainting [1] idiom) ------
+rangePctD = (high - low) / close * 100
+[prevClose, mtd] =
+     request.security(syminfo.tickerid, "1D",
+         [close[1],
+          math.sum(rangePctD >= rangeThresh ? 1 : 0, mtdLookback)[1]],
+         lookahead = barmerge.lookahead_on)
+
+// ---- Gap, pre-market volume, opening range -------------------------------------
+var float pmVol = 0.0
+var float orH = na
+var float orL = na
+var int rthStart = na
+var int tradesToday = 0
+if timeframe.change("1D")
+    pmVol := 0.0
+    orH := na
+    orL := na
+    rthStart := na
+    tradesToday := 0
+if session.ispremarket
+    pmVol += nz(volume)
+
+// The day's gap is LOCKED at the opening bell (open vs prior close) so the
+// direction gate can't flip as price moves intraday — same as the scan's gap.
+var float dayGap = 0.0
+if session.isfirstbar_regular
+    rthStart := time
+    orH := high
+    orL := low
+    dayGap := nz(prevClose) > 0 ? (open - prevClose) / prevClose * 100 : 0.0
+else if not na(rthStart) and time < rthStart + orMinutes * 60 * 1000
+    orH := math.max(orH, high)
+    orL := math.min(orL, low)
+orDone = not na(rthStart) and time >= rthStart + orMinutes * 60 * 1000
+
+// ---- Scan qualification ---------------------------------------------------------
+qualified = mtd >= mtdMin and close <= priceCeil and (pmVolMin == 0 or pmVol >= pmVolMin)
+isJumpDay = dayGap >= gapThresh
+isFallDay = dayGap <= -gapThresh
+longOk  = qualified and (gapAlignOnly ? isJumpDay : not isFallDay)
+shortOk = qualified and (gapAlignOnly ? isFallDay : not isJumpDay)
+
+// ---- Entries ---------------------------------------------------------------------
+// closedtrades + opentrades counts every entry, including trades opened and
+// stopped out within the same bar (opentrades alone would miss those).
+totalEntries = strategy.closedtrades + strategy.opentrades
+if totalEntries > totalEntries[1]
+    tradesToday += 1
+
+inEntryWindow = not na(time(timeframe.period, entrySess))
+canEnter = orDone and inEntryWindow and strategy.position_size == 0 and tradesToday < maxTrades
+
+atrC     = ta.atr(14)
+stopDist = atrC * atrStopMult
+riskCash = strategy.equity * riskPct / 100
+rawQty   = stopDist > 0 ? riskCash / stopDist : 0.0
+capQty   = close > 0 ? strategy.equity / close : 0.0
+qty      = math.floor(math.min(rawQty, capQty))
+
+// Tick-based loss/profit are measured from the ACTUAL fill price, so the
+// reward:risk ratio survives slippage (absolute stop/limit prices anchored
+// to the signal bar's close would not).
+stopTicks = math.round(stopDist / syminfo.mintick)
+if canEnter and qty >= 1 and stopTicks >= 1
+    if longOk and close > orH
+        strategy.entry("Long", strategy.long, qty = qty)
+        strategy.exit("Long exit", "Long", loss = stopTicks, profit = math.round(stopTicks * rrTarget))
+    else if shortOk and close < orL
+        strategy.entry("Short", strategy.short, qty = qty)
+        strategy.exit("Short exit", "Short", loss = stopTicks, profit = math.round(stopTicks * rrTarget))
+
+// ---- Hard EOD flatten (no overnight risk) -----------------------------------------
+if not na(time(timeframe.period, flatSess))
+    strategy.cancel_all()
+    strategy.close_all(comment = "EOD flat")
+
+// ---- Chart context -----------------------------------------------------------------
+plot(orDone ? orH : na, "Opening range high", color = color.new(color.green, 40), style = plot.style_linebr)
+plot(orDone ? orL : na, "Opening range low", color = color.new(color.red, 40), style = plot.style_linebr)
+plot(prevClose, "Prior close", color = color.new(color.yellow, 60), style = plot.style_line)
+bgcolor(session.ispremarket ? color.new(color.blue, 92) : qualified and session.ismarket ? color.new(color.green, 96) : na,
+     title = "Pre-market / qualified-day shading")
