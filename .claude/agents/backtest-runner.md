@@ -48,7 +48,14 @@ stated baseline on data it was not tuned on.
 5. **State the baseline to beat** before running (e.g. "rider on HIMS:
    +$3,931 PF 2.2, Aug 2025–Jul 2026").
 
-6. **Backtest hygiene — leave the tree clean.** Edits to committed harness
+6. **Multi-check the data.** The first time a date range is backtested, run
+   `node tools/research/crosscheck.mjs --from <from> --to <to>` (add
+   `--intraday <sym>` for at least one traded symbol) and report its verdict
+   alongside the results. Alpaca SIP remains the only engine bar source; FMP
+   is the independent verifier. Unexplained drift = results are not
+   reportable until the discrepancy is resolved.
+
+7. **Backtest hygiene — leave the tree clean.** Edits to committed harness
    files (the `DAYS` list, symbol lists, config constants) are scratch state
    for one run, never repo changes. After the run completes and you have
    reported, restore them: `git checkout -- tools/research/<file>`. Never
