@@ -107,7 +107,9 @@ HIMS +$3,931 (PF 2.2) · QBTS +$1,820 (1.45) · PLTR +$631 (1.63) ·
 OKTA +$509 (2 days) · SOFI −$682 · MARA −$654 · RIOT −$509 →
 **aggregate +$5,046 on $25k.** Edge concentrates in volatile, higher-priced
 gappers; cheap high-float names are net negative — validate per symbol
-before use.
+before use. (Shipped code thresholds: rider ≥6.5%/day & ≥$20; scalper
+≥$8B/day dollar volume — the "~$10B" phrasing elsewhere in this doc is the
+class description, $8e9 is the deliberate code boundary.)
 
 ### Standing rules distilled
 
