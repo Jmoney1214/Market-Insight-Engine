@@ -1,0 +1,125 @@
+//@version=6
+// =============================================================================
+// FinDesk Large-Cap Gap Scalper — long-only, profit-target scalps on liquid
+// large caps (COIN / TSLA / NVDA / AMD / META class)
+// -----------------------------------------------------------------------------
+// Stock-class research result (research/findings.md, case study 3): the same
+// morning-gap edge needs a DIFFERENT exit engine per class.
+//   - Hyper-volatile movers (avg range >= ~7%/day: HIMS, QBTS, IONQ):
+//     RIDE the day -> use morning_scan_jumpday_long.pine.
+//   - Liquid large caps (>= ~$10B daily dollar volume, 3-6%/day):
+//     TAKE PROFITS -> this script. Trained on COIN + TSLA, validated frozen on
+//     NVDA +$17, AMD +$1,364 (PF 1.47), META +$436 (PF 2.17) — positive on all
+//     three unseen symbols (Aug 2025 - Jul 2026, Alpaca SIP 5m, costs modeled).
+//   - Cheap movers under ~$20 (PLUG, BBAI class): NO mechanical long edge
+//     found — both engines fail. Don't trade them mechanically.
+//
+// Rules:
+//   DAY FILTER: >= mtdMin of last mtdLookback sessions ranged >= rangeThresh %,
+//   pre-market DOLLAR volume >= pmDollarMin, gap up >= gapUpMin at the open.
+//   ENTRY: 9-EMA pullback-reclaim with close > session VWAP and EMA9 > EMA20,
+//   09:40-11:00, up to maxTrades per day.
+//   EXIT: structural stop below the pullback low (0.8% buffer) + 1.5R profit
+//   target (this class pays the target; movers don't), 15:50 hard flatten,
+//   daily loss limit.
+//
+// USE ON A 5-MINUTE CHART with Extended Trading Hours ON.
+// Educational template validated on 2025-26 data — walk-forward before any
+// capital. NOT financial advice, NOT proven profitable going forward.
+// =============================================================================
+strategy("FinDesk Large-Cap Gap Scalper", overlay = true,
+     initial_capital = 25000,
+     commission_type = strategy.commission.percent, commission_value = 0.02,
+     slippage = 2,
+     calc_on_every_tick = false,
+     margin_long = 100, margin_short = 100)
+
+// ---- Scan / day filter ----------------------------------------------------------
+rangeThresh = input.float(2.0, "Multi-trade day range %", minval = 0.5, group = "Scan filter")
+mtdLookback = input.int(10, "Multi-trade lookback (days)", minval = 5, maxval = 20, group = "Scan filter")
+mtdMin      = input.int(7, "Min multi-trade days", minval = 1, maxval = 20, group = "Scan filter")
+pmDollarMin = input.float(2000000, "Min pre-market $ volume (0 = off)", minval = 0, group = "Scan filter")
+gapUpMin    = input.float(1.5, "Min gap up % at the open", minval = 0.1, group = "Scan filter")
+
+// ---- Execution --------------------------------------------------------------------
+entrySess   = input.session("0940-1100", "Entry window (ET)", group = "Execution")
+flatSess    = input.session("1550-1600", "Flatten window (ET)", group = "Execution")
+stopBufPct  = input.float(0.8, "Stop buffer below pullback low (%)", minval = 0.1, group = "Execution")
+rrTarget    = input.float(1.5, "Reward:risk profit target", minval = 0.5, group = "Execution")
+riskPct     = input.float(1.0, "Risk % of equity per trade", minval = 0.1, maxval = 5, group = "Execution")
+notionalCap = input.float(50, "Max position (% of equity)", minval = 10, maxval = 100, group = "Execution")
+maxTrades   = input.int(3, "Max trades per day (3 = tested config)", minval = 1, maxval = 10, group = "Execution")
+dayLoss     = input.float(500, "Daily loss limit $ (halt entries)", minval = 0, group = "Execution")
+
+// ---- Daily stats from COMPLETED sessions only (non-repainting [1] idiom) ---------
+rangePctD = (high - low) / close * 100
+[prevClose, mtd] =
+     request.security(syminfo.tickerid, "1D",
+         [close[1],
+          math.sum(rangePctD >= rangeThresh ? 1 : 0, mtdLookback)[1]],
+         lookahead = barmerge.lookahead_on)
+
+// ---- Day state ---------------------------------------------------------------------
+var float pmDollar = 0.0
+var int tradesToday = 0
+var float dayStartEq = na
+if timeframe.change("1D")
+    pmDollar := 0.0
+    tradesToday := 0
+    dayStartEq := na
+if session.ispremarket
+    pmDollar += nz(volume) * close
+
+// Gap locked at the opening bell (open vs prior close), same as the scan.
+var float dayGap = 0.0
+if session.isfirstbar_regular
+    dayGap := nz(prevClose) > 0 ? (open - prevClose) / prevClose * 100 : 0.0
+    dayStartEq := strategy.equity
+
+// ---- Qualification -------------------------------------------------------------------
+qualified = mtd >= mtdMin and (pmDollarMin == 0 or pmDollar >= pmDollarMin)
+jumpDay   = dayGap >= gapUpMin
+dayPnl    = na(dayStartEq) ? 0.0 : strategy.equity - dayStartEq
+riskOn    = dayLoss == 0 or dayPnl > -dayLoss
+
+// ---- Signal: 9-EMA pullback reclaim above VWAP -----------------------------------------
+e9   = ta.ema(close, 9)
+e20  = ta.ema(close, 20)
+vw   = ta.vwap
+pullbackTag = low <= e9 and close > e9
+bias        = close > vw and e9 > e20
+
+totalEntries = strategy.closedtrades + strategy.opentrades
+if totalEntries > totalEntries[1]
+    tradesToday += 1
+
+inEntryWindow = not na(time(timeframe.period, entrySess))
+canEnter = qualified and jumpDay and riskOn and inEntryWindow and
+     strategy.position_size == 0 and tradesToday < maxTrades and session.ismarket
+
+stopLevel = math.min(low, low[1]) - stopBufPct / 100 * close
+stopDist  = close - stopLevel
+riskCash  = strategy.equity * riskPct / 100
+rawQty    = stopDist > 0 ? riskCash / stopDist : 0.0
+capQty    = close > 0 ? strategy.equity * notionalCap / 100 / close : 0.0
+qty       = math.floor(math.min(rawQty, capQty))
+
+if canEnter and pullbackTag and bias and qty >= 1 and stopDist > 0
+    strategy.entry("Long", strategy.long, qty = qty)
+    // Structural stop at an absolute level; profit target in ticks from the
+    // actual fill so the R multiple survives slippage.
+    strategy.exit("Long exit", "Long", stop = stopLevel,
+         profit = math.round(stopDist * rrTarget / syminfo.mintick))
+
+// ---- Hard EOD flatten (no overnight risk) ---------------------------------------------
+if not na(time(timeframe.period, flatSess))
+    strategy.cancel_all()
+    strategy.close_all(comment = "EOD flat")
+
+// ---- Chart context ----------------------------------------------------------------------
+plot(vw, "Session VWAP", color = color.new(color.orange, 30))
+plot(e9, "EMA 9", color = color.new(color.aqua, 50))
+plot(prevClose, "Prior close", color = color.new(color.yellow, 60))
+bgcolor(session.ispremarket ? color.new(color.blue, 92) :
+     qualified and jumpDay and session.ismarket ? color.new(color.green, 94) : na,
+     title = "Pre-market / qualified-day shading")
