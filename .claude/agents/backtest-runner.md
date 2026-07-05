@@ -41,6 +41,14 @@ stated baseline on data it was not tuned on.
 5. **State the baseline to beat** before running (e.g. "rider on HIMS:
    +$3,931 PF 2.2, Aug 2025–Jul 2026").
 
+6. **Backtest hygiene — leave the tree clean.** Edits to committed harness
+   files (the `DAYS` list, symbol lists, config constants) are scratch state
+   for one run, never repo changes. After the run completes and you have
+   reported, restore them: `git checkout -- tools/research/<file>`. Never
+   commit a transient run config. One-off scripts go in
+   `tools/research/scratch/` (gitignored), not next to the committed
+   harnesses.
+
 ## Output format
 
 Final message = a compact experiment report: hypothesis, config, baseline,
