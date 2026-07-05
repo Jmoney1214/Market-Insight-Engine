@@ -37,7 +37,7 @@ strategy("FinDesk Jump-Day Long Rider", overlay = true,
 rangeThresh = input.float(2.0, "Multi-trade day range %", minval = 0.5, group = "Scan filter")
 mtdLookback = input.int(10, "Multi-trade lookback (days)", minval = 5, maxval = 20, group = "Scan filter")
 mtdMin      = input.int(7, "Min multi-trade days", minval = 1, maxval = 20, group = "Scan filter")
-pmVolMin    = input.float(100000, "Min pre-market volume (shares, 0 = off)", minval = 0, group = "Scan filter")
+pmDollarMin = input.float(2000000, "Min pre-market $ volume (0 = off)", minval = 0, group = "Scan filter")
 priceCeil   = input.float(150, "Price ceiling $", minval = 1, group = "Scan filter")
 gapUpMin    = input.float(1.5, "Min gap up % (jump-list days only)", minval = 0.1, group = "Scan filter")
 
@@ -60,15 +60,17 @@ rangePctD = (high - low) / close * 100
          lookahead = barmerge.lookahead_on)
 
 // ---- Day state ---------------------------------------------------------------------
-var float pmVol = 0.0
+// Pre-market conviction measured in DOLLARS (research/findings.md: share
+// counts don't scale across price classes) — matches the scalper strategy.
+var float pmDollar = 0.0
 var int tradesToday = 0
 var float dayStartEq = na
 if timeframe.change("1D")
-    pmVol := 0.0
+    pmDollar := 0.0
     tradesToday := 0
     dayStartEq := na
 if session.ispremarket
-    pmVol += nz(volume)
+    pmDollar += nz(volume) * close
 
 // Gap locked at the opening bell (open vs prior close), same as the scan.
 var float dayGap = 0.0
@@ -77,7 +79,7 @@ if session.isfirstbar_regular
     dayStartEq := strategy.equity
 
 // ---- Qualification: jump-list day only ----------------------------------------------
-qualified = mtd >= mtdMin and close <= priceCeil and (pmVolMin == 0 or pmVol >= pmVolMin)
+qualified = mtd >= mtdMin and close <= priceCeil and (pmDollarMin == 0 or pmDollar >= pmDollarMin)
 jumpDay   = dayGap >= gapUpMin
 dayPnl    = na(dayStartEq) ? 0.0 : strategy.equity - dayStartEq
 riskOn    = dayLoss == 0 or dayPnl > -dayLoss

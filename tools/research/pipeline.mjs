@@ -19,17 +19,19 @@ const DAYS = [
 const cacheGet = (k) => existsSync(`${CACHE}${k}.json`) ? JSON.parse(readFileSync(`${CACHE}${k}.json`, "utf8")) : null;
 const cachePut = (k, v) => writeFileSync(`${CACHE}${k}.json`, JSON.stringify(v));
 
+// No price ceiling at the screener: the scalper class (NVDA/META tier) lives
+// above $150 by design. The ceiling is applied per-class in scanDay.
 async function fmpScreener() {
-  const hit = cacheGet("universe"); if (hit) return hit;
+  const hit = cacheGet("universe_v2"); if (hit) return hit;
   const u = new URL("https://financialmodelingprep.com/stable/company-screener");
-  Object.entries({ priceLowerThan: 150, priceMoreThan: 3, volumeMoreThan: 2000000,
+  Object.entries({ priceMoreThan: 3, volumeMoreThan: 2000000,
     marketCapMoreThan: 500000000, exchange: "NASDAQ,NYSE", isEtf: false, isFund: false,
-    limit: 500, apikey: FMP }).forEach(([k, v]) => u.searchParams.set(k, v));
+    limit: 1000, apikey: FMP }).forEach(([k, v]) => u.searchParams.set(k, v));
   const r = await fetch(u); if (!r.ok) throw new Error(`screener ${r.status}`);
   const j = await r.json();
   const out = (Array.isArray(j) ? j : []).filter((x) => /^[A-Z]{1,5}$/.test(x.symbol))
     .map((x) => ({ symbol: x.symbol, companyName: x.companyName ?? null }));
-  cachePut("universe", out); return out;
+  cachePut("universe_v2", out); return out;
 }
 
 async function fmpEarnings(from, to) {
@@ -91,7 +93,6 @@ function scanDay(day, dailiesMap, pmMap, earnSet) {
     const prevClose = hist[hist.length - 1].c;
     const pms = pmMap.get(sym) ?? [];
     const price = pms.length ? pms[pms.length - 1].c : prevClose;
-    if (price > 150) continue;
     const gap = ((price - prevClose) / prevClose) * 100;
     const pmDollar = pms.reduce((s, b) => s + b.v * b.c, 0);
     const last10 = hist.slice(-10);
@@ -111,9 +112,13 @@ function scanDay(day, dailiesMap, pmMap, earnSet) {
     const gapMag = clamp01(Math.abs(gap) / 5);
     const catalyst = clamp01(hasEarn ? 0.5 : 0); // news omitted in harness (see notes)
     const score = round(100 * (0.4 * volatility + 0.25 * liquidity + 0.15 * gapMag + 0.2 * catalyst), 1);
+    const cls = classify(avgRange, dollarVol, price);
+    // Per-class ceiling: only the scalper class trades above $150 (parity with
+    // morning_scan_largecap_scalper.pine, which has no ceiling by design).
+    if (price > 150 && cls !== "scalper") continue;
     cands.push({ sym, price: round(price), gap: round(gap), pmDollar: Math.round(pmDollar),
       mtd, avgRange: round(avgRange, 1), dollarVol: Math.round(dollarVol), atrPct: atrPct != null ? round(atrPct) : null,
-      hasEarn, score, cls: classify(avgRange, dollarVol, price) });
+      hasEarn, score, cls });
   }
   // prelim ranking mirrors the live scan: |gap| + catalyst + liquidity
   cands.sort((a, b) => (Math.abs(b.gap) + (b.hasEarn ? 2 : 0) + clamp01(Math.log10(Math.max(b.dollarVol, 1) / 1e8)))
@@ -122,14 +127,17 @@ function scanDay(day, dailiesMap, pmMap, earnSet) {
   const jump = finalists.filter((c) => c.gap >= 1.5).sort((a, b) => b.gap - a.gap).slice(0, 12);
   const fall = finalists.filter((c) => c.gap <= -1.5).sort((a, b) => a.gap - b.gap).slice(0, 12);
   const top = [...finalists].sort((a, b) => b.score - a.score).slice(0, 12);
-  const eligible = [...finalists].filter((c) => c.cls === "rider" || c.cls === "scalper")
+  // Parity with the Pine strategies' own day filters: multi-trade profile
+  // (mtd >= 7) and pre-market DOLLAR conviction (>= $2M) are required to trade.
+  const eligible = [...finalists].filter((c) =>
+    (c.cls === "rider" || c.cls === "scalper") && c.mtd >= 7 && c.pmDollar >= 2e6)
     .sort((a, b) => b.score - a.score).slice(0, 5);
   return { day, finalists, top, jump, fall, eligible };
 }
 
 // ---- engines: one (symbol, day) ------------------------------------------------
 // bars5m: full-session 5m for that day (04:00-20:00 ET). Fixed $25k, no compounding.
-function runEngine(cls, dayBars, prevClose) {
+function runEngine(cls, dayBars, prevClose) { // cls also gates the rider's live price ceiling
   const cfg = cls === "rider"
     ? { gapUpMin: 1.5, maxTrades: 1, rr: null, entryTo: "11:00" }
     : { gapUpMin: 1.5, maxTrades: 3, rr: 1.5, entryTo: "11:00" };
@@ -141,19 +149,22 @@ function runEngine(cls, dayBars, prevClose) {
   if (gap < cfg.gapUpMin) return { status: `declined: gap +${round(gap)}% < 1.5%`, trades: [] };
   const slip = Math.max(0.01, firstRth.o * 0.0003);
   let cumPV = 0, cumV = 0, e9 = null, e20 = null, prev = null, pos = null, pending = null;
-  const trades = []; let nT = 0, dayPnl = 0;
+  const trades = []; let nT = 0, dayPnl = 0, lastRth = null;
   const ema = (p, v, n) => { const k = 2 / (n + 1); return p == null ? v : v * k + p * (1 - k); };
   for (const b of dayBars) {
     const tp = (b.h + b.l + b.c) / 3; cumPV += tp * b.v; cumV += b.v;
     const vwap = cumV > 0 ? cumPV / cumV : b.c;
     e9 = ema(e9, b.c, 9); e20 = ema(e20, b.c, 20);
     const rth = b.hm >= "09:30" && b.hm < "16:00";
+    if (rth) lastRth = b;
     if (pending && rth) {
-      const entry = b.o + slip, stopDist = entry - pending.stop;
-      if (stopDist > 0) {
-        const qty = Math.floor(Math.min((EQ * riskPct / 100) / stopDist, (EQ * notionalCap) / entry));
+      const entry = b.o + slip;
+      // R-distance and qty from the SIGNAL bar (parity with the Pine scripts,
+      // which size and place the target off signal-bar close - stopLevel).
+      if (entry - pending.stop > 0 && pending.dist > 0) {
+        const qty = Math.floor(Math.min((EQ * riskPct / 100) / pending.dist, (EQ * notionalCap) / entry));
         if (qty >= 1) pos = { entry, entryHm: b.hm, stop: pending.stop,
-          tgt: cfg.rr ? entry + stopDist * cfg.rr : Infinity, qty };
+          tgt: cfg.rr ? entry + pending.dist * cfg.rr : Infinity, qty };
       }
       pending = null;
     }
@@ -170,13 +181,29 @@ function runEngine(cls, dayBars, prevClose) {
         pos = null;
       }
     }
-    const canSignal = rth && b.hm >= "09:40" && b.hm <= cfg.entryTo && !pos && !pending &&
+    // "0940-1100" session semantics: the 11:00 bar is EXCLUDED (last signal
+    // 10:55, last fill 11:00), matching TradingView session-end exclusivity.
+    const canSignal = rth && b.hm >= "09:40" && b.hm < cfg.entryTo && !pos && !pending &&
       nT < cfg.maxTrades && dayPnl > -500;
     if (canSignal && prev) {
-      const tag = b.l <= e9 && b.c > e9 && b.c > vwap && e9 > e20;
-      if (tag) pending = { stop: Math.min(b.l, prev.l) - (stopBuf / 100) * b.c };
+      // Rider re-checks the price ceiling live, like the Pine's close <= priceCeil.
+      const ceilOk = cls !== "rider" || b.c <= 150;
+      const tag = ceilOk && b.l <= e9 && b.c > e9 && b.c > vwap && e9 > e20;
+      if (tag) {
+        const stop = Math.min(b.l, prev.l) - (stopBuf / 100) * b.c;
+        pending = { stop, dist: b.c - stop };
+      }
     }
     prev = b;
+  }
+  // Data ended with an open position (halt / feed gap): close at the last RTH
+  // bar's close so the trade is recorded instead of silently vanishing.
+  if (pos && lastRth) {
+    const exit = lastRth.c;
+    const pnl = (exit - pos.entry) * pos.qty - (pos.entry + exit) * pos.qty * commPct;
+    dayPnl += pnl;
+    trades.push({ entryHm: pos.entryHm, exitHm: lastRth.hm, entry: round(pos.entry), exit: round(exit),
+      qty: pos.qty, pnl: round(pnl), reason: "data-end" });
   }
   return { status: trades.length ? "traded" : "qualified, no trigger", gap: round(gap), trades };
 }
