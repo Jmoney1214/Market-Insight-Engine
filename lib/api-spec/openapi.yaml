@@ -870,6 +870,18 @@ components:
         score:
           type: number
           description: 0-100 composite (repeatable range, liquidity, gap, catalysts)
+        tradeClass:
+          type: ["string", "null"]
+          enum: [rider, scalper, caution, avoid, null]
+          description: >-
+            Backtest-validated stock class (research/findings.md case study 3):
+            rider = hyper-volatile mover (avg range >= ~6.5%/day, >= $20) — ride the day;
+            scalper = liquid large cap (>= ~$8B/day dollar volume) — take profit targets;
+            caution = mid-range or cheap mover — edge unreliable;
+            avoid = quiet tape — no validated intraday edge.
+        classNote:
+          type: ["string", "null"]
+          description: One-line human explanation of the assigned tradeClass
         reasons:
           type: array
           items:

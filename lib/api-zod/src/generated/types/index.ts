@@ -81,6 +81,7 @@ export * from './riskItem';
 export * from './riskReward';
 export * from './riskRewardDirection';
 export * from './scanCandidate';
+export * from './scanCandidateTradeClass';
 export * from './scanResult';
 export * from './scorecardEntry';
 export * from './scorecardListStats';

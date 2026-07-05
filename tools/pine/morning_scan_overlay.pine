@@ -65,8 +65,17 @@ plot(showPrevCls ? prevClose : na, "Prior close", color = color.new(color.yellow
      style = plot.style_line, linewidth = 1)
 bgcolor(session.ispremarket ? color.new(color.blue, 92) : na, title = "Pre-market shading")
 
+// ---- Stock class (backtest-validated; research/findings.md case study 3) ------
+// RIDER: >= ~6.5%/day range and >= $20 -> Jump-Day Long Rider strategy.
+// SCALPER: >= ~$8B/day traded -> Large-Cap Gap Scalper strategy.
+// CAUTION: mid-range or cheap mover — unreliable edge. AVOID: quiet tape.
+isRider   = avgRangePct >= 6.5 and close >= 20
+isScalper = dollarVol20 >= 8e9
+clsTxt = isRider ? "RIDER" : isScalper ? "SCALPER" : avgRangePct >= 4.5 ? "CAUTION" : "AVOID"
+clsCol = isRider ? color.green : isScalper ? color.aqua : avgRangePct >= 4.5 ? color.orange : color.gray
+
 // ---- Scan-row table (top right) ----------------------------------------------
-var table t = table.new(position.top_right, 2, 8, border_width = 1,
+var table t = table.new(position.top_right, 2, 9, border_width = 1,
      border_color = color.new(color.gray, 70), bgcolor = color.new(color.black, 20))
 f(v, p) => str.tostring(v, p)
 if barstate.islast
@@ -89,6 +98,8 @@ if barstate.islast
     table.cell(t, 1, 6, "$" + f(dollarVol20 / 1e6, "#") + "M", text_color = color.white, text_size = size.small)
     table.cell(t, 0, 7, "Score (ex-catalyst)", text_color = color.gray, text_size = size.small)
     table.cell(t, 1, 7, f(score, "#.#"), text_color = score >= 70 ? color.green : color.white, text_size = size.small)
+    table.cell(t, 0, 8, "Strategy class", text_color = color.gray, text_size = size.small)
+    table.cell(t, 1, 8, clsTxt, text_color = clsCol, text_size = size.small)
 
 // Alert when a chart symbol develops scan-grade evidence live.
 alertcondition(isJump and multiTrade, "FinDesk: jump-gapper with multi-trade profile",
