@@ -15,14 +15,15 @@ grade them honestly.
 
 ## Method
 
-- Use `tools/research/pipeline.mjs` (edit the DAYS list, or import its
-  functions in a one-off script under tools/research/). Credentials from env
-  (`ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY`, `FMP_API_KEY`) — if unset,
-  ask the user; never hardcode.
+- Run `node tools/research/pipeline.mjs --from <date> --to <date> --report` —
+  dates are CLI args (never edit source); session math is DST-correct per
+  date. The run auto-produces gate telemetry, post-flight attribution with
+  deterministic reason codes, catch rates, and a stamped report in
+  `research/reports/`. Credentials from env (`ALPACA_API_KEY_ID`,
+  `ALPACA_API_SECRET_KEY`, `FMP_API_KEY`) — if unset, ask the user; never
+  hardcode.
 - The scan cutoff is 8:30 AM ET, point-in-time: daily stats from sessions
-  before the date, pre-market bars 4:00–8:30 only. All three test windows
-  used so far are EDT; for winter (EST) dates check the UTC offsets before
-  trusting session boundaries.
+  before the date, pre-market bars 4:00–8:30 only.
 - Badge with the shipped thresholds (rider ≥6.5%/day and ≥$20; scalper ≥$8B/day;
   see `artifacts/api-server/src/lib/classify.ts`) and run the badge-matched
   engine exactly as configured in the repo — no parameter changes during a
