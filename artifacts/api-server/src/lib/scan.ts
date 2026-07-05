@@ -155,7 +155,7 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
   // 1. Universe — liquid US names under the ceiling (ETFs/funds excluded).
   // Plain-ticker filter: FMP emits share-class forms like "BRK-B" that Alpaca's
   // batch snapshot rejects with a 400 for the whole chunk.
-  const universe = ((await fmp.getScreenerUniverse(PRICE_CEILING, 500)) ?? []).filter((u) =>
+  const universe = ((await fmp.getScreenerUniverse(PRICE_CEILING)) ?? []).filter((u) =>
     /^[A-Z]{1,5}$/.test(u.symbol),
   );
   const bySymbol = new Map(universe.map((u) => [u.symbol, u]));

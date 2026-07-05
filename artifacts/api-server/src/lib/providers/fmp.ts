@@ -233,8 +233,11 @@ export type FmpScreenerRow = {
 /**
  * Liquid trading universe under `maxPrice`: active US large/mid caps with real
  * volume. Used as the pre-market scan universe.
+ * limit=5000 is a safety margin, not a size target — the filters define the
+ * universe. FMP orders by mcap, so a binding limit silently drops the smallest
+ * caps (the rider class): ~1,300 names match today, so 500/1000 truncated.
  */
-export async function getScreenerUniverse(maxPrice: number, limit = 500): Promise<FmpScreenerRow[] | null> {
+export async function getScreenerUniverse(maxPrice: number, limit = 5000): Promise<FmpScreenerRow[] | null> {
   const rows = await fmpGet<Array<Record<string, unknown>>>("company-screener", {
     priceLowerThan: maxPrice,
     priceMoreThan: 3,
@@ -245,6 +248,8 @@ export async function getScreenerUniverse(maxPrice: number, limit = 500): Promis
     limit,
   });
   if (!Array.isArray(rows)) return null;
+  if (rows.length >= limit)
+    logger.warn({ limit, rows: rows.length }, "FMP screener hit the safety limit — universe may be truncated, raise it");
   return rows
     .filter((r) => !r["isEtf"] && !r["isFund"])
     .map((r) => ({

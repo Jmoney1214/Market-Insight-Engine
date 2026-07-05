@@ -60,18 +60,23 @@ export async function universeFor(day) {
 }
 
 /** FMP screener universe. Cached per calendar day (TTL 24h). No price ceiling —
- * class-specific ceilings are the scanner's job, not the data layer's. */
+ * class-specific ceilings are the scanner's job, not the data layer's.
+ * limit=5000 is a safety margin, NOT a size target: the tradability filters
+ * (price>$3, vol>2M, mcap>$500M) define the universe (~1,300 names). FMP
+ * orders by mcap, so a binding limit silently drops the smallest caps — the
+ * rider class. Hard-fail if the margin is ever hit. */
 export function fmpUniverse() {
   const today = new Date().toISOString().slice(0, 10);
   return cached(`universe_${today}`, 24, async () => {
     const u = new URL("https://financialmodelingprep.com/stable/company-screener");
     Object.entries({ priceMoreThan: 3, volumeMoreThan: 2000000, marketCapMoreThan: 500000000,
-      exchange: "NASDAQ,NYSE", isEtf: false, isFund: false, limit: 1000, apikey: FMP })
+      exchange: "NASDAQ,NYSE", isEtf: false, isFund: false, limit: 5000, apikey: FMP })
       .forEach(([k, v]) => u.searchParams.set(k, v));
     const r = await fetch(u);
     if (!r.ok) throw new Error(`FMP screener ${r.status}`);
     const j = await r.json();
     if (!Array.isArray(j) || j.length === 0) throw new Error("FMP screener returned no rows");
+    if (j.length >= 5000) throw new Error("FMP screener hit the 5000 safety limit — universe is truncated, raise it");
     return j.filter((x) => /^[A-Z]{1,5}$/.test(x.symbol))
       .map((x) => ({ symbol: x.symbol, companyName: x.companyName ?? null }));
   });

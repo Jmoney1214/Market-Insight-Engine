@@ -111,7 +111,7 @@ export async function runPitReplayScan(refresh = false): Promise<ScanResult> {
   if (!refresh && cached?.key === key) return cached.result;
   const { date, time, cutoffUtc } = asOf;
 
-  const uni = ((await fmp.getScreenerUniverse(PRICE_CEILING, 500)) ?? []).filter((u) => /^[A-Z]{1,5}$/.test(u.symbol));
+  const uni = ((await fmp.getScreenerUniverse(PRICE_CEILING)) ?? []).filter((u) => /^[A-Z]{1,5}$/.test(u.symbol));
   const symbols = uni.map((u) => u.symbol);
   const bySymbol = new Map(uni.map((u) => [u.symbol, u]));
 
