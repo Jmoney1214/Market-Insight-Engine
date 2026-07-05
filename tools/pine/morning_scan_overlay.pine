@@ -69,10 +69,11 @@ bgcolor(session.ispremarket ? color.new(color.blue, 92) : na, title = "Pre-marke
 // RIDER: >= ~6.5%/day range and >= $20 -> Jump-Day Long Rider strategy.
 // SCALPER: >= ~$8B/day traded -> Large-Cap Gap Scalper strategy.
 // CAUTION: mid-range or cheap mover — unreliable edge. AVOID: quiet tape.
-isRider   = avgRangePct >= 6.5 and close >= 20
-isScalper = dollarVol20 >= 8e9
-clsTxt = isRider ? "RIDER" : isScalper ? "SCALPER" : avgRangePct >= 4.5 ? "CAUTION" : "AVOID"
-clsCol = isRider ? color.green : isScalper ? color.aqua : avgRangePct >= 4.5 ? color.orange : color.gray
+// na daily stats must read as unknown, not silently fall through to AVOID.
+isRider   = not na(avgRangePct) and avgRangePct >= 6.5 and close >= 20
+isScalper = not na(dollarVol20) and dollarVol20 >= 8e9
+clsTxt = na(avgRangePct) and not isScalper ? "N/A" : isRider ? "RIDER" : isScalper ? "SCALPER" : avgRangePct >= 4.5 ? "CAUTION" : "AVOID"
+clsCol = na(avgRangePct) and not isScalper ? color.gray : isRider ? color.green : isScalper ? color.aqua : avgRangePct >= 4.5 ? color.orange : color.gray
 
 // ---- Scan-row table (top right) ----------------------------------------------
 var table t = table.new(position.top_right, 2, 9, border_width = 1,

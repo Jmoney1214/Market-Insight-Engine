@@ -18,11 +18,14 @@ export function classifyCandidate(
   dollarVol: number | null,
   price: number,
 ): { tradeClass: TradeClass | null; classNote: string | null } {
-  if (avgDailyRangePct == null) return { tradeClass: null, classNote: null };
-  if (avgDailyRangePct >= 6.5 && price >= 20)
+  if (avgDailyRangePct != null && avgDailyRangePct >= 6.5 && price >= 20)
     return { tradeClass: "rider", classNote: "Hyper-volatile mover — Jump-Day Rider class (ride the day, no target)" };
+  // Liquidity alone identifies the scalper class, so it must not depend on
+  // range stats being available (a large cap with a failed bar fetch is still
+  // a large cap).
   if (dollarVol != null && dollarVol >= 8e9)
     return { tradeClass: "scalper", classNote: "Liquid large cap — take-profit scalper class (1.5R targets)" };
+  if (avgDailyRangePct == null) return { tradeClass: null, classNote: null };
   if (avgDailyRangePct >= 6.5)
     return { tradeClass: "caution", classNote: "Cheap mover under $20 — class failed validation, no reliable long edge" };
   if (avgDailyRangePct >= 4.5)

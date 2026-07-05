@@ -38,6 +38,10 @@ describe("classifyCandidate", () => {
     expect(classifyCandidate(3.0, 7.9e9, 165).tradeClass).toBe("avoid");
   });
 
+  it("classifies by liquidity alone when range stats are missing on a large cap", () => {
+    expect(classifyCandidate(null, 33.5e9, 194.83).tradeClass).toBe("scalper"); // NVDA, failed bar fetch
+  });
+
   it("returns null class when range stats are unavailable, with a note either way", () => {
     expect(classifyCandidate(null, 1e9, 50)).toEqual({ tradeClass: null, classNote: null });
     expect(classifyCandidate(7.0, null, 50).tradeClass).toBe("rider");
