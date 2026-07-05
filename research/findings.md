@@ -123,6 +123,50 @@ before use.
 
 ---
 
+## Case study 3 (ACCEPTED with class limits): stock-class discovery
+
+Question: does one script fit all tickers, or do "classes" of stocks need
+different execution? Method: measured price / avg daily range / dollar volume
+for 22 candidates (last 60 sessions), split into classes, trained engines on
+2 symbols per class, validated the frozen winner on the untouched rest
+(Aug 2025 – Jul 2026, 5m, costs modeled).
+
+### Measured features first: price is NOT the class boundary
+
+F ($13, 3.75%/day) behaves nothing like MARA ($12, 7.6%/day); QBTS ($22)
+ranges more than PLUG ($2.64). The axes that matter are **average daily
+range** and **dollar liquidity**. Methodological note: pre-market volume
+filters must be in **dollars** (100k shares of PLUG ≈ $264k of nothing;
+2M-dollar floor self-scales across classes).
+
+### Results by class
+
+| Class | Members tested | Train result | Frozen validation | Verdict |
+|---|---|---|---|---|
+| **Cheap movers** (<$20, ≥4%/day: PLUG, BBAI, NIO, MARA, SOFI) | rider/ORB/scalper all tried | best config barely +$212 (PLUG PF 0.24–0.57 everywhere) | −$1,280 (BBAI PF 0.57) | **REJECTED — no mechanical long edge. Gap-and-fade tape; do not trade these mechanically.** |
+| **Hyper-volatile movers** (≥~7%/day, any price: HIMS, QBTS, IONQ, MARA) | rider PF 1.5–2.3 | IONQ unseen: **+$2,413 (PF 1.53)**; 3-symbol rider total +$8.6k | **ACCEPTED — ride, don't target** → `morning_scan_jumpday_long.pine` |
+| **Mid movers** (4.5–6.5%/day: CVNA, AFRM, PLTR, DKNG, RBLX, HOOD, MSTR, RIOT) | (validated as part of B) | mixed: HOOD +$1,026 but CVNA −$1,976, AFRM −$2,080, PLTR −$1,124 | **UNRELIABLE — the rider's edge decays as daily range drops below ~6–7%. Trade only the hottest names.** |
+| **Liquid large caps** (≥~$10B/day dollar vol: COIN, TSLA, NVDA, AMD, META) | scalper (3 trades, 1.5R targets) beat rider on COIN+TSLA (+$2.9k) | **positive on all 3 unseen: AMD +$1,364 (PF 1.47), META +$436 (PF 2.17), NVDA +$17** | **ACCEPTED — take profits, don't ride** → `morning_scan_largecap_scalper.pine` |
+
+### The class law (measured, not assumed)
+
+- **The gap-day filter is universal** (every accepted engine trades only
+  gap-up mornings on active names) — but the **exit engine flips by class**:
+  hyper-volatile movers pay you for *riding* (targets cut the winners that
+  fund the system); liquid large caps pay you for *taking 1.5R* (they mean-
+  revert intraday; riders give gains back).
+- Volatility, not price, defines the class. A $12 name and a $130 name with
+  8%/day tape belong to the same class; two $13 names (F vs MARA) do not.
+- Cheap sub-$5–20 pumpers reward nobody mechanically long — the morning gap
+  sells off. If they're ever traded, it's the dashboard's *fall* list logic,
+  not a long script.
+- Caveat: the ≥~7% vs 4.5–6.5% mover boundary was observed in validation
+  data (winners/losers separate cleanly by range) but hasn't itself been
+  re-validated out-of-sample; treat ~6–7%/day as a soft threshold and prefer
+  the top of the scan's volatility ranking.
+
+---
+
 ## Engine parity note
 
 This repo's simulator resolves intrabar stop-vs-target **stop-first**
