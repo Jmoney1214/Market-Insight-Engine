@@ -22,7 +22,9 @@ if (!csvPath || !symbol) {
 requireCreds();
 
 // TradingView export: rows come in pairs (Exit + Entry) per trade number.
-const rows = readFileSync(csvPath, "utf8").trim().split("\n").map((l) => l.split(","));
+// Split on \r?\n (Windows exports) and on commas OUTSIDE quoted fields.
+const rows = readFileSync(csvPath, "utf8").trim().split(/\r?\n/)
+  .map((l) => l.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map((c) => c.replace(/^"|"$/g, "")));
 const header = rows[0];
 const col = (name) => header.findIndex((h) => h.trim().toLowerCase().startsWith(name));
 const iNum = col("trade number"), iType = col("type"), iTime = col("date and time"),

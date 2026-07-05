@@ -77,7 +77,8 @@ export function renderHtml(md, meta) {
   }
   if (inTable) out.push("</table>");
   const body = out.join("\n")
-    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/_(.+?)_/g, "<i>$1</i>");
+    // Italics only at word boundaries — snake_case (GATED_PRICE_CAP) must survive.
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`(.+?)`/g, "<code>$1</code>").replace(/(?<!\w)_(.+?)_(?!\w)/g, "<i>$1</i>");
   return `<title>Backtest ${meta.dateRange}</title><style>
 body{font:14px/1.5 system-ui;max-width:1000px;margin:24px auto;padding:0 16px;color:#1a1d21;background:#fafbfc}
 @media(prefers-color-scheme:dark){body{color:#e6e8eb;background:#16181c}table,th,td{border-color:#333!important}}

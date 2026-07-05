@@ -6,11 +6,12 @@
 import { mkdirSync, existsSync, readFileSync, writeFileSync, statSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const AK = process.env.ALPACA_API_KEY_ID, AS = process.env.ALPACA_API_SECRET_KEY;
 const FMP = process.env.FMP_API_KEY;
 const AH = { "APCA-API-KEY-ID": AK, "APCA-API-SECRET-KEY": AS };
-const CACHE = new URL("../cache/", import.meta.url).pathname;
+const CACHE = fileURLToPath(new URL("../cache/", import.meta.url));
 mkdirSync(CACHE, { recursive: true });
 
 export function requireCreds() {
@@ -85,7 +86,7 @@ export function alpacaBars(symbols, timeframe, start, end, tag, ttlHours = 24 * 
 
 // ---- provenance stamping -------------------------------------------------------
 export function gitSha() {
-  try { return execSync("git rev-parse --short HEAD", { cwd: new URL("..", import.meta.url).pathname }).toString().trim(); }
+  try { return execSync("git rev-parse --short HEAD", { cwd: fileURLToPath(new URL("..", import.meta.url)) }).toString().trim(); }
   catch { return "unknown"; }
 }
 export const configHash = (cfg) =>

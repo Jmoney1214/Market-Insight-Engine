@@ -4,6 +4,7 @@
 // post-flight attribution (movers, reason codes, catch rates) -> stamped report.
 // Data plane: Alpaca SIP bars only; FMP screener/earnings only. See lib/data.mjs.
 import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs, tradingDays, etWindow, etHm, daysBefore } from "./lib/dates.mjs";
 import { requireCreds, fmpUniverse, fmpEarnings, alpacaBars, stampMetadata } from "./lib/data.mjs";
 import { scanDay, runEngine } from "./lib/engine.mjs";
@@ -60,9 +61,9 @@ for (const day of days) {
 }
 
 const meta = stampMetadata(args);
-writeFileSync(new URL("./pipeline_results.json", import.meta.url).pathname, JSON.stringify({ meta, results }, null, 1));
+writeFileSync(fileURLToPath(new URL("./pipeline_results.json", import.meta.url)), JSON.stringify({ meta, results }, null, 1));
 console.error("results -> pipeline_results.json");
 if (args.report) {
-  const repoRoot = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
+  const repoRoot = fileURLToPath(new URL("../..", import.meta.url)).replace(/[\\/]+$/, "");
   for (const f of writeReports(results, meta, repoRoot, args.html)) console.error(`report -> ${f}`);
 }
