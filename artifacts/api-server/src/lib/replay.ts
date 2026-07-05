@@ -14,6 +14,7 @@ import { atr, rsi, rangeStats } from "./providers/indicators.js";
 import { decodeEntities } from "./providers/alpaca.js";
 import * as fmp from "./providers/fmp.js";
 import type { ScanCandidate, ScanResult } from "./scan.js";
+import { classifyCandidate } from "./classify.js";
 
 const TOP_N = 12;
 const GAP_T = 1.5;
@@ -174,6 +175,7 @@ export async function runPitReplayScan(refresh = false): Promise<ScanResult> {
       avgDailyRangePct: c.avgDailyRangePct,
       multiTradeDays: c.mtd,
       score: round(100 * (0.4 * volatility + 0.25 * liquidity + 0.15 * gapMag + 0.2 * catalyst), 1),
+      ...classifyCandidate(c.avgDailyRangePct, c.dollarVol, c.price),
       reasons,
     };
   });

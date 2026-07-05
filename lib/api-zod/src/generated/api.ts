@@ -33,6 +33,8 @@ export const GetPremarketScanResponse = zod.object({
   "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
   "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
   "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
+  "tradeClass": zod.union([zod.literal('rider'),zod.literal('scalper'),zod.literal('caution'),zod.literal('avoid'),zod.literal(null)]).nullish().describe('Backtest-validated stock class (research\/findings.md case study 3): rider = hyper-volatile mover (avg range >= ~6.5%\/day, >= $20) — ride the day; scalper = liquid large cap (>= ~$8B\/day dollar volume) — take profit targets; caution = mid-range or cheap mover — edge unreliable; avoid = quiet tape — no validated intraday edge.'),
+  "classNote": zod.string().nullish().describe('One-line human explanation of the assigned tradeClass'),
   "reasons": zod.array(zod.string())
 })),
   "likelyJump": zod.array(zod.object({
@@ -46,6 +48,8 @@ export const GetPremarketScanResponse = zod.object({
   "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
   "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
   "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
+  "tradeClass": zod.union([zod.literal('rider'),zod.literal('scalper'),zod.literal('caution'),zod.literal('avoid'),zod.literal(null)]).nullish().describe('Backtest-validated stock class (research\/findings.md case study 3): rider = hyper-volatile mover (avg range >= ~6.5%\/day, >= $20) — ride the day; scalper = liquid large cap (>= ~$8B\/day dollar volume) — take profit targets; caution = mid-range or cheap mover — edge unreliable; avoid = quiet tape — no validated intraday edge.'),
+  "classNote": zod.string().nullish().describe('One-line human explanation of the assigned tradeClass'),
   "reasons": zod.array(zod.string())
 })),
   "likelyFall": zod.array(zod.object({
@@ -59,6 +63,8 @@ export const GetPremarketScanResponse = zod.object({
   "avgDailyRangePct": zod.number().nullish().describe('Average (high-low)\/close % over the last 10 sessions'),
   "multiTradeDays": zod.number().nullish().describe('Sessions out of the last 10 that ranged >=2% — the \"multiple trades today\" signal'),
   "score": zod.number().describe('0-100 composite (repeatable range, liquidity, gap, catalysts)'),
+  "tradeClass": zod.union([zod.literal('rider'),zod.literal('scalper'),zod.literal('caution'),zod.literal('avoid'),zod.literal(null)]).nullish().describe('Backtest-validated stock class (research\/findings.md case study 3): rider = hyper-volatile mover (avg range >= ~6.5%\/day, >= $20) — ride the day; scalper = liquid large cap (>= ~$8B\/day dollar volume) — take profit targets; caution = mid-range or cheap mover — edge unreliable; avoid = quiet tape — no validated intraday edge.'),
+  "classNote": zod.string().nullish().describe('One-line human explanation of the assigned tradeClass'),
   "reasons": zod.array(zod.string())
 }))
 })

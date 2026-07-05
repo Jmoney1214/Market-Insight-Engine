@@ -17,6 +17,7 @@ import { logger } from "./logger.js";
 import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
 import { atr, rsi, rangeStats } from "./providers/indicators.js";
+import { classifyCandidate, type TradeClass } from "./classify.js";
 
 export type ScanCandidate = {
   symbol: string;
@@ -29,6 +30,8 @@ export type ScanCandidate = {
   avgDailyRangePct: number | null;
   multiTradeDays: number | null;
   score: number;
+  tradeClass: TradeClass | null;
+  classNote: string | null;
   reasons: string[];
 };
 
@@ -247,6 +250,8 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
       1,
     );
 
+    const { tradeClass, classNote } = classifyCandidate(avgDailyRangePct, f.dollarVol, f.price);
+
     return {
       symbol: f.symbol,
       companyName: u?.companyName ?? null,
@@ -258,6 +263,8 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
       avgDailyRangePct,
       multiTradeDays,
       score,
+      tradeClass,
+      classNote,
       reasons,
     };
   });

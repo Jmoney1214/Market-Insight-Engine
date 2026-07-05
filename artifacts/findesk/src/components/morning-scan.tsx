@@ -17,6 +17,16 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toneText, toneBadge, formatPrice, signedPct } from "@/lib/finance";
 
+// Backtest-validated class -> which execution playbook applies (see
+// research/findings.md case study 3). Green = validated engine exists,
+// amber = unreliable edge, gray = stand aside.
+const classBadge: Record<string, { label: string; className: string }> = {
+  rider: { label: "RIDER", className: "text-bullish border-bullish/50 bg-bullish/10" },
+  scalper: { label: "SCALPER", className: "text-sky-500 border-sky-500/50 bg-sky-500/10" },
+  caution: { label: "CAUTION", className: "text-amber-500 border-amber-500/50 bg-amber-500/10" },
+  avoid: { label: "AVOID", className: "text-muted-foreground border-border bg-muted/30" },
+};
+
 function CandidateRow({
   c,
   onAnalyze,
@@ -28,6 +38,7 @@ function CandidateRow({
 }) {
   const gapTone = c.gapPct >= 0 ? "bullish" : "bearish";
   const busy = analyzing === c.symbol;
+  const badge = c.tradeClass ? classBadge[c.tradeClass] : null;
   return (
     <div className="p-4 flex flex-col gap-2 hover-elevate" data-testid={`scan-row-${c.symbol}`}>
       <div className="flex items-center justify-between gap-3">
@@ -44,6 +55,16 @@ function CandidateRow({
           <span className="text-xs text-muted-foreground truncate">{c.companyName}</span>
         </div>
         <div className="flex items-center gap-3 shrink-0 font-mono-numbers text-sm">
+          {badge && (
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] px-2 py-0 font-semibold", badge.className)}
+              title={c.classNote ?? undefined}
+              data-testid={`badge-class-${c.symbol}`}
+            >
+              {badge.label}
+            </Badge>
+          )}
           <span>{formatPrice(c.price)}</span>
           <span className={toneText[gapTone]}>{signedPct(c.gapPct)}</span>
           <Badge className={cn("text-[10px] px-2 py-0", toneBadge[gapTone])}>score {c.score}</Badge>

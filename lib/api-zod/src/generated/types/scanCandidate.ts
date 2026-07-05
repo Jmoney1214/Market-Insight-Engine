@@ -5,6 +5,7 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
+import type { ScanCandidateTradeClass } from './scanCandidateTradeClass';
 
 export interface ScanCandidate {
   symbol: string;
@@ -34,5 +35,15 @@ export interface ScanCandidate {
   multiTradeDays?: number | null;
   /** 0-100 composite (repeatable range, liquidity, gap, catalysts) */
   score: number;
+  /**
+     * Backtest-validated stock class (research/findings.md case study 3): rider = hyper-volatile mover (avg range >= ~6.5%/day, >= $20) — ride the day; scalper = liquid large cap (>= ~$8B/day dollar volume) — take profit targets; caution = mid-range or cheap mover — edge unreliable; avoid = quiet tape — no validated intraday edge.
+     * @nullable
+     */
+  tradeClass?: ScanCandidateTradeClass;
+  /**
+     * One-line human explanation of the assigned tradeClass
+     * @nullable
+     */
+  classNote?: string | null;
   reasons: string[];
 }
