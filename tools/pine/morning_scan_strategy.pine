@@ -65,8 +65,6 @@ rangePctD = (high - low) / close * 100
          lookahead = barmerge.lookahead_on)
 
 // ---- Gap, pre-market volume, opening range -------------------------------------
-gapPct = nz(prevClose) > 0 ? (close - prevClose) / prevClose * 100 : 0.0
-
 var float pmVol = 0.0
 var float orH = na
 var float orL = na
@@ -81,10 +79,14 @@ if timeframe.change("1D")
 if session.ispremarket
     pmVol += nz(volume)
 
+// The day's gap is LOCKED at the opening bell (open vs prior close) so the
+// direction gate can't flip as price moves intraday — same as the scan's gap.
+var float dayGap = 0.0
 if session.isfirstbar_regular
     rthStart := time
     orH := high
     orL := low
+    dayGap := nz(prevClose) > 0 ? (open - prevClose) / prevClose * 100 : 0.0
 else if not na(rthStart) and time < rthStart + orMinutes * 60 * 1000
     orH := math.max(orH, high)
     orL := math.min(orL, low)
@@ -92,14 +94,16 @@ orDone = not na(rthStart) and time >= rthStart + orMinutes * 60 * 1000
 
 // ---- Scan qualification ---------------------------------------------------------
 qualified = mtd >= mtdMin and close <= priceCeil and (pmVolMin == 0 or pmVol >= pmVolMin)
-isJumpDay = gapPct >= gapThresh
-isFallDay = gapPct <= -gapThresh
+isJumpDay = dayGap >= gapThresh
+isFallDay = dayGap <= -gapThresh
 longOk  = qualified and (gapAlignOnly ? isJumpDay : not isFallDay)
 shortOk = qualified and (gapAlignOnly ? isFallDay : not isJumpDay)
 
 // ---- Entries ---------------------------------------------------------------------
-newEntry = strategy.opentrades > strategy.opentrades[1]
-if newEntry
+// closedtrades + opentrades counts every entry, including trades opened and
+// stopped out within the same bar (opentrades alone would miss those).
+totalEntries = strategy.closedtrades + strategy.opentrades
+if totalEntries > totalEntries[1]
     tradesToday += 1
 
 inEntryWindow = not na(time(timeframe.period, entrySess))
@@ -112,13 +116,17 @@ rawQty   = stopDist > 0 ? riskCash / stopDist : 0.0
 capQty   = close > 0 ? strategy.equity / close : 0.0
 qty      = math.floor(math.min(rawQty, capQty))
 
-if canEnter and qty >= 1
+// Tick-based loss/profit are measured from the ACTUAL fill price, so the
+// reward:risk ratio survives slippage (absolute stop/limit prices anchored
+// to the signal bar's close would not).
+stopTicks = math.round(stopDist / syminfo.mintick)
+if canEnter and qty >= 1 and stopTicks >= 1
     if longOk and close > orH
         strategy.entry("Long", strategy.long, qty = qty)
-        strategy.exit("Long exit", "Long", stop = close - stopDist, limit = close + stopDist * rrTarget)
+        strategy.exit("Long exit", "Long", loss = stopTicks, profit = math.round(stopTicks * rrTarget))
     else if shortOk and close < orL
         strategy.entry("Short", strategy.short, qty = qty)
-        strategy.exit("Short exit", "Short", stop = close + stopDist, limit = close - stopDist * rrTarget)
+        strategy.exit("Short exit", "Short", loss = stopTicks, profit = math.round(stopTicks * rrTarget))
 
 // ---- Hard EOD flatten (no overnight risk) -----------------------------------------
 if not na(time(timeframe.period, flatSess))
