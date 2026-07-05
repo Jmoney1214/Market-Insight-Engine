@@ -32,6 +32,14 @@ grade them honestly.
   declined names do 9:40→15:50); (3) execution — trades taken, P&L,
   counterfactual for "no trigger" picks.
 
+## Backtest hygiene — leave the tree clean
+
+Editing the harness's `DAYS` list (or any committed config) for a replay is
+scratch state for that run only. After you have produced the report, restore
+the file: `git checkout -- tools/research/pipeline.mjs`. Never commit a
+transient run config; one-off scripts belong in `tools/research/scratch/`
+(gitignored).
+
 ## Known limitations to state in every report
 
 Universe is today's screener constituents (survivorship risk on old dates);
