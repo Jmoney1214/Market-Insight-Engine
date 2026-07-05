@@ -1,0 +1,219 @@
+<title>Backtest 2025-07-21..2025-07-25</title><style>
+body{font:14px/1.5 system-ui;max-width:1000px;margin:24px auto;padding:0 16px;color:#1a1d21;background:#fafbfc}
+@media(prefers-color-scheme:dark){body{color:#e6e8eb;background:#16181c}table,th,td{border-color:#333!important}}
+table{border-collapse:collapse;margin:10px 0;font-size:13px;display:block;overflow-x:auto}
+th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;font-variant-numeric:tabular-nums}
+code{background:rgba(127,127,127,.15);padding:1px 4px;border-radius:3px}h2{margin-top:28px}</style>
+<body><h1>FinDesk pipeline backtest — 2025-07-21..2025-07-25</h1>
+<h2>Run metadata</h2>
+<li><b>generatedAt</b>: 2026-07-05T22:56:53.398Z</li>
+<li><b>gitSha</b>: 3100582</li>
+<li><b>dataProvider</b>: Alpaca SIP (bars) + FMP stable (screener, earnings)</li>
+<li><b>feed</b>: sip</li>
+<li><b>adjustment</b>: split</li>
+<li><b>barTimeframe</b>: 5Min/1Day</li>
+<li><b>timezone</b>: America/New_York (per-date DST via Intl)</li>
+<li><b>sessionTemplate</b>: pm 04:00-09:30 · cutoff 08:30 · RTH 09:30-16:00 · flatten 15:50</li>
+<li><b>fillMode</b>: stop_first</li>
+<li><b>dateRange</b>: 2025-07-21..2025-07-25</li>
+<li><b>configHash</b>: 7fc935f4c7c7</li>
+<li><b>caveats</b>:</li>
+<p>  - Universe = screener constituents as of run date (survivorship risk for past dates until snapshots ship)</p>
+<p>  - News catalyst omitted from harness scores (earnings calendar included)</p>
+<p>  - Fills pessimistic unless fill mode says otherwise; costs 2bps/side + ~3bps slippage</p>
+<p>  - Fixed $25k per pick, no cross-position capital netting</p>
+<li><b>universeSource</b>: current screener constituents (survivorship risk for past dates)</li>
+<h2>Summary</h2>
+<table><tr><th>Net P&amp;L</th><th>Trades</th><th>Wins/Losses</th><th>Movers (≥5%)</th><th>Board catch</th><th>Traded catch</th></tr>
+<tr><td>−$962</td><td>6</td><td>1/5</td><td>314</td><td>28.2%</td><td>0.7%</td></tr>
+</table>
+<h2>2025-07-21</h2>
+<p>Universe 869 · eligible 4 · day P&amp;L −$638</p>
+<h3>Picks (badge-matched engine)</h3>
+<table><tr><th>Sym</th><th>Class</th><th>Gap 8:30</th><th>PM $</th><th>Outcome</th><th>Trades</th><th>P&amp;L</th></tr>
+<tr><td>GLXY</td><td>rider</td><td>+7.37%</td><td>$17.3M</td><td>traded</td><td>09:55→11:40 stop −$260</td><td>−$260</td></tr>
+<tr><td>ASTS</td><td>rider</td><td>+3.04%</td><td>$12.8M</td><td>traded</td><td>09:50→09:50 stop −$131</td><td>−$131</td></tr>
+<tr><td>BMNR</td><td>rider</td><td>+6.26%</td><td>$85.1M</td><td>traded</td><td>09:55→11:30 stop −$247</td><td>−$247</td></tr>
+<tr><td>RKLB</td><td>rider</td><td>-2.61%</td><td>$37.3M</td><td>declined: fall day</td><td>—</td><td>—</td></tr>
+</table>
+<h3>Movers ≥5% and why we caught/missed them (70)</h3>
+<table><tr><th>Sym</th><th>c/c</th><th>9:40 ride</th><th>Max up/dn</th><th>Gap 8:30</th><th>Class</th><th>Reason</th><th>Detail</th></tr>
+<tr><td>OPEN</td><td>+42.89%</td><td>+19.9%</td><td>+76.55%/-4.44%</td><td>+30.67%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>NVTS</td><td>+24.59%</td><td>+4.03%</td><td>+17.62%/-1.36%</td><td>+7.36%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>ALAB</td><td>+19.32%</td><td>+3.03%</td><td>+5.17%/-2.17%</td><td>+6.71%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>ABCL</td><td>+14.96%</td><td>-5.11%</td><td>+6.62%/-8.22%</td><td>+8.44%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>QS</td><td>-14.55%</td><td>+2.07%</td><td>+7.95%/-6.24%</td><td>-2.87%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>BULL</td><td>-13.44%</td><td>-6.49%</td><td>+6.1%/-6.84%</td><td>-7.93%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>CLF</td><td>+12.34%</td><td>+4.66%</td><td>+7.65%/-1.13%</td><td>+6.33%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>BRKR</td><td>-12.12%</td><td>+1.4%</td><td>+4.33%/-2.06%</td><td>-10.73%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>DFTX</td><td>+11.99%</td><td>+7.44%</td><td>+11.18%/+0%</td><td>+1.21%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.21% at 08:30 — below board thresholds</td></tr>
+<tr><td>ACHR</td><td>-10.99%</td><td>-9.97%</td><td>+0.76%/-10.47%</td><td>-1.43%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -1.43% at 08:30 — below board thresholds</td></tr>
+<tr><td>RDW</td><td>-10.54%</td><td>-12.13%</td><td>+1.21%/-12.56%</td><td>+2.94%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 41 (top 30 cut)</td></tr>
+<tr><td>AR</td><td>-10.36%</td><td>-5.24%</td><td>+0.45%/-5.62%</td><td>-0.19%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.19% at 08:30 — below board thresholds</td></tr>
+<tr><td>UNIT</td><td>+10.02%</td><td>+6.65%</td><td>+8.87%/-0.77%</td><td>+1.46%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.46% at 08:30 — below board thresholds</td></tr>
+<tr><td>S</td><td>+9.88%</td><td>+2.77%</td><td>+10.88%/-0.21%</td><td>+7.33%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>SMR</td><td>-9.61%</td><td>-8.96%</td><td>+1.14%/-9.18%</td><td>+0.62%</td><td>rider</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.62% at 08:30 — below board thresholds</td></tr>
+<tr><td>EQT</td><td>-9.53%</td><td>-3.67%</td><td>+0.88%/-4.12%</td><td>-1.33%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -1.33% at 08:30 — below board thresholds</td></tr>
+<tr><td>OKLO</td><td>-9.4%</td><td>-9.27%</td><td>+1.59%/-9.46%</td><td>+0.65%</td><td>rider</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.65% at 08:30 — below board thresholds</td></tr>
+<tr><td>LUNR</td><td>-9.27%</td><td>-6.79%</td><td>+0.35%/-7.38%</td><td>+1.53%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 160 (top 30 cut)</td></tr>
+<tr><td>AEHR</td><td>+9.22%</td><td>+6.36%</td><td>+8.33%/-0.39%</td><td>+0.4%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.4% at 08:30 — below board thresholds</td></tr>
+<tr><td>CENX</td><td>+9.2%</td><td>+1.84%</td><td>+3.44%/-2.18%</td><td>+0.39%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.39% at 08:30 — below board thresholds</td></tr>
+<tr><td>CRK</td><td>-9.15%</td><td>-1.88%</td><td>+1.77%/-2.42%</td><td>-1.17%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -1.17% at 08:30 — below board thresholds</td></tr>
+<tr><td>KEEL</td><td>+9.13%</td><td>+0.45%</td><td>+9.82%/-0.89%</td><td>+2.88%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 45 (top 30 cut)</td></tr>
+<tr><td>KSS</td><td>+8.77%</td><td>+7.15%</td><td>+7.93%/-0.21%</td><td>+0.63%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.63% at 08:30 — below board thresholds</td></tr>
+<tr><td>SOUN</td><td>-8.59%</td><td>-10.52%</td><td>+0.22%/-11.02%</td><td>+0.78%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.78% at 08:30 — below board thresholds</td></tr>
+<tr><td>EXE</td><td>-8.5%</td><td>-4.95%</td><td>+0.18%/-5.46%</td><td>-0.31%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.31% at 08:30 — below board thresholds</td></tr>
+</table>
+<p><i>…and 45 more (see results JSON).</i></p>
+<p>Catch rates: board 24.3% · tradeable 0% · traded 0% · capture -9.6% (P&amp;L −$638 vs opportunity ~$6657.5)</p>
+<h2>2025-07-22</h2>
+<p>Universe 869 · eligible 2 · day P&amp;L −$249</p>
+<h3>Picks (badge-matched engine)</h3>
+<table><tr><th>Sym</th><th>Class</th><th>Gap 8:30</th><th>PM $</th><th>Outcome</th><th>Trades</th><th>P&amp;L</th></tr>
+<tr><td>RKLB</td><td>rider</td><td>-2.95%</td><td>$32.5M</td><td>declined: fall day</td><td>—</td><td>—</td></tr>
+<tr><td>BMNR</td><td>rider</td><td>+4.95%</td><td>$67.5M</td><td>traded</td><td>09:45→09:50 stop −$249</td><td>−$249</td></tr>
+</table>
+<h3>Movers ≥5% and why we caught/missed them (77)</h3>
+<table><tr><th>Sym</th><th>c/c</th><th>9:40 ride</th><th>Max up/dn</th><th>Gap 8:30</th><th>Class</th><th>Reason</th><th>Detail</th></tr>
+<tr><td>KSS</td><td>+37.67%</td><td>-12.39%</td><td>+6.97%/-24.32%</td><td>+4.22%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>AEHR</td><td>+22.19%</td><td>-2.71%</td><td>+3.74%/-7.9%</td><td>+12.77%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>KEEL</td><td>+16.81%</td><td>-0.11%</td><td>+2.29%/-7.63%</td><td>+7.04%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>BULL</td><td>+16.28%</td><td>+11.08%</td><td>+11.38%/-5.31%</td><td>+0.72%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.72% at 08:30 — below board thresholds</td></tr>
+<tr><td>ERAS</td><td>+12.67%</td><td>+12.25%</td><td>+12.58%/-0.99%</td><td>+0%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>TXG</td><td>+12.56%</td><td>+6.46%</td><td>+7.28%/-1.28%</td><td>+2.25%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 66 (top 30 cut)</td></tr>
+<tr><td>CIFR</td><td>+11.04%</td><td>+11.65%</td><td>+14.89%/-3.72%</td><td>+0.65%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.65% at 08:30 — below board thresholds</td></tr>
+<tr><td>NIO</td><td>+10.73%</td><td>+4.4%</td><td>+6.28%/-1.87%</td><td>+1.99%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 58 (top 30 cut)</td></tr>
+<tr><td>THC</td><td>-10.66%</td><td>-14.51%</td><td>+0.83%/-15.86%</td><td>+4.1%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$181.81 > $150 and not scalper-class</td></tr>
+<tr><td>SEDG</td><td>+10.46%</td><td>+5.79%</td><td>+7.15%/-2.72%</td><td>+1.6%</td><td>rider</td><td><code>RANK_CUT</code></td><td>prelim rank 88 (top 30 cut)</td></tr>
+<tr><td>OPEN</td><td>-10.44%</td><td>-19.06%</td><td>+3.08%/-25.62%</td><td>+22.74%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>QS</td><td>+10.18%</td><td>+11.43%</td><td>+11.79%/-5.34%</td><td>-9.5%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>RIG</td><td>+9.85%</td><td>+7.88%</td><td>+7.88%/-0.33%</td><td>+0%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>MPW</td><td>+8.93%</td><td>+6.44%</td><td>+11.86%/-0.11%</td><td>-0.25%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.25% at 08:30 — below board thresholds</td></tr>
+<tr><td>BTU</td><td>+8.93%</td><td>+0.09%</td><td>+2.13%/-2.7%</td><td>+4.27%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>MPT</td><td>+8.93%</td><td>+6.44%</td><td>+11.86%/-0.11%</td><td>-0.25%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.25% at 08:30 — below board thresholds</td></tr>
+<tr><td>BRKR</td><td>+8.81%</td><td>+4.53%</td><td>+4.62%/-0.65%</td><td>+2.06%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 69 (top 30 cut)</td></tr>
+<tr><td>REAL</td><td>+8.63%</td><td>+5.9%</td><td>+9.67%/-2.46%</td><td>+0%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>PONY</td><td>+8.62%</td><td>+0.79%</td><td>+4.45%/-3.72%</td><td>+1.4%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.4% at 08:30 — below board thresholds</td></tr>
+<tr><td>NWL</td><td>+8.53%</td><td>+4.01%</td><td>+4.35%/-0.26%</td><td>+0.71%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.71% at 08:30 — below board thresholds</td></tr>
+<tr><td>PM</td><td>-8.49%</td><td>+1.47%</td><td>+4.08%/-0.08%</td><td>-4.79%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$171.84 > $150 and not scalper-class</td></tr>
+<tr><td>LEN</td><td>+8.4%</td><td>+1.68%</td><td>+1.94%/-0.39%</td><td>+3.49%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>EFX</td><td>-8.18%</td><td>-0.46%</td><td>+1.83%/-1.07%</td><td>-4.02%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$249.21 > $150 and not scalper-class</td></tr>
+<tr><td>CRCL</td><td>-8.18%</td><td>-2.92%</td><td>+0.84%/-5.98%</td><td>-2.78%</td><td>rider</td><td><code>GATED_PRICE_CAP</code></td><td>$210.1 > $150 and not scalper-class</td></tr>
+<tr><td>GM</td><td>-8.14%</td><td>-2.1%</td><td>+0.42%/-2.22%</td><td>-2.27%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+</table>
+<p><i>…and 52 more (see results JSON).</i></p>
+<p>Catch rates: board 20.8% · tradeable 0% · traded 0% · capture -1.3% (P&amp;L −$249 vs opportunity ~$18602.5)</p>
+<h2>2025-07-23</h2>
+<p>Universe 869 · eligible 3 · day P&amp;L −$75</p>
+<h3>Picks (badge-matched engine)</h3>
+<table><tr><th>Sym</th><th>Class</th><th>Gap 8:30</th><th>PM $</th><th>Outcome</th><th>Trades</th><th>P&amp;L</th></tr>
+<tr><td>SMR</td><td>rider</td><td>+5.76%</td><td>$22.2M</td><td>traded</td><td>10:00→10:05 stop −$166</td><td>−$166</td></tr>
+<tr><td>BMNR</td><td>rider</td><td>+2.9%</td><td>$39.9M</td><td>qualified, no trigger</td><td>—</td><td>—</td></tr>
+<tr><td>ABVX</td><td>rider</td><td>+531%</td><td>$283.3M</td><td>traded</td><td>10:05→15:50 eod +$92</td><td>+$92</td></tr>
+</table>
+<h3>Movers ≥5% and why we caught/missed them (76)</h3>
+<table><tr><th>Sym</th><th>c/c</th><th>9:40 ride</th><th>Max up/dn</th><th>Gap 8:30</th><th>Class</th><th>Reason</th><th>Detail</th></tr>
+<tr><td>ABVX</td><td>+584.15%</td><td>+7.01%</td><td>+9.85%/-3.14%</td><td>+489.4%</td><td>rider</td><td><code>TRADED</code></td><td>1 trade(s)</td></tr>
+<tr><td>OPEN</td><td>-20.31%</td><td>+0%</td><td>+12.23%/-10.48%</td><td>-9.03%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>WOLF</td><td>+19.73%</td><td>+13.44%</td><td>+35.72%/-1.36%</td><td>+7.74%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>LUNR</td><td>+18.88%</td><td>+8.37%</td><td>+9.64%/-1.27%</td><td>+1.96%</td><td>caution</td><td><code>RANK_CUT</code></td><td>prelim rank 136 (top 30 cut)</td></tr>
+<tr><td>LBRT</td><td>+17.87%</td><td>+9.68%</td><td>+14.25%/-0.81%</td><td>+9.42%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>HIMS</td><td>+16.06%</td><td>+13.22%</td><td>+14.94%/-0.47%</td><td>-0.02%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.02% at 08:30 — below board thresholds</td></tr>
+<tr><td>QBTS</td><td>+15.43%</td><td>+7.18%</td><td>+8.05%/-1.4%</td><td>+3.98%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>GEV</td><td>+14.63%</td><td>+2.27%</td><td>+3.02%/-0.31%</td><td>+6.33%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$583.75 > $150 and not scalper-class</td></tr>
+<tr><td>KSS</td><td>-14.44%</td><td>-6.9%</td><td>+0%/-9.92%</td><td>-0.28%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.28% at 08:30 — below board thresholds</td></tr>
+<tr><td>ENPH</td><td>-14.19%</td><td>-6.2%</td><td>+0.3%/-7.64%</td><td>-4.94%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>PEGA</td><td>+13.96%</td><td>+4.01%</td><td>+4.71%/-1.32%</td><td>-4.79%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>FI</td><td>-13.81%</td><td>+9.1%</td><td>+9.34%/-1.39%</td><td>-16.54%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>FISV</td><td>-13.81%</td><td>+9.1%</td><td>+9.34%/-1.39%</td><td>-16.54%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>TXN</td><td>-13.34%</td><td>-2.26%</td><td>+0.49%/-2.48%</td><td>-9.69%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$194.1 > $150 and not scalper-class</td></tr>
+<tr><td>HMC</td><td>+13.07%</td><td>+0.93%</td><td>+1.38%/-0.5%</td><td>+11.08%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>TRVI</td><td>+12.57%</td><td>+13.37%</td><td>+14.71%/-0.85%</td><td>-0.76%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.76% at 08:30 — below board thresholds</td></tr>
+<tr><td>OTIS</td><td>-12.38%</td><td>+1.4%</td><td>+4.83%/-0.11%</td><td>-6.53%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>BKR</td><td>+11.67%</td><td>+7.46%</td><td>+7.55%/-1.41%</td><td>+2.2%</td><td>avoid</td><td><code>RANK_CUT</code></td><td>prelim rank 79 (top 30 cut)</td></tr>
+<tr><td>STLA</td><td>+11.65%</td><td>+5.02%</td><td>+5.27%/-1.11%</td><td>+6.69%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>MARA</td><td>-11.64%</td><td>+0.51%</td><td>+4.49%/-3.17%</td><td>-4.83%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>AEHR</td><td>+10.3%</td><td>+2.85%</td><td>+6.75%/-1.24%</td><td>-1.39%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -1.39% at 08:30 — below board thresholds</td></tr>
+<tr><td>IBRX</td><td>+10.15%</td><td>+7.82%</td><td>+9.45%/-0.36%</td><td>+1.48%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.48% at 08:30 — below board thresholds</td></tr>
+<tr><td>OKLO</td><td>+9.26%</td><td>+0.39%</td><td>+5.51%/-3.92%</td><td>+2.94%</td><td>rider</td><td><code>RANK_CUT</code></td><td>prelim rank 35 (top 30 cut)</td></tr>
+<tr><td>TMO</td><td>+9.17%</td><td>-0.34%</td><td>+3.22%/-0.53%</td><td>+4.71%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$447.77 > $150 and not scalper-class</td></tr>
+<tr><td>SEDG</td><td>-8.82%</td><td>-8.08%</td><td>+0.14%/-9.03%</td><td>-0.38%</td><td>rider</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.38% at 08:30 — below board thresholds</td></tr>
+</table>
+<p><i>…and 51 more (see results JSON).</i></p>
+<p>Catch rates: board 25% · tradeable 3.4% · traded 3.4% · capture -0.3% (P&amp;L −$75 vs opportunity ~$27235)</p>
+<h2>2025-07-24</h2>
+<p>Universe 869 · eligible 1 · day P&amp;L +$0</p>
+<h3>Picks (badge-matched engine)</h3>
+<table><tr><th>Sym</th><th>Class</th><th>Gap 8:30</th><th>PM $</th><th>Outcome</th><th>Trades</th><th>P&amp;L</th></tr>
+<tr><td>TSLA</td><td>scalper</td><td>-6.78%</td><td>$1700.4M</td><td>declined: fall day</td><td>—</td><td>—</td></tr>
+</table>
+<h3>Movers ≥5% and why we caught/missed them (57)</h3>
+<table><tr><th>Sym</th><th>c/c</th><th>9:40 ride</th><th>Max up/dn</th><th>Gap 8:30</th><th>Class</th><th>Reason</th><th>Detail</th></tr>
+<tr><td>BE</td><td>+22.91%</td><td>+1.5%</td><td>+5.03%/-3.05%</td><td>+0.26%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.26% at 08:30 — below board thresholds</td></tr>
+<tr><td>IRDM</td><td>-22.08%</td><td>-5.08%</td><td>+0.38%/-6.73%</td><td>-6.27%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>LKQ</td><td>-17.79%</td><td>-0.2%</td><td>+0.19%/-5.74%</td><td>-15.51%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>DOW</td><td>-17.45%</td><td>-7.71%</td><td>+0%/-9.94%</td><td>-11.21%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>MAT</td><td>-16.39%</td><td>-7.27%</td><td>+2.12%/-7.54%</td><td>-3.66%</td><td>avoid</td><td><code>RANK_CUT</code></td><td>prelim rank 39 (top 30 cut)</td></tr>
+<tr><td>AMBP</td><td>-16.38%</td><td>-9.26%</td><td>+3.17%/-10.08%</td><td>-0.86%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.86% at 08:30 — below board thresholds</td></tr>
+<tr><td>STM</td><td>-15.88%</td><td>+1.26%</td><td>+1.55%/-1.7%</td><td>-14.92%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>SEI</td><td>+15.27%</td><td>-6.37%</td><td>+0%/-9.93%</td><td>+9.01%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>CMG</td><td>-13.3%</td><td>-1.15%</td><td>+2.27%/-1.84%</td><td>-11.88%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>MXL</td><td>+12.73%</td><td>-11.23%</td><td>+0.9%/-13.51%</td><td>+35.31%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>FTI</td><td>+11.61%</td><td>+3.49%</td><td>+3.97%/-0.99%</td><td>+0%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>OKLO</td><td>+11.54%</td><td>+9.39%</td><td>+12.35%/-1.03%</td><td>+1.37%</td><td>rider</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.37% at 08:30 — below board thresholds</td></tr>
+<tr><td>LUV</td><td>-11.16%</td><td>-2.07%</td><td>+2.01%/-4.67%</td><td>-3.48%</td><td>avoid</td><td><code>RANK_CUT</code></td><td>prelim rank 31 (top 30 cut)</td></tr>
+<tr><td>KSS</td><td>+10.76%</td><td>+7.72%</td><td>+12.18%/-0.98%</td><td>-0.65%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.65% at 08:30 — below board thresholds</td></tr>
+<tr><td>OSCR</td><td>-10.55%</td><td>-8.68%</td><td>+1.1%/-8.97%</td><td>+1.32%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.32% at 08:30 — below board thresholds</td></tr>
+<tr><td>TPH</td><td>-9.83%</td><td>-9.07%</td><td>+0.11%/-9.75%</td><td>+0%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>CLOV</td><td>-9.82%</td><td>-7.62%</td><td>+0.15%/-8.52%</td><td>+1.17%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.17% at 08:30 — below board thresholds</td></tr>
+<tr><td>AAL</td><td>-9.74%</td><td>-0.39%</td><td>+2.6%/-1.82%</td><td>-6.15%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>LYB</td><td>-9.71%</td><td>-3.64%</td><td>+0.06%/-5%</td><td>-5.12%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>BULL</td><td>-9.29%</td><td>-7.04%</td><td>+2.57%/-8.17%</td><td>+0.11%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.11% at 08:30 — below board thresholds</td></tr>
+<tr><td>CNC</td><td>-9.01%</td><td>-6.31%</td><td>+1.05%/-6.98%</td><td>-1.8%</td><td>avoid</td><td><code>RANK_CUT</code></td><td>prelim rank 62 (top 30 cut)</td></tr>
+<tr><td>TECK</td><td>-8.97%</td><td>-4.83%</td><td>+0.65%/-4.86%</td><td>-1.53%</td><td>avoid</td><td><code>RANK_CUT</code></td><td>prelim rank 37 (top 30 cut)</td></tr>
+<tr><td>RKT</td><td>-8.33%</td><td>-5.13%</td><td>+0.89%/-5.54%</td><td>-0.8%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.8% at 08:30 — below board thresholds</td></tr>
+<tr><td>TSLA</td><td>-8.27%</td><td>+1.03%</td><td>+2.02%/-0.72%</td><td>-6.25%</td><td>scalper</td><td><code>DECLINED</code></td><td>declined: fall day</td></tr>
+<tr><td>DB</td><td>+7.86%</td><td>-0.63%</td><td>+0.59%/-1.34%</td><td>+6.81%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+</table>
+<p><i>…and 32 more (see results JSON).</i></p>
+<p>Catch rates: board 29.8% · tradeable 0% · traded 0% · capture 0% (P&amp;L +$0 vs opportunity ~$5187.5)</p>
+<h2>2025-07-25</h2>
+<p>Universe 869 · eligible 3 · day P&amp;L +$0</p>
+<h3>Picks (badge-matched engine)</h3>
+<table><tr><th>Sym</th><th>Class</th><th>Gap 8:30</th><th>PM $</th><th>Outcome</th><th>Trades</th><th>P&amp;L</th></tr>
+<tr><td>ASTS</td><td>rider</td><td>-6.34%</td><td>$124.2M</td><td>declined: fall day</td><td>—</td><td>—</td></tr>
+<tr><td>OKLO</td><td>rider</td><td>-3.86%</td><td>$53.2M</td><td>declined: fall day</td><td>—</td><td>—</td></tr>
+<tr><td>SMR</td><td>rider</td><td>-3.59%</td><td>$21.2M</td><td>declined: fall day</td><td>—</td><td>—</td></tr>
+</table>
+<h3>Movers ≥5% and why we caught/missed them (34)</h3>
+<table><tr><th>Sym</th><th>c/c</th><th>9:40 ride</th><th>Max up/dn</th><th>Gap 8:30</th><th>Class</th><th>Reason</th><th>Detail</th></tr>
+<tr><td>CHTR</td><td>-18.49%</td><td>-6%</td><td>+0.48%/-6.49%</td><td>-11.13%</td><td>avoid</td><td><code>GATED_PRICE_CAP</code></td><td>$337.7 > $150 and not scalper-class</td></tr>
+<tr><td>GNTX</td><td>+16.27%</td><td>+1.54%</td><td>+1.93%/-1.26%</td><td>+9.36%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>SNV</td><td>-12.5%</td><td>+2.91%</td><td>+4.91%/-0.52%</td><td>-9.64%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>DECK</td><td>+11.37%</td><td>-3.15%</td><td>+0.3%/-3.44%</td><td>+13.11%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>ALM</td><td>-11.04%</td><td>-3.45%</td><td>+0.49%/-3.45%</td><td>—</td><td>—</td><td><code>GATED_HISTORY</code></td><td>9 sessions of history (&lt;30)</td></tr>
+<tr><td>ASTS</td><td>-9.52%</td><td>-0.38%</td><td>+3.2%/-2.37%</td><td>-6.48%</td><td>rider</td><td><code>DECLINED</code></td><td>declined: fall day</td></tr>
+<tr><td>GNW</td><td>+9.13%</td><td>+1.52%</td><td>+1.52%/-5.57%</td><td>+5.59%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>INTC</td><td>-8.53%</td><td>-0.07%</td><td>+0.68%/-1.74%</td><td>-8.79%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>WOLF</td><td>-8.15%</td><td>-4.02%</td><td>+3.5%/-7.48%</td><td>-1.12%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -1.12% at 08:30 — below board thresholds</td></tr>
+<tr><td>DYN</td><td>+7.79%</td><td>+9.44%</td><td>+12.91%/-0.66%</td><td>+0%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>SRPT</td><td>-7.45%</td><td>+2.08%</td><td>+5.95%/-2.24%</td><td>-12.27%</td><td>caution</td><td><code>BADGE_CUT</code></td><td>class caution — no validated engine</td></tr>
+<tr><td>OUST</td><td>-7.03%</td><td>-5.8%</td><td>+0%/-6.23%</td><td>+0.92%</td><td>rider</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.92% at 08:30 — below board thresholds</td></tr>
+<tr><td>NEM</td><td>+6.89%</td><td>-0.09%</td><td>+0.93%/-2.24%</td><td>+2.54%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>PPBI</td><td>+6.66%</td><td>+2.85%</td><td>+2.99%/-0.89%</td><td>+1.32%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +1.32% at 08:30 — below board thresholds</td></tr>
+<tr><td>DOC</td><td>-6.62%</td><td>-0.65%</td><td>+0.25%/-1.6%</td><td>-0.05%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.05% at 08:30 — below board thresholds</td></tr>
+<tr><td>LPL</td><td>+6.41%</td><td>+2.82%</td><td>+3.49%/-0.27%</td><td>+3.34%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>COLB</td><td>+6.23%</td><td>+2.61%</td><td>+2.8%/-0.97%</td><td>+1.5%</td><td>avoid</td><td><code>RANK_CUT</code></td><td>prelim rank 98 (top 30 cut)</td></tr>
+<tr><td>KSS</td><td>-6.2%</td><td>-0.63%</td><td>+0.88%/-3.29%</td><td>+0.15%</td><td>caution</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.15% at 08:30 — below board thresholds</td></tr>
+<tr><td>CNC</td><td>+6.13%</td><td>+1.36%</td><td>+3.12%/-3.3%</td><td>-0.89%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>GTX</td><td>+6.11%</td><td>+7.29%</td><td>+7.74%/-0.45%</td><td>+0%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0% at 08:30 — below board thresholds</td></tr>
+<tr><td>TECK</td><td>-6.05%</td><td>-3.25%</td><td>+0.06%/-3.56%</td><td>-0.43%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.43% at 08:30 — below board thresholds</td></tr>
+<tr><td>STLA</td><td>+5.74%</td><td>+2.95%</td><td>+3.15%/-0.51%</td><td>+2.71%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+<tr><td>PENN</td><td>+5.6%</td><td>+2.68%</td><td>+2.79%/-2.38%</td><td>+0.66%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap +0.66% at 08:30 — below board thresholds</td></tr>
+<tr><td>FLG</td><td>-5.52%</td><td>+2.68%</td><td>+3.85%/-1.03%</td><td>-0.42%</td><td>avoid</td><td><code>INVISIBLE_AT_0830</code></td><td>gap -0.42% at 08:30 — below board thresholds</td></tr>
+<tr><td>EW</td><td>+5.49%</td><td>-2.08%</td><td>+0%/-4.74%</td><td>+8.71%</td><td>avoid</td><td><code>BADGE_CUT</code></td><td>class avoid — no validated engine</td></tr>
+</table>
+<p><i>…and 9 more (see results JSON).</i></p>
+<p>Catch rates: board 41.2% · tradeable 0% · traded 0% · capture 0% (P&amp;L +$0 vs opportunity ~$4182.5)</p>
+<hr>
+<p><i>Reason codes come from logged gate telemetry (deterministic), not post-hoc inference. Capture ratio = net P&amp;L ÷ Σ(up-rides ≥5% × $12.5k half-notional).</i></p></body>
