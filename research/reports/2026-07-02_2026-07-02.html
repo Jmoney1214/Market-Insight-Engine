@@ -6,8 +6,8 @@ th,td{border:1px solid #ccc;padding:4px 8px;text-align:left;font-variant-numeric
 code{background:rgba(127,127,127,.15);padding:1px 4px;border-radius:3px}h2{margin-top:28px}</style>
 <body><h1>FinDesk pipeline backtest — 2026-07-02..2026-07-02</h1>
 <h2>Run metadata</h2>
-<li><b>generatedAt</b>: 2026-07-05T22:07:07.270Z</li>
-<li><b>gitSha</b>: 05b1655</li>
+<li><b>generatedAt</b>: 2026-07-05T22:11:39.053Z</li>
+<li><b>gitSha</b>: d073852</li>
 <li><b>dataProvider</b>: Alpaca SIP (bars) + FMP stable (screener, earnings)</li>
 <li><b>feed</b>: sip</li>
 <li><b>adjustment</b>: split</li>
@@ -22,6 +22,7 @@ code{background:rgba(127,127,127,.15);padding:1px 4px;border-radius:3px}h2{margi
 <p>  - News catalyst omitted from harness scores (earnings calendar included)</p>
 <p>  - Fills pessimistic unless fill mode says otherwise; costs 2bps/side + ~3bps slippage</p>
 <p>  - Fixed $25k per pick, no cross-position capital netting</p>
+<li><b>universeSource</b>: current screener constituents (survivorship risk for past dates)</li>
 <h2>Summary</h2>
 <table><tr><th>Net P&amp;L</th><th>Trades</th><th>Wins/Losses</th><th>Movers (≥5%)</th><th>Board catch</th><th>Traded catch</th></tr>
 <tr><td>−$10</td><td>2</td><td>1/1</td><td>165</td><td>13.3%</td><td>0%</td></tr>

@@ -28,4 +28,24 @@ router.get("/scan/scorecard", async (_req, res) => {
   }
 });
 
+router.get("/scan/universe-snapshot", async (req, res) => {
+  const date = String(req.query["date"] ?? "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(404).json({ error: "date=YYYY-MM-DD required" });
+    return;
+  }
+  try {
+    const { getUniverseSnapshot } = await import("../lib/universeSnapshot.js");
+    const snap = await getUniverseSnapshot(date);
+    if (!snap) {
+      res.status(404).json({ error: `No universe snapshot for ${date}` });
+      return;
+    }
+    res.json(snap);
+  } catch (err) {
+    logger.error({ err: String(err) }, "Universe snapshot fetch failed");
+    res.status(500).json({ error: "Universe snapshot unavailable" });
+  }
+});
+
 export default router;

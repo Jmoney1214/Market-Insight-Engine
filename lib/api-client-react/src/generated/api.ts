@@ -32,6 +32,7 @@ import type {
   GetPremarketScanParams,
   GetReplayEventParams,
   GetReplaySessionParams,
+  GetUniverseSnapshotParams,
   HealthStatus,
   HistoryEvent,
   JournalEntry,
@@ -42,6 +43,7 @@ import type {
   ScanResult,
   ScorecardSummary,
   StrategyRegistryEntry,
+  UniverseSnapshot,
   ValidationState,
   WatchlistEntry,
   WatchlistInput
@@ -212,6 +214,92 @@ export function useGetScanScorecard<TData = Awaited<ReturnType<typeof getScanSco
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetScanScorecardQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetUniverseSnapshotUrl = (params: GetUniverseSnapshotParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/scan/universe-snapshot?${stringifiedParams}` : `/api/scan/universe-snapshot`
+}
+
+/**
+ * The scan records its screener constituents once per trading morning. Point-in-time backtests read this to replay past dates against the TRUE as-of universe (survivorship-bias fix). 404 for dates before the feature shipped or non-trading days.
+
+ * @summary Screener universe as of a past trading day
+ */
+export const getUniverseSnapshot = async (params: GetUniverseSnapshotParams, options?: RequestInit): Promise<UniverseSnapshot> => {
+
+  return customFetch<UniverseSnapshot>(getGetUniverseSnapshotUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetUniverseSnapshotQueryKey = (params?: GetUniverseSnapshotParams,) => {
+    return [
+    `/api/scan/universe-snapshot`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetUniverseSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getUniverseSnapshot>>, TError = ErrorType<ApiError>>(params: GetUniverseSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUniverseSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetUniverseSnapshotQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getUniverseSnapshot>>> = ({ signal }) => getUniverseSnapshot(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getUniverseSnapshot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetUniverseSnapshotQueryResult = NonNullable<Awaited<ReturnType<typeof getUniverseSnapshot>>>
+export type GetUniverseSnapshotQueryError = ErrorType<ApiError>
+
+
+/**
+ * @summary Screener universe as of a past trading day
+ */
+
+export function useGetUniverseSnapshot<TData = Awaited<ReturnType<typeof getUniverseSnapshot>>, TError = ErrorType<ApiError>>(
+ params: GetUniverseSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUniverseSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetUniverseSnapshotQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

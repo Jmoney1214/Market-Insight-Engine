@@ -6,7 +6,7 @@
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs, tradingDays, etWindow, etHm, daysBefore } from "./lib/dates.mjs";
-import { requireCreds, fmpUniverse, fmpEarnings, alpacaBars, stampMetadata } from "./lib/data.mjs";
+import { requireCreds, universeFor, fmpEarnings, alpacaBars, stampMetadata } from "./lib/data.mjs";
 import { scanDay, runEngine } from "./lib/engine.mjs";
 import { attribute } from "./lib/postflight.mjs";
 import { writeReports } from "./lib/report.mjs";
@@ -17,10 +17,10 @@ requireCreds();
 const days = tradingDays(args.from, args.to);
 console.error(`run: ${days.length} weekday(s) ${args.from}..${args.to} · fill=${args.fill}`);
 
-const uni = await fmpUniverse();
+const { source: universeSource, entries: uni } = await universeFor(args.from);
 const syms = uni.map((u) => u.symbol);
 const nameOf = new Map(uni.map((u) => [u.symbol, u.companyName]));
-console.error(`universe: ${uni.length}`);
+console.error(`universe: ${uni.length} (${universeSource})`);
 
 // Warm-up lookback: 320 calendar days covers 60d dollar-vol + 10d range stats
 // with margin, from the EARLIEST requested day.
@@ -60,7 +60,7 @@ for (const day of days) {
     `pnl=${dayPnl} movers=${attribution.movers.length} boardCatch=${attribution.catchRates.boardCatch}%`);
 }
 
-const meta = stampMetadata(args);
+const meta = { ...stampMetadata(args), universeSource };
 writeFileSync(fileURLToPath(new URL("./pipeline_results.json", import.meta.url)), JSON.stringify({ meta, results }, null, 1));
 console.error("results -> pipeline_results.json");
 if (args.report) {

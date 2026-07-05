@@ -30,6 +30,30 @@ function cached(key, ttlHours, fetcher) {
   return Promise.resolve(fetcher()).then((v) => { writeFileSync(f, JSON.stringify(v)); return v; });
 }
 
+/** Universe for a backtest date. Preference order:
+ *  1. TRUE as-of snapshot from the live app (survivorship-bias-free) when
+ *     UNIVERSE_SNAPSHOT_URL is set and the app recorded that date;
+ *  2. current FMP screener constituents, with `source` stamped so every report
+ *     carries the survivorship caveat honestly. */
+export async function universeFor(day) {
+  const base = process.env.UNIVERSE_SNAPSHOT_URL;
+  if (base && day) {
+    try {
+      const snap = await cached(`snapshot_${day}`, null, async () => {
+        const r = await fetch(`${base.replace(/\/$/, "")}/api/scan/universe-snapshot?date=${day}`);
+        if (!r.ok) throw new Error(`snapshot ${day}: HTTP ${r.status}`);
+        return r.json();
+      });
+      if (snap?.symbols?.length)
+        return { source: `as-of snapshot (${day})`, entries: snap.symbols };
+    } catch (err) {
+      console.error(`universe snapshot unavailable for ${day} (${err.message}) — falling back to current screener`);
+    }
+  }
+  const entries = await fmpUniverse();
+  return { source: "current screener constituents (survivorship risk for past dates)", entries };
+}
+
 /** FMP screener universe. Cached per calendar day (TTL 24h). No price ceiling —
  * class-specific ceilings are the scanner's job, not the data layer's. */
 export function fmpUniverse() {
