@@ -39,13 +39,18 @@ export async function universeFor(day) {
   const base = process.env.UNIVERSE_SNAPSHOT_URL;
   if (base && day) {
     try {
+      // Throw on empty/invalid so nothing bogus is ever cached; 10s timeout so
+      // a stalled app endpoint can't hang the whole backtest.
       const snap = await cached(`snapshot_${day}`, null, async () => {
-        const r = await fetch(`${base.replace(/\/$/, "")}/api/scan/universe-snapshot?date=${day}`);
+        const r = await fetch(`${base.replace(/\/$/, "")}/api/scan/universe-snapshot?date=${day}`,
+          { signal: AbortSignal.timeout(10_000) });
         if (!r.ok) throw new Error(`snapshot ${day}: HTTP ${r.status}`);
-        return r.json();
+        const j = await r.json();
+        if (!Array.isArray(j?.symbols) || j.symbols.length === 0)
+          throw new Error(`snapshot ${day}: empty symbol list`);
+        return j;
       });
-      if (snap?.symbols?.length)
-        return { source: `as-of snapshot (${day})`, entries: snap.symbols };
+      return { source: `as-of snapshot (${day})`, entries: snap.symbols };
     } catch (err) {
       console.error(`universe snapshot unavailable for ${day} (${err.message}) — falling back to current screener`);
     }

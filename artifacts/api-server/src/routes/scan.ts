@@ -31,7 +31,7 @@ router.get("/scan/scorecard", async (_req, res) => {
 router.get("/scan/universe-snapshot", async (req, res) => {
   const date = String(req.query["date"] ?? "");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    res.status(404).json({ error: "date=YYYY-MM-DD required" });
+    res.status(400).json({ error: "date=YYYY-MM-DD required" });
     return;
   }
   try {

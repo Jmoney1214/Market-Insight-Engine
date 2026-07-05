@@ -93,6 +93,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UniverseSnapshot"
+        "400":
+          description: Missing or malformed date parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
         "404":
           description: No snapshot recorded for that date
           content:
