@@ -98,6 +98,30 @@ export const GetScanScorecardResponse = zod.object({
 
 
 /**
+ * The scan records its screener constituents once per trading morning. Point-in-time backtests read this to replay past dates against the TRUE as-of universe (survivorship-bias fix). 404 for dates before the feature shipped or non-trading days.
+
+ * @summary Screener universe as of a past trading day
+ */
+export const getUniverseSnapshotQueryDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetUniverseSnapshotQueryParams = zod.object({
+  "date": zod.coerce.string().regex(getUniverseSnapshotQueryDateRegExp).describe('Trading date (YYYY-MM-DD, America\/New_York)')
+})
+
+export const GetUniverseSnapshotResponse = zod.object({
+  "date": zod.string(),
+  "count": zod.number(),
+  "symbols": zod.array(zod.object({
+  "symbol": zod.string(),
+  "companyName": zod.string().nullish(),
+  "price": zod.number().nullish(),
+  "avgVolume": zod.number().nullish()
+}))
+})
+
+
+/**
  * Returns server health status
  * @summary Health check
  */

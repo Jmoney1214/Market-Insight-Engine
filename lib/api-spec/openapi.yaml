@@ -68,6 +68,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ScorecardSummary"
 
+  /scan/universe-snapshot:
+    get:
+      operationId: getUniverseSnapshot
+      tags: [scan]
+      summary: Screener universe as of a past trading day
+      description: >
+        The scan records its screener constituents once per trading morning.
+        Point-in-time backtests read this to replay past dates against the TRUE
+        as-of universe (survivorship-bias fix). 404 for dates before the
+        feature shipped or non-trading days.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+          description: Trading date (YYYY-MM-DD, America/New_York)
+      responses:
+        "200":
+          description: Universe snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UniverseSnapshot"
+        "400":
+          description: Missing or malformed date parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "404":
+          description: No snapshot recorded for that date
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
   /healthz:
     get:
       operationId: healthCheck
@@ -886,6 +924,29 @@ components:
           type: array
           items:
             type: string
+
+    UniverseSnapshot:
+      type: object
+      required: [date, count, symbols]
+      properties:
+        date:
+          type: string
+        count:
+          type: number
+        symbols:
+          type: array
+          items:
+            type: object
+            required: [symbol]
+            properties:
+              symbol:
+                type: string
+              companyName:
+                type: ["string", "null"]
+              price:
+                type: ["number", "null"]
+              avgVolume:
+                type: ["number", "null"]
 
     CompanySnapshot:
       type: object

@@ -160,6 +160,15 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
   );
   const bySymbol = new Map(universe.map((u) => [u.symbol, u]));
 
+  // Persist today's constituents once (survivorship-bias fix for the offline
+  // backtester). Fire-and-forget: snapshot failures never block the scan.
+  void import("./universeSnapshot.js")
+    .then((m) => m.recordUniverseSnapshot(
+      universe.map((u) => ({ symbol: u.symbol, companyName: u.companyName ?? null, price: u.price ?? null, avgVolume: u.volume ?? null })),
+      todayNY(),
+    ))
+    .catch(() => {});
+
   // 2. Live gaps for the whole universe (batched SIP snapshots).
   const snaps = (await alpaca.getSnapshots(universe.map((u) => u.symbol))) ?? new Map();
 

@@ -414,6 +414,22 @@ export interface ScorecardSummary {
   recent: ScorecardEntry[];
 }
 
+export type UniverseSnapshotSymbolsItem = {
+  symbol: string;
+  /** @nullable */
+  companyName?: string | null;
+  /** @nullable */
+  price?: number | null;
+  /** @nullable */
+  avgVolume?: number | null;
+};
+
+export interface UniverseSnapshot {
+  date: string;
+  count: number;
+  symbols: UniverseSnapshotSymbolsItem[];
+}
+
 export interface WatchlistEntry {
   id: number;
   ticker: string;
@@ -1101,6 +1117,14 @@ export type GetPremarketScanParams = {
  * Bypass the short-lived scan cache
  */
 refresh?: boolean;
+};
+
+export type GetUniverseSnapshotParams = {
+/**
+ * Trading date (YYYY-MM-DD, America/New_York)
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+date: string;
 };
 
 export type GetCopilotEventParams = {

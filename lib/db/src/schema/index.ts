@@ -5,3 +5,4 @@ export * from "./journalEntries";
 export * from "./strategyRegistry";
 export * from "./validationState";
 export * from "./historyLog";
+export * from "./universe";
