@@ -15,7 +15,8 @@ profitable.**
 | `opening_range_breakout.pine` | Momentum | Break of the first 15-min range, filtered by HTF trend |
 | `rsi_divergence.pine` | Mean-reversion | Pivot-based regular RSI divergence (counter-trend reversals) |
 | `morning_scan_overlay.pine` | **Indicator** (not a strategy, Pine **v6**) | Recreates a FinDesk Morning Scan row on the chart: gap vs prior close, pre-market volume, ≥2% multi-trade count, ATR/RSI, ex-catalyst score, list eligibility. Use on 1–15m with Extended Hours ON |
-| `morning_scan_strategy.pine` | Momentum (Pine **v6**) | Trades ONLY on scan-qualified days (multi-trade profile + pre-market volume + price ceiling): opening-range breakout, gap decides allowed direction, ATR stop + RR target, EOD flatten. Use on 1–15m with Extended Hours ON |
+| `morning_scan_strategy.pine` | Momentum (Pine **v6**) | Trades ONLY on scan-qualified days (multi-trade profile + pre-market volume + price ceiling): opening-range breakout, gap decides allowed direction, ATR stop + RR target, EOD flatten. Use on 1–15m with Extended Hours ON. **Tested: unprofitable on HIMS 5m 2025-26 (PF 0.80)** — kept as the baseline to beat |
+| `morning_scan_jumpday_long.pine` | Long-only rider (Pine **v6**) | v2, data-selected on Alpaca SIP 5m (Aug 2025–Jul 2026): trades ONLY scan-qualified **gap-up** days, one morning 9-EMA pullback entry above VWAP, structural stop, ride to the 15:50 flatten. Survivor of a 19-config sweep + 7-symbol holdout (aggregate +$5.0k on $25k; mixed by symbol — validate per symbol) |
 
 Run all three on the same symbol/timeframe to compare a trend engine, a
 momentum engine, and a mean-reversion engine head-to-head.
