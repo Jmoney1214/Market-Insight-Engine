@@ -110,7 +110,9 @@ async function adjudicateExtreme(sym, day, hm, bar, field) {
   const [h, m] = hm.split(":").map(Number);
   const end = `${String(Math.floor((h * 60 + m + 5) / 60)).padStart(2, "0")}:${String((m + 5) % 60).padStart(2, "0")}`;
   const w = etWindow(day, hm, end);
-  const m1 = (await alpaca({ symbols: sym, timeframe: "1Min", start: w.start, end: w.end }))[sym] ?? [];
+  // Alpaca's `end` is inclusive — drop the hm+5 bar, it belongs to the NEXT 5m interval.
+  const m1 = ((await alpaca({ symbols: sym, timeframe: "1Min", start: w.start, end: w.end }))[sym] ?? [])
+    .filter((b) => { const t = etHm(b.t); return t >= hm && t < end; });
   if (!m1.length) return false;
   const tape = field === "h" ? Math.max(...m1.map((b) => b.h)) : Math.min(...m1.map((b) => b.l));
   return pctDiff(bar[field], tape) <= 0.02; // 5m extreme reproduced on the 1m tape
@@ -118,9 +120,14 @@ async function adjudicateExtreme(sym, day, hm, bar, field) {
 for (const sym of cfg.intraday) {
   for (const day of days) {
     const w = etWindow(day, "09:30", "16:00");
-    const a = (await alpaca({ symbols: sym, timeframe: "5Min", start: w.start, end: w.end }))[sym] ?? [];
+    const a = ((await alpaca({ symbols: sym, timeframe: "5Min", start: w.start, end: w.end }))[sym] ?? [])
+      .filter((b) => { const t = etHm(b.t); return t >= "09:30" && t < "16:00"; }); // inclusive end may return the 16:00 bar
     const f = await fmp(`historical-chart/5min?symbol=${sym}&from=${day}&to=${day}`);
-    if (!a.length && !f.length) continue;
+    if (!a.length && !f.length) continue; // both agree: no session
+    if (!a.length || !f.length) {
+      issues.push(`${sym} ${day}: intraday session mismatch — ${a.length ? "Alpaca" : "FMP"} has ${a.length || f.length} bars, ${a.length ? "FMP" : "Alpaca"} has none`);
+      continue;
+    }
     const aMap = new Map(a.map((b) => [etHm(b.t), b]));
     let n = 0, worst = 0, miss = 0, notes = 0;
     const disputes = [];
@@ -144,10 +151,13 @@ for (const sym of cfg.intraday) {
         issues.push(`${sym} ${day} ${hm}: intraday ${fk} drift ${d.toFixed(3)}% (alpaca=${b[ak]} fmp=${fv}) — NOT explained by tape granularity`);
       }
     }
-    if (n && miss > 2)
+    const aMiss = a.length - n; // symmetric: Alpaca RTH bars FMP never published
+    if (miss > 2)
       issues.push(`${sym} ${day}: ${miss} FMP bars missing from Alpaca RTH set`);
+    if (aMiss > 2)
+      issues.push(`${sym} ${day}: ${aMiss} Alpaca RTH bars missing from FMP set`);
     console.error(`  ${sym} ${day} intraday: ${n} bars · worst ΔOHLC ${worst.toFixed(3)}%` +
-      `${miss ? ` · ${miss} unmatched` : ""}${notes ? ` · ${notes} adjudicated (SIP finer)` : ""}`);
+      `${miss || aMiss ? ` · ${miss + aMiss} unmatched` : ""}${notes ? ` · ${notes} adjudicated (SIP finer)` : ""}`);
   }
 }
 
