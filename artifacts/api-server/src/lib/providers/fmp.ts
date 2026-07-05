@@ -248,6 +248,8 @@ export async function getScreenerUniverse(maxPrice: number, limit = 5000): Promi
     limit,
   });
   if (!Array.isArray(rows)) return null;
+  if (rows.length >= limit)
+    logger.warn({ limit, rows: rows.length }, "FMP screener hit the safety limit — universe may be truncated, raise it");
   return rows
     .filter((r) => !r["isEtf"] && !r["isFund"])
     .map((r) => ({
