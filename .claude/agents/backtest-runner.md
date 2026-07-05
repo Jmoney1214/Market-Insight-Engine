@@ -17,13 +17,20 @@ stated baseline on data it was not tuned on.
 
 ## Tools and data
 
-- Harnesses live in `tools/research/` (`class_backtest.mjs`, `pipeline.mjs`).
-  They fetch Alpaca SIP bars (split-adjusted, feed=sip) and cache to
-  `tools/research/cache/` (gitignored). Node 20+, plain `node file.mjs`.
+- Main entrypoint: `node tools/research/pipeline.mjs --from YYYY-MM-DD
+  [--to YYYY-MM-DD] [--report] [--html] [--fill mode]` — dates are CLI args,
+  never edit source for a run. Modules in `tools/research/lib/`
+  (dates/data/engine/postflight/report); legacy `class_backtest.mjs` for
+  multi-month single-symbol sweeps. Tests: `node --test tools/research/test/`.
+- **Data-plane contract (hard rule)**: Alpaca SIP is the ONLY source of bars
+  (daily + intraday, feed=sip, split-adjusted). FMP is screener / earnings /
+  enrichment only — never bars. Cache in `tools/research/cache/` (gitignored).
 - Credentials come ONLY from env: `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY`,
   `FMP_API_KEY`. If unset, stop and ask the user — never hardcode keys in files.
-- Read `research/findings.md` before designing any experiment: it holds the
-  validated class boundaries, the rejected strategies, and the standing rules.
+- Read `research/findings.md` (validated boundaries, rejected strategies,
+  standing rules) and `research/parity-audit.md` (Pine↔Node contract) before
+  designing any experiment. If you change an engine rule, update the Pine twin
+  and the parity contract, and run `parity_check.mjs`.
 
 ## House rules (non-negotiable)
 
