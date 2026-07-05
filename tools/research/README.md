@@ -38,7 +38,28 @@ node pipeline.mjs --from 2026-07-02 [--to 2026-07-03] [--report] [--html] \
 | `lib/postflight.mjs` | Realized outcomes, ≥5% movers, reason codes **from logged gates**, catch rates |
 | `lib/report.mjs` | Markdown/HTML report writer |
 | `parity_check.mjs` | Pine↔Node regression guard: diffs a TradingView Strategy Tester CSV export against the harness (`research/parity-audit.md` is the contract) |
+| `crosscheck.mjs` | Cross-source data verifier: Alpaca SIP vs FMP for a date range (daily close/volume + optional intraday 5m OHLC), exit 1 on unexplained drift |
 | `class_backtest.mjs` | Legacy per-symbol engine sweeps (kept for multi-month single-symbol studies) |
+
+## Cross-source verification (multi-check rule)
+
+Every backtest over a NEW date range gets its data independently verified
+before results are trusted:
+
+```sh
+node crosscheck.mjs --from 2025-07-21 --to 2025-07-25 \
+  [--symbols HIMS,COIN] [--sample 10] [--intraday HIMS]
+```
+
+- Compares Alpaca SIP (the engine's only bar source) against FMP EOD daily
+  close/volume, plus intraday 5m OHLC for `--intraday` symbols. Both sides
+  fetch LIVE — the verifier never reads the harness cache.
+- Disputed 5m highs/lows are adjudicated against Alpaca's own 1-minute SIP
+  tape: a confirmed SIP extreme that FMP's coarser feed missed is a note, not
+  a failure. FMP showing a *wider* range than SIP is a real issue.
+- Exit 1 = unexplained drift → do not trust backtests over that range until
+  each issue is explained. FMP stays a verifier here — never a bar source
+  (data-plane contract unchanged).
 
 ## Reason codes (attribution)
 
