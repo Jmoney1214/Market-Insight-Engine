@@ -1,0 +1,38 @@
+{
+  "_comment": "Real data_get_trades payload captured from TradingView MCP on NYSE:HIMS 5m with 'FinDesk Jump-Day Long Rider' loaded (2026-07-05). Shape reference for the normalizer. NOTE: orders carry time_index = ORDER-SEQUENCE ordinal (0..total_orders-1, contiguous), NOT a bar index and NOT a wall-clock timestamp. No date/time field exists in this payload. strategy_results.total_trades=28; data_get_trades caps at ~20 orders/call.",
+  "strategy_results": {
+    "strategy": "FinDesk Jump-Day Long Rider",
+    "total_trades": 28,
+    "net_profit": 4064.13,
+    "profit_factor": 2.2665,
+    "winning_trades": 14,
+    "losing_trades": 14
+  },
+  "trades_sample": {
+    "trade_count": 20,
+    "total_orders": 56,
+    "source": "internal_api",
+    "trades": [
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 16.45, "qty": 555, "time_index": 36 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 16.39, "qty": 555, "time_index": 37 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 24.84, "qty": 348, "time_index": 38 },
+      { "id": "Long exit", "type": "STOP", "side": "sell", "entry": false, "price": 24.05, "qty": 348, "time_index": 39 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 22.62, "qty": 561, "time_index": 40 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 22.52, "qty": 561, "time_index": 41 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 19.95, "qty": 654, "time_index": 42 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 20.25, "qty": 654, "time_index": 43 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 21.59, "qty": 574, "time_index": 44 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 24.09, "qty": 574, "time_index": 45 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 29.23, "qty": 474, "time_index": 46 },
+      { "id": "Long exit", "type": "STOP", "side": "sell", "entry": false, "price": 28.65, "qty": 474, "time_index": 47 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 29.65, "qty": 316, "time_index": 48 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 30.51, "qty": 316, "time_index": 49 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 25, "qty": 554, "time_index": 50 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 25.35, "qty": 554, "time_index": 51 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 28.67, "qty": 432, "time_index": 52 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 30.14, "qty": 432, "time_index": 53 },
+      { "id": "Long", "type": "MARKET", "side": "buy", "entry": true, "price": 34.15, "qty": 418, "time_index": 54 },
+      { "id": "Close position order", "type": "MARKET", "side": "sell", "entry": false, "price": 35.5, "qty": 418, "time_index": 55 }
+    ]
+  }
+}
