@@ -37,7 +37,10 @@ node pipeline.mjs --from 2026-07-02 [--to 2026-07-03] [--report] [--html] \
 | `lib/engine.mjs` | Scanner with per-symbol **gate telemetry** + badge-matched engines (rider/scalper) with fill modes |
 | `lib/postflight.mjs` | Realized outcomes, ≥5% movers, reason codes **from logged gates**, catch rates |
 | `lib/report.mjs` | Markdown/HTML report writer |
-| `parity_check.mjs` | Pine↔Node regression guard: diffs a TradingView Strategy Tester CSV export against the harness (`research/parity-audit.md` is the contract) |
+| `parity_check.mjs` | Pine↔Node regression guard (CSV path): diffs a TradingView Strategy Tester CSV export against the harness, TIME-matched (`research/parity-audit.md` is the contract) |
+| `tv_parity_check.mjs` | Pine↔Node regression guard (MCP path): diffs a TradingView-MCP `data_get_trades` dump against the harness, SEQUENCE-matched — no manual CSV export |
+| `lib/parity.mjs` | Shared verdict core for both paths: `matchByTime`, `matchBySequence`, `tally`, `hardFail` |
+| `lib/tradingview_mcp_adapter.mjs` | Normalizes a `data_get_trades` payload (orders → round-trip trades) |
 | `crosscheck.mjs` | Cross-source data verifier: Alpaca SIP vs FMP for a date range (daily close/volume + optional intraday 5m OHLC), exit 1 on unexplained drift |
 | `class_backtest.mjs` | Legacy per-symbol engine sweeps (kept for multi-month single-symbol studies) |
 
@@ -60,6 +63,50 @@ node crosscheck.mjs --from 2025-07-21 --to 2025-07-25 \
 - Exit 1 = unexplained drift → do not trust backtests over that range until
   each issue is explained. FMP stays a verifier here — never a bar source
   (data-plane contract unchanged).
+
+## Pine↔Node parity (two paths, one verdict core)
+
+Both paths prove the harness engine (`runEngine`) reproduces the TradingView
+Pine strategy. They share `lib/parity.mjs`; only how TradingView trades arrive
+differs.
+
+**MCP path (automated, no manual export) — for fast spot-checks:**
+
+```sh
+# 1. Drive TradingView via the MCP (in a Claude session):
+#    chart_set_symbol HIMS · chart_set_timeframe 5 · (ensure the rider/scalper
+#    Pine strategy is on the chart: pine_set_source + pine_smart_compile) ·
+#    data_get_trades + data_get_strategy_results → save both into one JSON:
+#    { "strategy_results": {...}, "trades": [ ...orders... ] }  →  hims.tvdump.json
+# 2. Diff it against the engine over the SAME date range:
+node tv_parity_check.mjs --trades hims.tvdump.json --symbol HIMS \
+  --from 2025-08-01 --to 2026-07-06 --class rider [--fill tv_ohlc_path]
+```
+
+- Matched by **chronological sequence** (the MCP payload carries no timestamps —
+  only an order-sequence `time_index`). Verdict keys off entry/exit **price**,
+  **side**, trade **count**, and exit reason.
+- **qty and absolute P&L are reported but NOT hard-failed** — Node uses fixed
+  $25k, TradingView compounds equity, so they differ by design
+  (`research/parity-audit.md` § Sizing base).
+- **Completeness guard:** `data_get_trades` caps at ~20 orders (~10 trades) per
+  call. If the dump has fewer trades than `strategy_results.total_trades`, the
+  run WARNS and hard-fails ("incomplete TV capture") rather than comparing a
+  truncated tail. For a strategy with >10 trades, either bound the chart's
+  loaded history or use the CSV path below for the full run.
+
+**CSV path (full run, timestamped) — for complete regression:**
+
+```sh
+node parity_check.mjs --csv <TradingView Strategy Tester export.csv> \
+  --symbol HIMS --class rider [--fill tv_ohlc_path]
+```
+
+- Matched by **wall-clock time** (±5 min entry / ±10 min exit). No order cap,
+  carries dates — use this for the authoritative full-history parity.
+
+Both exit 1 on drift (`SIGNAL_MISMATCH` + `EXIT_DIFF`) or hard-fail, 0 on clean
+parity. `FILL_DIFF` (price within the fill-model/feed tolerance) is not drift.
 
 ## Reason codes (attribution)
 

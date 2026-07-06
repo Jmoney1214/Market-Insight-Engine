@@ -1,3 +1,4 @@
 cache/
 pipeline_results.json
 scratch/
+*.tvdump.json
