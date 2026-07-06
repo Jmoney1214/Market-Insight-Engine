@@ -1130,7 +1130,7 @@ date: string;
 export type GetCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys
+ * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.
  */
 source?: GetCopilotEventSource;
 mode?: GetCopilotEventMode;
@@ -1157,7 +1157,7 @@ export const GetCopilotEventMode = {
 export type ExplainCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys
+ * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.
  */
 source?: ExplainCopilotEventSource;
 mode?: ExplainCopilotEventMode;

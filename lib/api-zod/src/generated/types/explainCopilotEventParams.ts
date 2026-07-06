@@ -11,7 +11,7 @@ import type { ExplainCopilotEventSource } from './explainCopilotEventSource';
 export type ExplainCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys
+ * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.
  */
 source?: ExplainCopilotEventSource;
 mode?: ExplainCopilotEventMode;

@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { Sunrise, TrendingUp, TrendingDown, Crosshair, RefreshCw, Loader2 } from "lucide-react";
+import { Sunrise, TrendingUp, TrendingDown, Crosshair, RefreshCw, Loader2, Users, ChevronDown } from "lucide-react";
 import {
   useGetPremarketScan,
   getPremarketScan,
   getGetPremarketScanQueryKey,
   useAnalyzeTicker,
+  useExplainCopilotEvent,
+  getExplainCopilotEventQueryKey,
   type ScanCandidate,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +29,84 @@ const classBadge: Record<string, { label: string; className: string }> = {
   avoid: { label: "AVOID", className: "text-muted-foreground border-border bg-muted/30" },
 };
 
+const biasTone: Record<string, string> = {
+  bullish: "text-bullish border-bullish/40",
+  bearish: "text-bearish border-bearish/40",
+};
+
+/** Read-only analyst committee panel for one board name. Fetches only while
+ * open; Alpaca SIP is the only live source (yahoo_delayed is contract-blocked
+ * server-side). The committee explains the deterministic read — it never
+ * creates signals or overrides blocks. */
+function CommitteePanel({ symbol }: { symbol: string }) {
+  const { data, isLoading, isError } = useExplainCopilotEvent(
+    { symbol, source: "alpaca_live" },
+    {
+      query: {
+        queryKey: getExplainCopilotEventQueryKey({ symbol, source: "alpaca_live" }),
+        staleTime: 5 * 60 * 1000,
+      },
+    },
+  );
+
+  if (isLoading) {
+    return (
+      <div className="mt-2 p-3 rounded-md border border-border bg-muted/20 text-xs text-muted-foreground flex items-center gap-2" data-testid={`committee-loading-${symbol}`}>
+        <Loader2 className="w-3.5 h-3.5 animate-spin" /> Running 10-agent committee…
+      </div>
+    );
+  }
+  if (isError || !data) {
+    return (
+      <div className="mt-2 p-3 rounded-md border border-border bg-muted/20 text-xs text-muted-foreground" data-testid={`committee-error-${symbol}`}>
+        Committee unavailable for {symbol} right now.
+      </div>
+    );
+  }
+
+  const read = data.dashboardRead;
+  return (
+    <div className="mt-2 p-3 rounded-md border border-border bg-muted/20 flex flex-col gap-2" data-testid={`committee-panel-${symbol}`}>
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="text-[10px] font-semibold uppercase">
+          {read.recommendation.replaceAll("_", " ")}
+        </Badge>
+        <span className="text-[11px] text-muted-foreground font-mono-numbers">confidence {read.confidence}</span>
+        {data.l5Blocked && (
+          <Badge variant="outline" className="text-[10px] text-bearish border-bearish/40">HARD BLOCKED</Badge>
+        )}
+        <span className="ml-auto text-[10px] text-muted-foreground/70">
+          {data.provider === "deterministic" ? "deterministic read" : `prose via ${data.provider}`}
+          {data.degraded ? " · degraded" : ""}
+        </span>
+      </div>
+      <p className="text-xs leading-relaxed">{read.oneSentenceRead}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {data.agents.map((a) => (
+          <Badge
+            key={a.agent}
+            variant="outline"
+            title={a.headline}
+            className={cn("text-[10px] font-normal", biasTone[a.bias] ?? "text-muted-foreground")}
+            data-testid={`committee-agent-${symbol}-${a.agent}`}
+          >
+            {a.agent.replaceAll("_", " ")} · {a.bias}
+          </Badge>
+        ))}
+      </div>
+      {read.whatSupports.length > 0 && (
+        <p className="text-[11px] text-muted-foreground"><span className="text-bullish">Supports:</span> {read.whatSupports.slice(0, 3).join(" · ")}</p>
+      )}
+      {read.whatArguesAgainst.length > 0 && (
+        <p className="text-[11px] text-muted-foreground"><span className="text-bearish">Against:</span> {read.whatArguesAgainst.slice(0, 3).join(" · ")}</p>
+      )}
+      {read.riskNotes.length > 0 && (
+        <p className="text-[11px] text-muted-foreground/80">Risk: {read.riskNotes.slice(0, 2).join(" · ")}</p>
+      )}
+    </div>
+  );
+}
+
 function CandidateRow({
   c,
   onAnalyze,
@@ -36,6 +116,7 @@ function CandidateRow({
   onAnalyze: (symbol: string) => void;
   analyzing: string | null;
 }) {
+  const [committeeOpen, setCommitteeOpen] = useState(false);
   const gapTone = c.gapPct >= 0 ? "bullish" : "bearish";
   const busy = analyzing === c.symbol;
   const badge = c.tradeClass ? classBadge[c.tradeClass] : null;
@@ -97,7 +178,17 @@ function CandidateRow({
             RSI {c.rsi}
           </Badge>
         )}
+        <button
+          type="button"
+          onClick={() => setCommitteeOpen((v) => !v)}
+          className="ml-auto inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
+          data-testid={`button-committee-${c.symbol}`}
+        >
+          <Users className="w-3 h-3" /> Committee
+          <ChevronDown className={cn("w-3 h-3 transition-transform", committeeOpen && "rotate-180")} />
+        </button>
       </div>
+      {committeeOpen && <CommitteePanel symbol={c.symbol} />}
     </div>
   );
 }
