@@ -124,3 +124,23 @@ describe("replay surface requires no API keys (items 12, 23)", () => {
     expect(res.text).not.toMatch(/\bNaN\b|\bInfinity\b/);
   });
 });
+
+// Data-plane contract: paid feeds only. Yahoo delayed bars must be rejected at
+// the API boundary unless explicitly re-enabled via ALLOW_DELAYED_YAHOO=true.
+describe("data-plane contract (yahoo_delayed gate)", () => {
+  it("rejects yahoo_delayed on /copilot/explain", async () => {
+    const res = await request(app)
+      .get("/api/copilot/explain")
+      .query({ symbol: "HIMS", source: "yahoo_delayed" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/data-plane contract/);
+  });
+
+  it("rejects yahoo_delayed on /copilot/event", async () => {
+    const res = await request(app)
+      .get("/api/copilot/event")
+      .query({ symbol: "HIMS", source: "yahoo_delayed" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/data-plane contract/);
+  });
+});

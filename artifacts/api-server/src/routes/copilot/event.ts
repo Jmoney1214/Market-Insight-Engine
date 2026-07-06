@@ -44,7 +44,14 @@ router.get("/event", async (req, res) => {
     return;
   }
 
-  // Live sources: alpaca_live (real-time, key-gated) or yahoo_delayed.
+  // Data-plane contract: paid feeds only (Alpaca SIP). Yahoo delayed bars are
+  // disabled unless explicitly re-enabled for offline experiments.
+  if (source === "yahoo_delayed" && process.env["ALLOW_DELAYED_YAHOO"] !== "true") {
+    res.status(400).json({
+      error: "yahoo_delayed is disabled by the data-plane contract — use source=alpaca_live",
+    });
+    return;
+  }
   const liveSource = source === "alpaca_live" ? ALPACA_SOURCE : INTRADAY_SOURCE;
   try {
     const input =
