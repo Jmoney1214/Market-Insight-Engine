@@ -29,9 +29,10 @@ const classBadge: Record<string, { label: string; className: string }> = {
   avoid: { label: "AVOID", className: "text-muted-foreground border-border bg-muted/30" },
 };
 
+// Keys match the wire enum (BULLISH | BEARISH | NEUTRAL | MIXED | UNKNOWN).
 const biasTone: Record<string, string> = {
-  bullish: "text-bullish border-bullish/40",
-  bearish: "text-bearish border-bearish/40",
+  BULLISH: "text-bullish border-bullish/40",
+  BEARISH: "text-bearish border-bearish/40",
 };
 
 /** Read-only analyst committee panel for one board name. Fetches only while
@@ -90,7 +91,7 @@ function CommitteePanel({ symbol }: { symbol: string }) {
             className={cn("text-[10px] font-normal", biasTone[a.bias] ?? "text-muted-foreground")}
             data-testid={`committee-agent-${symbol}-${a.agent}`}
           >
-            {a.agent.replaceAll("_", " ")} · {a.bias}
+            {a.agent.replaceAll("_", " ")} · {a.bias.toLowerCase()}
           </Badge>
         ))}
       </div>
