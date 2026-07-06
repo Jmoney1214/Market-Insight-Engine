@@ -107,31 +107,32 @@ test("hardFail: side mismatch fails even when prices match", () => {
   assert.ok(hf.reasons.some((r) => /side mismatch/.test(r)));
 });
 
-test("hardFail: pnl beyond tolerance fails (qty drift, prices in tol)", () => {
-  // prices identical -> MATCH verdict, but qty 100 vs 105 blows pnl past tol
+test("hardFail: qty/PnL differences are REPORTED but NOT hard-fails (sizing base)", () => {
+  // Node fixed $25k vs Pine compounding strategy.equity => qty (and therefore
+  // absolute gross PnL) differ BY DESIGN. Prices match -> MATCH, no hard-fail.
+  // See research/parity-audit.md § "Sizing base".
   const results = matchBySequence(
     [tv({ entryPx: 20, exitPx: 22, qty: 100, grossPnl: 200 })],
-    [node({ entry: 20, exit: 22, qty: 105 })], // gross 210, delta 10 > max(1, 2)
+    [node({ entry: 20, exit: 22, qty: 105 })], // gross 210, big qty + pnl delta
   );
   assert.equal(results[0].verdict, "MATCH");
+  // deltas are still surfaced for the report / JSON, just not failed on.
+  assert.equal(results[0].deltas.qty, 5);
+  assert.equal(results[0].deltas.pnl, 10);
   const hf = hardFail(results, { tvCount: 1, nodeCount: 1 });
-  assert.equal(hf.failed, true);
-  assert.ok(hf.reasons.some((r) => /pnl beyond tol/.test(r)));
+  assert.equal(hf.failed, false);
+  assert.deepEqual(hf.reasons, []);
+  assert.ok(!hf.reasons.some((r) => /qty|pnl/.test(r)));
 });
 
-test("hardFail: pure qty mismatch fails even when pnl stays within tol", () => {
-  // qty 100 vs 101 at a $0.50 move -> gross delta $0.50 < pnl tol $1, but qty
-  // parity is required in its own right.
+test("hardFail: price beyond tol still fails even when qty matches", () => {
   const results = matchBySequence(
-    [tv({ entryPx: 20, exitPx: 20.5, qty: 100, grossPnl: 50 })],
-    [node({ entry: 20, exit: 20.5, qty: 101 })], // gross 50.5, delta 0.5 < max(1, 0.5)
+    [tv({ entryPx: 20, exitPx: 22, qty: 100, grossPnl: 200 })],
+    [node({ entry: 20, exit: 22.30, qty: 100 })], // exit 0.30 > tol 0.05
   );
-  assert.equal(results[0].verdict, "MATCH");
-  assert.equal(results[0].deltas.qty, 1);
   const hf = hardFail(results, { tvCount: 1, nodeCount: 1 });
   assert.equal(hf.failed, true);
-  assert.ok(hf.reasons.some((r) => /qty mismatch/.test(r)));
-  assert.ok(!hf.reasons.some((r) => /pnl beyond tol/.test(r))); // pnl alone would NOT catch it
+  assert.ok(hf.reasons.some((r) => /exit px beyond tol/.test(r)));
 });
 
 test("classifyPair: non-finite node exit -> EXIT_DIFF (never MATCH via NaN)", () => {
