@@ -119,6 +119,37 @@ test("hardFail: pnl beyond tolerance fails (qty drift, prices in tol)", () => {
   assert.ok(hf.reasons.some((r) => /pnl beyond tol/.test(r)));
 });
 
+test("hardFail: pure qty mismatch fails even when pnl stays within tol", () => {
+  // qty 100 vs 101 at a $0.50 move -> gross delta $0.50 < pnl tol $1, but qty
+  // parity is required in its own right.
+  const results = matchBySequence(
+    [tv({ entryPx: 20, exitPx: 20.5, qty: 100, grossPnl: 50 })],
+    [node({ entry: 20, exit: 20.5, qty: 101 })], // gross 50.5, delta 0.5 < max(1, 0.5)
+  );
+  assert.equal(results[0].verdict, "MATCH");
+  assert.equal(results[0].deltas.qty, 1);
+  const hf = hardFail(results, { tvCount: 1, nodeCount: 1 });
+  assert.equal(hf.failed, true);
+  assert.ok(hf.reasons.some((r) => /qty mismatch/.test(r)));
+  assert.ok(!hf.reasons.some((r) => /pnl beyond tol/.test(r))); // pnl alone would NOT catch it
+});
+
+test("classifyPair: non-finite node exit -> EXIT_DIFF (never MATCH via NaN)", () => {
+  const t = tv({ entryPx: 20, exitPx: 22, qty: 100, grossPnl: 200 });
+  assert.equal(classifyPair(t, node({ entry: 20, exit: NaN, qty: 100 })), "EXIT_DIFF");
+  assert.equal(classifyPair(t, node({ entry: Infinity, exit: 22, qty: 100 })), "EXIT_DIFF");
+});
+
+test("matchBySequence: non-finite node exit surfaces as EXIT_DIFF drift", () => {
+  const results = matchBySequence(
+    [tv({ entryPx: 20, exitPx: 22, qty: 100, grossPnl: 200 })],
+    [node({ entry: 20, exit: NaN, qty: 100 })],
+  );
+  assert.equal(results[0].verdict, "EXIT_DIFF");
+  const { drift } = tally(results);
+  assert.equal(drift, 1);
+});
+
 test("hardFail: clean sequence passes", () => {
   const results = matchBySequence(
     [tv({ entryPx: 20, exitPx: 22, qty: 100, grossPnl: 200 })],

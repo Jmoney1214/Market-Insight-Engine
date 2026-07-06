@@ -18,6 +18,9 @@ const near = (a, b, mins = 5) => Math.abs(hmMinutes(a) - hmMinutes(b)) <= mins;
  * {entryPx, exitPx}; nodeTrade carries {entry, exit}. A missing side -> mismatch. */
 export function classifyPair(tvTrade, nodeTrade, { priceTol = defaultPriceTol } = {}) {
   if (!tvTrade || !nodeTrade) return "SIGNAL_MISMATCH";
+  // A non-finite node exit/entry (bad bar, data-end with no fill) must never
+  // classify MATCH via a NaN comparison — treat it as a real exit difference.
+  if (!Number.isFinite(nodeTrade.exit) || !Number.isFinite(nodeTrade.entry)) return "EXIT_DIFF";
   const exitDelta = Math.abs(nodeTrade.exit - tvTrade.exitPx);
   const entryDelta = Math.abs(nodeTrade.entry - tvTrade.entryPx);
   if (exitDelta > priceTol(tvTrade.exitPx)) return "EXIT_DIFF";
@@ -118,6 +121,8 @@ export function hardFail(results, { tvCount, nodeCount, priceTol = defaultPriceT
     }
     if (r.deltas && r.deltas.sideMatch === false)
       reasons.push(`seq ${r.seq}: side mismatch`);
+    if (r.deltas && r.deltas.qty != null && r.deltas.qty !== 0)
+      reasons.push(`seq ${r.seq}: qty mismatch (tv ${r.qtyTv} vs node ${r.qtyNode})`);
     if (r.tvEntry != null && r.nodeEntry != null &&
         Math.abs(r.nodeEntry - r.tvEntry) > priceTol(r.tvEntry))
       reasons.push(`seq ${r.seq}: entry px beyond tol (tv ${r.tvEntry} vs node ${r.nodeEntry})`);

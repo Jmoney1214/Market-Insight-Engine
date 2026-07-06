@@ -28,6 +28,18 @@ requireCreds();
 const payload = JSON.parse(readFileSync(tradesPath, "utf8"));
 const tvTrades = normalizeMcpTrades(payload);
 
+// Completeness guard: data_get_trades caps at ~20 orders/call, so a dump can
+// silently under-report. If the payload states total_trades, it MUST equal the
+// trades we parsed — otherwise the whole comparison runs on partial data.
+const totalTrades = payload?.strategy_results?.total_trades
+  ?? payload?.trades_sample?.strategy_results?.total_trades;
+let extraHardFail = [];
+if (totalTrades != null && totalTrades !== tvTrades.length) {
+  console.error(`\n!!! WARNING: INCOMPLETE TV CAPTURE — parsed ${tvTrades.length} of ${totalTrades} trades.`);
+  console.error(`!!! data_get_trades caps at ~20 orders/call; re-pull the full trade list before trusting this parity run.\n`);
+  extraHardFail.push(`incomplete TV capture: ${tvTrades.length} of ${totalTrades} trades`);
+}
+
 // Node side: run the harness engine over the SAME date range, collecting every
 // trade across all days into one chronological list (Alpaca SIP bars only).
 const nodeTrades = [];
@@ -46,6 +58,9 @@ console.error(`TV MCP: ${tvTrades.length} trade(s) vs Node: ${nodeTrades.length}
 const results = matchBySequence(tvTrades, nodeTrades);
 const { counts, drift } = tally(results);
 const hf = hardFail(results, { tvCount: tvTrades.length, nodeCount: nodeTrades.length });
+// Fold the completeness guard into the hard-fail verdict.
+hf.reasons = [...extraHardFail, ...hf.reasons];
+hf.failed = hf.failed || extraHardFail.length > 0;
 
 // Readable mismatch report — one line per non-MATCH pair.
 for (const r of results) {
