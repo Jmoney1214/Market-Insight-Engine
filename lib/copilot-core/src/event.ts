@@ -132,6 +132,7 @@ export function buildCopilotEvent(input: BuildEventInput): CopilotEvent {
     position,
     feedQuality,
     warnings,
+    validation,
     bars,
   };
 

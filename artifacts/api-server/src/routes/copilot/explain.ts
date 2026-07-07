@@ -4,6 +4,7 @@ import {
   ExplainCopilotEventResponse,
 } from "@workspace/api-zod";
 import { buildCopilotEvent } from "@workspace/copilot-core";
+import { buildEventWithValidation } from "../../lib/validationResolver.js";
 import { runCommittee } from "@workspace/copilot-committee";
 import { committeeResultToApiRead } from "../../lib/committeeRead.js";
 import { getCommitteeProvider } from "../../lib/committeeProvider.js";
@@ -44,7 +45,7 @@ router.get("/explain", async (req, res) => {
       res.status(404).json({ error: `No fixture found for "${symbolUpper}".` });
       return;
     }
-    const core = buildCopilotEvent(mode ? { ...input, mode } : input);
+    const core = await buildEventWithValidation(mode ? { ...input, mode } : input);
     const result = await runCommittee(core, provider);
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
     return;
@@ -64,7 +65,7 @@ router.get("/explain", async (req, res) => {
       source === "alpaca_live"
         ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
         : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
-    const core = buildCopilotEvent(input);
+    const core = await buildEventWithValidation(input);
     const result = await runCommittee(core, provider);
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
   } catch (err) {

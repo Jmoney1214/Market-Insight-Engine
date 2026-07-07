@@ -229,6 +229,10 @@ export interface CopilotEvent {
   position: PositionRead;
   feedQuality: FeedQuality;
   warnings: string[];
+  /** Measured-edge validation for the active trigger stack (journal-derived);
+   * the memory agent reads this. DEFAULT is insufficient_sample until outcomes
+   * accumulate. Internal to the core event — not forwarded to the wire type. */
+  validation: ValidationSnapshot;
   /** OHLCV bars underlying this event, oldest first; empty on data failure. */
   bars: Bar[];
 }
