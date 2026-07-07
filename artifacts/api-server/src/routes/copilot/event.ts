@@ -4,6 +4,7 @@ import {
   GetCopilotEventResponse,
 } from "@workspace/api-zod";
 import { buildCopilotEvent } from "@workspace/copilot-core";
+import { buildEventWithValidation } from "../../lib/validationResolver.js";
 import { coreEventToApiEvent } from "../../lib/copilotEvent.js";
 import {
   CopilotDataError,
@@ -39,7 +40,7 @@ router.get("/event", async (req, res) => {
       res.status(404).json({ error: `No fixture found for "${symbolUpper}".` });
       return;
     }
-    const core = buildCopilotEvent(mode ? { ...input, mode } : input);
+    const core = await buildEventWithValidation(mode ? { ...input, mode } : input);
     res.json(GetCopilotEventResponse.parse(coreEventToApiEvent(core)));
     return;
   }
@@ -58,7 +59,7 @@ router.get("/event", async (req, res) => {
       source === "alpaca_live"
         ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
         : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
-    const core = buildCopilotEvent(input);
+    const core = await buildEventWithValidation(input);
     res.json(GetCopilotEventResponse.parse(coreEventToApiEvent(core)));
   } catch (err) {
     if (err instanceof CopilotDataError) {

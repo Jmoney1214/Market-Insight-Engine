@@ -137,6 +137,52 @@ describe("unavailable agents never invent data (items 2, 3, 4, 20)", () => {
   });
 });
 
+describe("memory agent reports the measured edge when wired", () => {
+  const base = eventFor("AAPL");
+
+  it("paper_validated with positive expectancy → OK, measured, never dominates", () => {
+    const ev: CopilotEvent = {
+      ...base,
+      validation: { status: "paper_validated", sampleCount: 40, expectancyR: 0.5 },
+    };
+    const r = memoryAgent(ev);
+    expect(r.status).toBe("OK");
+    expect(r.bias).toBe("NEUTRAL"); // memory measures edge quality, not direction
+    expect(r.confidence).toBeGreaterThan(0);
+    expect(r.confidence).toBeLessThanOrEqual(0.5); // capped — informs, never dominates
+    expect(r.supportingFactors.join(" ")).toMatch(/40 samples/);
+    expect(r.supportingFactors.join(" ")).toMatch(/0\.50R/);
+  });
+
+  it("no_edge → OK but cautions, must not raise conviction", () => {
+    const ev: CopilotEvent = {
+      ...base,
+      validation: { status: "no_edge", sampleCount: 30, expectancyR: -0.2 },
+    };
+    const r = memoryAgent(ev);
+    expect(r.status).toBe("OK");
+    expect(r.bias).toBe("NEUTRAL");
+    expect(r.warnings.join(" ")).toMatch(/non-positive|not raise conviction/i);
+  });
+
+  it("insufficient_sample stays UNAVAILABLE (honest, no data yet)", () => {
+    const ev: CopilotEvent = {
+      ...base,
+      validation: { status: "insufficient_sample", sampleCount: 0, expectancyR: null },
+    };
+    expect(memoryAgent(ev).status).toBe("UNAVAILABLE");
+  });
+
+  it("unproven stays UNAVAILABLE even with non-countable samples present", () => {
+    // status "unproven" ⟺ zero countable samples, though sampleCount may be > 0.
+    const ev: CopilotEvent = {
+      ...base,
+      validation: { status: "unproven", sampleCount: 5, expectancyR: null },
+    };
+    expect(memoryAgent(ev).status).toBe("UNAVAILABLE");
+  });
+});
+
 describe("position agent uses position-safe language (item 19)", () => {
   it("flat → review-only and neutral", () => {
     const r = positionAgent(passBaseline());
