@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { etWindow, etHm, daysBefore } from "./lib/dates.mjs";
 import { requireCreds, alpacaBars } from "./lib/data.mjs";
 import { runEngine } from "./lib/engine.mjs";
+import { matchByTime, tally } from "./lib/parity.mjs";
 
 const get = (f) => { const i = process.argv.indexOf(f); return i >= 0 ? process.argv[i + 1] : undefined; };
 const csvPath = get("--csv"), symbol = get("--symbol"), cls = get("--class") ?? "rider";
@@ -41,9 +42,6 @@ const tvTrades = [...tv.values()].filter((t) => t.entryHm);
 const days = [...new Set(tvTrades.map((t) => t.day))].sort();
 console.error(`TV export: ${tvTrades.length} trades across ${days.length} day(s) for ${symbol} (class ${cls}, fill ${fill})`);
 
-const hmMinutes = (hm) => +hm.slice(0, 2) * 60 + +hm.slice(3, 5);
-const near = (a, b, mins = 5) => Math.abs(hmMinutes(a) - hmMinutes(b)) <= mins;
-
 const results = [];
 for (const day of days) {
   const daily = await alpacaBars([symbol], "1Day", `${daysBefore(day, 30)}T00:00:00Z`, `${day}T23:59:59Z`, `pchk_d_${symbol}_${day}`);
@@ -52,28 +50,11 @@ for (const day of days) {
   const full = await alpacaBars([symbol], "5Min", w.start, w.end, `pchk_f_${symbol}_${day}`);
   const bars = (full.get(symbol) ?? []).map((b) => ({ ...b, hm: etHm(b.t) }));
   const res = runEngine(cls, bars, hist.at(-1)?.c, fill);
-  const nodeTrades = res.trades ?? [];
   const tvDay = tvTrades.filter((t) => t.day === day);
-  const usedNode = new Set();
-  for (const t of tvDay) {
-    const m = nodeTrades.find((n, i) => !usedNode.has(i) && near(n.entryHm, t.entryHm) && usedNode.add(i) !== false);
-    if (!m) { results.push({ day, verdict: "SIGNAL_MISMATCH", side: "tv-only", tv: t }); continue; }
-    const exitOk = near(m.exitHm, t.exitHm, 10);
-    const pxDelta = Math.abs(m.entry - t.entryPx);
-    if (!exitOk) results.push({ day, verdict: "EXIT_DIFF", tv: t, node: m });
-    else if (pxDelta > Math.max(0.05, t.entryPx * 0.002)) results.push({ day, verdict: "FILL_DIFF", pxDelta: +pxDelta.toFixed(3), tv: t, node: m });
-    else results.push({ day, verdict: "MATCH", tv: t, node: m });
-  }
-  nodeTrades.forEach((n, i) => {
-    if (!usedNode.has(i)) results.push({ day, verdict: "SIGNAL_MISMATCH", side: "node-only", node: n, status: res.status });
-  });
-  if (!tvDay.length && !nodeTrades.length)
-    results.push({ day, verdict: "MATCH", note: `both flat (${res.status})` });
+  results.push(...matchByTime(tvDay, res.trades ?? [], { day, status: res.status }));
 }
 
-const counts = {};
-for (const r of results) counts[r.verdict] = (counts[r.verdict] ?? 0) + 1;
+const { counts, drift } = tally(results);
 console.log(JSON.stringify({ symbol, cls, fill, counts, results }, null, 1));
-const drift = (counts.SIGNAL_MISMATCH ?? 0) + (counts.EXIT_DIFF ?? 0);
 console.error(`verdict: ${drift === 0 ? "PARITY OK" : `DRIFT: ${drift} signal/exit mismatch(es)`} · ${JSON.stringify(counts)}`);
 process.exit(drift === 0 ? 0 : 1);

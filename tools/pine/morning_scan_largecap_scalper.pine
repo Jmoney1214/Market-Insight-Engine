@@ -116,6 +116,27 @@ if not na(time(timeframe.period, flatSess))
     strategy.cancel_all()
     strategy.close_all(comment = "EOD flat")
 
+// ---- BIG buy / exit markers + stop & target lines (VISUAL ONLY — no effect on logic) ---
+var float pendingStop = na
+var float pendingTgt  = na
+if canEnter and pullbackTag and bias and qty >= 1 and stopDist > 0
+    pendingStop := stopLevel
+    pendingTgt  := close + stopDist * rrTarget
+justEntered = strategy.position_size > 0 and strategy.position_size[1] == 0
+justExited  = strategy.position_size == 0 and strategy.position_size[1] > 0
+var float activeStop = na
+var float activeTgt  = na
+if justEntered
+    activeStop := pendingStop
+    activeTgt  := pendingTgt
+if justExited
+    activeStop := na
+    activeTgt  := na
+plotshape(justEntered, "BUY", shape.labelup, location.belowbar, color.new(color.green, 0), text = "BUY", textcolor = color.white, size = size.large)
+plotshape(justExited, "EXIT", shape.labeldown, location.abovebar, color.new(color.red, 0), text = "EXIT", textcolor = color.white, size = size.large)
+plot(activeStop, "Protective stop", color = color.new(color.red, 0), linewidth = 2, style = plot.style_linebr)
+plot(activeTgt, "1.5R target", color = color.new(color.green, 0), linewidth = 2, style = plot.style_linebr)
+
 // ---- Chart context ----------------------------------------------------------------------
 plot(vw, "Session VWAP", color = color.new(color.orange, 30))
 plot(e9, "EMA 9", color = color.new(color.aqua, 50))
