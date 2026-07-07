@@ -93,9 +93,13 @@ export function fmpEarnings(from, to) {
 }
 
 /** Alpaca SIP multi-symbol bars. Chunked, paginated, cached. HARD-FAILS if any
- * chunk errors — partial data would silently corrupt every downstream number. */
+ * chunk errors — partial data would silently corrupt every downstream number.
+ * The cache key includes a digest of the EXACT request (symbol set + timeframe +
+ * window), sorted so it is order-independent: if the universe changes, the tag
+ * alone would otherwise serve a stale symbol set for the 30-day TTL. */
 export function alpacaBars(symbols, timeframe, start, end, tag, ttlHours = 24 * 30) {
-  return cached(`bars_${tag}`, ttlHours, async () => {
+  const digest = configHash({ symbols: [...symbols].sort(), timeframe, start, end });
+  return cached(`bars_${tag}_${digest}`, ttlHours, async () => {
     const out = {};
     for (let i = 0; i < symbols.length; i += 100) {
       const chunk = symbols.slice(i, i + 100);

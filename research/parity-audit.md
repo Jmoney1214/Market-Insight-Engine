@@ -31,6 +31,13 @@ export against the harness on the same symbol/days; exit code 1 on drift).
 - **Fill model**: harness default `stop_first` (pessimistic) vs TradingView's
   OHLC-path emulator. Harness offers `--fill tv_ohlc_path` for parity runs and
   `target_first` as the optimistic bound.
+- **Slippage & exits (tightened — audit batch 1)**: stop exits now fill at
+  `min(bar.open, stop) − slip`, so a bar that GAPS through the stop fills at the
+  open (a real traded price), matching how TradingView fills a gap-through
+  stop-market order. EOD-flatten and data-end exits now also take slippage like
+  every other market exit (Pine applies `slippage` to its `close_all`). These
+  bring Node CLOSER to Pine, not further — previously the harness understated
+  gap-through losses and flattered non-stopped exits by ~1 slip/side.
 - **Data feed**: Alpaca SIP vs TradingView chart feed — bar edges can differ;
   classified as `FILL_DIFF` by the parity checker, never as drift.
 - **Sizing base**: fixed $25k research capital vs Pine's compounding
