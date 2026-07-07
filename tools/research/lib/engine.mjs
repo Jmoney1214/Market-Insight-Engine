@@ -152,9 +152,13 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
     }
     if (pos && rth) {
       const hit = resolveIntrabar(b, pos.stop, pos.tgt, fillMode);
-      if (hit === "stop") record(pos.stop - slip, b.hm, "stop");
+      // Gap-through stop: if the bar OPENS at/below the stop, a stop-market order
+      // fills at the (worse) open, not the stop price — never a price the tape
+      // never traded. Pessimistic and matches how TradingView fills gap-throughs.
+      if (hit === "stop") record(Math.min(b.o, pos.stop) - slip, b.hm, "stop");
       else if (hit === "target") record(pos.tgt, b.hm, "target");
-      else if (b.hm >= "15:50") record(b.c, b.hm, "eod");
+      // EOD flatten is a market sell — take slippage like every other market exit.
+      else if (b.hm >= "15:50") record(b.c - slip, b.hm, "eod");
     }
     // Session "0940-1100": end-exclusive — last signal bar 10:55, fill 11:00.
     const canSignal = rth && b.hm >= "09:40" && b.hm < "11:00" && !pos && !pending &&
@@ -168,6 +172,6 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
     }
     prev = b;
   }
-  if (pos && lastRth) record(lastRth.c, lastRth.hm, "data-end");
+  if (pos && lastRth) record(lastRth.c - slip, lastRth.hm, "data-end"); // market sell — slipped
   return { status: trades.length ? "traded" : "qualified, no trigger", gap: round(gap), trades };
 }
