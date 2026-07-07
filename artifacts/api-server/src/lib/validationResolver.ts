@@ -34,8 +34,12 @@ function hypothesisForStack(stack: TriggerStack): string | null {
 }
 
 async function loadJournalSamples(): Promise<TradeSample[]> {
+  // Only mode + manualOutcome are needed to build a sample — select just those.
   const rows = await db
-    .select()
+    .select({
+      mode: journalEntriesTable.mode,
+      manualOutcome: journalEntriesTable.manualOutcome,
+    })
     .from(journalEntriesTable)
     .orderBy(desc(journalEntriesTable.createdAt))
     .limit(2000);
@@ -45,6 +49,23 @@ async function loadJournalSamples(): Promise<TradeSample[]> {
     if (sample) samples.push(sample);
   }
   return samples;
+}
+
+// The scoreboard only changes when a journal outcome is added; a short TTL cache
+// keeps a burst of per-symbol event/explain requests from re-querying and
+// recomputing it every time. Per-instance is fine — 30s staleness on a
+// measured-edge signal is immaterial.
+let cachedScores: ReturnType<typeof computeScoreboard> | null = null;
+let cacheStampMs = 0;
+const CACHE_TTL_MS = 30_000;
+
+async function currentScoreboard(): Promise<ReturnType<typeof computeScoreboard>> {
+  const now = Date.now();
+  if (!cachedScores || now - cacheStampMs > CACHE_TTL_MS) {
+    cachedScores = computeScoreboard(await loadJournalSamples());
+    cacheStampMs = now;
+  }
+  return cachedScores;
 }
 
 /**
@@ -57,7 +78,7 @@ export async function resolveValidation(stack: TriggerStack): Promise<Validation
   const hypothesis = hypothesisForStack(stack);
   if (!hypothesis) return DEFAULT_VALIDATION;
   try {
-    const scores = computeScoreboard(await loadJournalSamples());
+    const scores = await currentScoreboard();
     const score = scores.find((s) => s.hypothesisName === hypothesis);
     if (!score) return DEFAULT_VALIDATION;
     return {

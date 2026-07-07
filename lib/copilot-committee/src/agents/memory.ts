@@ -16,8 +16,15 @@ export function memoryAgent(event: CopilotEvent): AgentRead {
   const gateReason = event.gates.validation?.reason;
   const bias: Bias = "NEUTRAL";
 
-  // No measured sample yet → stay honestly unavailable (the default this phase).
-  if (!v || v.sampleCount <= 0 || v.status === "insufficient_sample") {
+  // No MEASURED (countable) sample yet → stay honestly unavailable. "unproven"
+  // is assigned only when there are zero countable samples, even if sampleCount
+  // > 0 from non-countable (WATCH_ONLY/INVALID) entries — so it is unmeasured.
+  if (
+    !v ||
+    v.sampleCount <= 0 ||
+    v.status === "insufficient_sample" ||
+    v.status === "unproven"
+  ) {
     const warnings = [
       "No historical journal/validation sample available; edge is unmeasured this phase.",
     ];

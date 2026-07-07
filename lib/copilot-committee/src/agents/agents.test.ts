@@ -172,6 +172,15 @@ describe("memory agent reports the measured edge when wired", () => {
     };
     expect(memoryAgent(ev).status).toBe("UNAVAILABLE");
   });
+
+  it("unproven stays UNAVAILABLE even with non-countable samples present", () => {
+    // status "unproven" ⟺ zero countable samples, though sampleCount may be > 0.
+    const ev: CopilotEvent = {
+      ...base,
+      validation: { status: "unproven", sampleCount: 5, expectancyR: null },
+    };
+    expect(memoryAgent(ev).status).toBe("UNAVAILABLE");
+  });
 });
 
 describe("position agent uses position-safe language (item 19)", () => {
