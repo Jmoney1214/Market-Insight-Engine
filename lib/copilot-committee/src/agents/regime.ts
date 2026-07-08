@@ -2,39 +2,65 @@ import type { CopilotEvent } from "@workspace/copilot-core";
 import type { Bias } from "../vocab";
 import type { AgentRead } from "../types";
 import { clampConfidence } from "../guardrails";
-import { fmtNum } from "../format";
 
 /**
- * No explicit regime classification exists in the event yet, so this agent is
- * honestly DEGRADED: it infers a coarse backdrop from volatility/volume proxies
- * only and never invents a regime label.
+ * Reads the deterministic 8-state regime classification from `event.regime`
+ * (computed by the core from bars + ET time-of-day — roadmap Step 4). OK only
+ * when the core actually classified a state; when there are too few bars the
+ * agent stays honestly DEGRADED and never invents a regime label. Confidence
+ * is capped — the backdrop informs a read, it never dominates one.
  */
 export function regimeAgent(event: CopilotEvent): AgentRead {
-  const s = event.snapshot;
-  const supportingFactors: string[] = [];
-  const warnings: string[] = [
-    "No explicit regime classification in the event; inferred from volatility/volume proxies only.",
-  ];
+  const r = event.regime;
 
-  let headline = "Regime proxy is inconclusive.";
-  const bias: Bias = "NEUTRAL";
+  if (!r || r.state === null) {
+    return {
+      agent: "regime",
+      status: "DEGRADED",
+      bias: "NEUTRAL",
+      confidence: clampConfidence(0.2),
+      headline: "Regime not classified — not enough session data.",
+      supportingFactors: [],
+      warnings: [
+        "Too few session bars to classify the intraday regime; no label invented.",
+      ],
+      riskVerdict: null,
+      maxRecommendation: null,
+    };
+  }
 
-  if (s.rvol != null) {
-    if (s.rvol >= 1.5 && s.volumeExpansion === true) {
-      headline = "Volatility/volume proxy suggests a trend-friendly backdrop.";
-      supportingFactors.push(`Relative volume ${fmtNum(s.rvol)}x with volume expansion.`);
-    } else if (s.rvol < 1) {
-      headline = "Low-participation proxy suggests a chop / mean-reversion backdrop.";
-      warnings.push("Low relative volume; trend continuation is less reliable.");
-    }
+  const bias: Bias =
+    r.trendBias === "LONG"
+      ? "BULLISH"
+      : r.trendBias === "SHORT"
+        ? "BEARISH"
+        : "NEUTRAL";
+
+  const supportingFactors = [...r.factors];
+  const m = r.metrics;
+  if (m.driftAtr != null && m.rangeAtr != null) {
+    supportingFactors.push(
+      `Session drift ${m.driftAtr} ATRs inside a ${m.rangeAtr}-ATR range.`,
+    );
+  }
+
+  const warnings: string[] = [];
+  if (r.state === "NEWS_SPIKE") {
+    warnings.push(
+      "Volatility event in progress; ranges and spreads are unstable.",
+    );
+  }
+  if (r.state === "CHOP" || r.state === "LOW_VOL_AFTERNOON") {
+    warnings.push("Backdrop does not support trend continuation.");
   }
 
   return {
     agent: "regime",
-    status: "DEGRADED",
+    status: "OK",
     bias,
-    confidence: clampConfidence(0.2),
-    headline,
+    // informs, never dominates: capped at 0.7 regardless of core confidence
+    confidence: clampConfidence(Math.min(0.7, r.confidence)),
+    headline: `Intraday regime: ${r.state.replace(/_/g, " ").toLowerCase()}.`,
     supportingFactors,
     warnings,
     riskVerdict: null,

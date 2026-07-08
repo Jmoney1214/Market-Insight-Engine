@@ -103,23 +103,64 @@ describe("honest degradation (items 1, 9)", () => {
     expect(patternAgent(ev).status).toBe("OK");
   });
 
-  it("regime is always honestly DEGRADED (never invents a regime label)", () => {
-    expect(regimeAgent(eventFor("AAPL")).status).toBe("DEGRADED");
-    expect(regimeAgent(eventFor("MSFT")).status).toBe("DEGRADED");
-    expect(regimeAgent(eventFor("NODATA")).status).toBe("DEGRADED");
+  it("regime reads the deterministic classification; DEGRADED only without one", () => {
+    // Session fixtures carry enough bars for the core to classify, so the
+    // agent reports the state (OK) and its headline names exactly that state.
+    for (const sym of ["AAPL", "MSFT"]) {
+      const ev = eventFor(sym);
+      const r = regimeAgent(ev);
+      expect(ev.regime.state).not.toBeNull();
+      expect(r.status).toBe("OK");
+      expect(r.headline.toLowerCase()).toContain(
+        ev.regime.state!.replace(/_/g, " ").toLowerCase(),
+      );
+      expect(r.confidence).toBeLessThanOrEqual(0.7);
+    }
+    // No bars → no classification → honestly DEGRADED, no label invented.
+    const nodata = eventFor("NODATA");
+    expect(nodata.regime.state).toBeNull();
+    const r = regimeAgent(nodata);
+    expect(r.status).toBe("DEGRADED");
+    expect(r.headline).not.toMatch(/trend|chop|range day|spike|power/i);
   });
 });
 
 describe("unavailable agents never invent data (items 2, 3, 4, 20)", () => {
   const ev = eventFor("AAPL");
 
-  it("order flow is UNAVAILABLE with no invented factors", () => {
+  it("order flow is UNAVAILABLE without a trade tape (never inferred from price)", () => {
+    // Fixtures supply no trades, so the event carries no order-flow summary.
     const r = orderFlowAgent(ev);
+    expect(ev.orderFlow).toBeNull();
     expect(r.status).toBe("UNAVAILABLE");
     expect(r.confidence).toBe(0);
     expect(r.bias).toBe("UNKNOWN");
     expect(r.supportingFactors).toEqual([]);
     expect(r.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("order flow reads real trades when supplied (tick-rule signed volume)", () => {
+    const f = getFixture("AAPL")!;
+    const withTape = buildCopilotEvent({
+      symbol: f.symbol,
+      mode: f.mode,
+      dataSource: f.dataSource,
+      bars: f.bars,
+      quote: f.quote,
+      nowMs: f.nowMs,
+      trades: [
+        { t: 1, p: 100.0, s: 100 },
+        { t: 2, p: 100.02, s: 300 }, // uptick: buyer-initiated
+        { t: 3, p: 100.05, s: 300 }, // uptick: buyer-initiated
+        { t: 4, p: 100.05, s: 200 }, // zero-tick inherits buy
+      ],
+    });
+    const r = orderFlowAgent(withTape);
+    expect(withTape.orderFlow?.pressure).toBe("BUYING");
+    expect(r.status).toBe("OK");
+    expect(r.bias).toBe("BULLISH");
+    expect(r.confidence).toBeLessThanOrEqual(0.6);
+    expect(r.warnings.join(" ")).toMatch(/no level-2 depth/i);
   });
 
   it("catalyst is UNAVAILABLE with no invented headlines", () => {

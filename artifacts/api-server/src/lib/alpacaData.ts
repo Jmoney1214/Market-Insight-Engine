@@ -3,6 +3,7 @@ import type {
   BuildEventInput,
   Mode,
   Quote,
+  Trade,
 } from "@workspace/copilot-core";
 import {
   BENCHMARK_SYMBOL,
@@ -140,6 +141,50 @@ async function requestAlpacaSnapshot(symbol: string): Promise<AlpacaSnapshot> {
   )) as AlpacaSnapshot;
 }
 
+type AlpacaTradesResponse = {
+  trades?: Array<{ t?: string; p?: number; s?: number }> | null;
+};
+
+/** Trade-tape lookback window feeding the signed-volume order-flow read. */
+const TRADES_LOOKBACK_MS = 15 * 60 * 1000;
+
+/**
+ * Recent executed trades off the SIP tape (last 15 minutes). Feeds the
+ * deterministic order-flow read (tick-rule signed volume). Best-effort: any
+ * failure resolves to null so the order-flow agent stays honestly UNAVAILABLE
+ * rather than breaking the symbol's event.
+ */
+async function fetchAlpacaTrades(symbol: string): Promise<Trade[] | null> {
+  try {
+    const start = new Date(Date.now() - TRADES_LOOKBACK_MS).toISOString();
+    const json = (await alpacaGet(
+      `/v2/stocks/${encodeURIComponent(symbol)}/trades?start=${encodeURIComponent(
+        start,
+      )}&limit=10000&feed=${alpacaFeed}&sort=asc`,
+      symbol,
+    )) as AlpacaTradesResponse;
+    const trades: Trade[] = [];
+    for (const tr of json.trades ?? []) {
+      const t =
+        typeof tr.t === "string" ? Math.floor(Date.parse(tr.t) / 1000) : NaN;
+      if (
+        Number.isFinite(t) &&
+        typeof tr.p === "number" &&
+        Number.isFinite(tr.p) &&
+        tr.p > 0 &&
+        typeof tr.s === "number" &&
+        Number.isFinite(tr.s) &&
+        tr.s > 0
+      ) {
+        trades.push({ t, p: tr.p, s: tr.s });
+      }
+    }
+    return trades.length > 0 ? trades : null;
+  } catch {
+    return null;
+  }
+}
+
 const ET_DATE = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/New_York",
 });
@@ -206,7 +251,7 @@ export async function fetchAlpacaIntradayInput(
   mode: Mode = "LIVE",
 ): Promise<BuildEventInput> {
   const symbolUpper = symbol.toUpperCase();
-  const [rawBars, snapshot, benchmarkReturnPct, earningsTime] =
+  const [rawBars, snapshot, benchmarkReturnPct, earningsTime, trades] =
     await Promise.all([
       requestAlpacaBars(symbolUpper),
       requestAlpacaSnapshot(symbolUpper).catch(() => null),
@@ -214,6 +259,7 @@ export async function fetchAlpacaIntradayInput(
         ? Promise.resolve<number | null>(null)
         : fetchAlpacaBenchmarkReturnPct(),
       fetchEarningsTime(symbolUpper),
+      fetchAlpacaTrades(symbolUpper),
     ]);
 
   const bars = sliceLatestSession(rawBars);
@@ -251,6 +297,7 @@ export async function fetchAlpacaIntradayInput(
     dataSource: ALPACA_SOURCE,
     bars,
     quote,
+    trades,
     priorClose,
     earningsTime,
     benchmarkReturnPct,
