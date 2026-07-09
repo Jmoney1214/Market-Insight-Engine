@@ -2,3 +2,6 @@ cache/
 pipeline_results.json
 scratch/
 *.tvdump.json
+backfill/candidates.json
+backfill/insert-plan.json
+backfill/journal-rows.json
