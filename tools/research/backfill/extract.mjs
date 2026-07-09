@@ -55,13 +55,17 @@ function addDay(iso) {
   return t.toISOString().slice(0, 10);
 }
 
-// Group all (symbol, date) pairs we must fetch.
+// Group all (symbol, date) pairs we must fetch, and map each date to the ONE
+// report whose range covers it (report ranges don't overlap) so provenance is
+// correct for symbols that appear in multiple reports.
 const pairs = new Map(); // date -> Set<symbol>
+const dateToReport = new Map(); // date -> reportRef
 for (const r of rows) {
   const [a, b] = r.dates.length === 2 ? r.dates : [r.dates[0], r.dates[0]];
   for (const d of datesInRange(a, b)) {
     if (!pairs.has(d)) pairs.set(d, new Set());
     pairs.get(d).add(r.symbol);
+    dateToReport.set(d, r.reportRef);
   }
 }
 
@@ -77,10 +81,12 @@ for (const [day, symSet] of [...pairs.entries()].sort()) {
     const prevClose = dbars[dbars.length - 1].c;
     const dayBars = (pm.get(sym) ?? []).map((b) => ({ ...b, hm: etHm(b.t) }));
     if (dayBars.length === 0) continue;
-    // Determine the class from any row for this symbol on a source report.
-    const rowForSym = rows.find((r) => r.symbol === sym);
+    // Provenance: the report covering THIS date, and the class from that
+    // report's row for this symbol (symbols recur across reports — attribute
+    // by the date's report, not the first match anywhere).
+    const reportRef = dateToReport.get(day) ?? null;
+    const rowForSym = rows.find((r) => r.symbol === sym && r.reportRef === reportRef);
     const cls = rowForSym ? rowForSym.cls : "rider";
-    const reportRef = rowForSym ? rowForSym.reportRef : null;
     const res = runEngine(cls, dayBars, prevClose);
     for (const t of res.trades) {
       candidates.push({
