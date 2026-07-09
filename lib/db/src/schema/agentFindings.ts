@@ -11,6 +11,8 @@ import { z } from "zod/v4";
  */
 export const agentFindingsTable = pgTable("agent_findings", {
   id: serial("id").primaryKey(),
+  runId: text("run_id").notNull(), // one agent run (a morning sweep, a post-mortem) — idempotency key part
+  eventId: text("event_id"), // nullable — the copilot event this finding judged, when applicable
   agentName: text("agent_name").notNull(),
   ticker: text("ticker"), // nullable — some findings are market-wide
   strategyId: text("strategy_id"), // nullable — links a finding to a registry hypothesis (e.g. JUMPDAY_RIDER)
