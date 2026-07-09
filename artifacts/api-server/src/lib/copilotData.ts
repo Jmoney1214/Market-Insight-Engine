@@ -3,6 +3,7 @@ import {
   type Bar,
   type BuildEventInput,
   type Mode,
+  type NewsItem,
   type Quote,
 } from "@workspace/copilot-core";
 
@@ -316,6 +317,54 @@ async function fetchYahooEarningsTime(symbol: string): Promise<number | null> {
       .map((d) => d.raw)
       .filter((raw): raw is number => typeof raw === "number");
     return latestPastTimestamp(candidates);
+  } catch {
+    return null;
+  }
+}
+
+type FmpNewsRow = {
+  title?: string;
+  publisher?: string;
+  site?: string;
+  publishedDate?: string;
+  url?: string;
+};
+
+/**
+ * Key-gated news enrichment: recent FMP headlines for one symbol, mapped to
+ * the core's NewsItem shape. Feeds the deterministic catalyst summary (counts
+ * and freshness only — the core never infers sentiment from text).
+ * Best-effort: null on any failure, keeping the catalyst agent honestly
+ * UNAVAILABLE rather than breaking the read. FMP is enrichment per the data
+ * contract — never bars.
+ */
+export async function fetchFmpNews(symbol: string): Promise<NewsItem[] | null> {
+  const apiKey = process.env.FMP_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const url = `https://financialmodelingprep.com/stable/news/stock?symbols=${encodeURIComponent(
+      symbol,
+    )}&limit=12&apikey=${apiKey}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
+    if (!res.ok) return null;
+    const json = (await res.json()) as FmpNewsRow[] | unknown;
+    if (!Array.isArray(json)) return null;
+    const items: NewsItem[] = [];
+    for (const row of json as FmpNewsRow[]) {
+      const headline = typeof row?.title === "string" ? row.title.trim() : "";
+      const publishedMs =
+        typeof row?.publishedDate === "string"
+          ? Date.parse(row.publishedDate.replace(" ", "T"))
+          : NaN;
+      if (!headline || !Number.isFinite(publishedMs)) continue;
+      items.push({
+        headline,
+        source: row.publisher ?? row.site ?? "FMP",
+        publishedAt: Math.floor(publishedMs / 1000),
+        url: row.url ?? null,
+      });
+    }
+    return items.length > 0 ? items : null;
   } catch {
     return null;
   }

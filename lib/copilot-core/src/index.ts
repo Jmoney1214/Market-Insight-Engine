@@ -30,6 +30,11 @@ export {
   BUY_PRESSURE_RATIO,
   SELL_PRESSURE_RATIO,
 } from "./orderFlow";
+export {
+  computeCatalyst,
+  FRESH_WINDOW_HOURS,
+  MAX_CATALYST_ITEMS,
+} from "./catalyst";
 
 export { computeRiskReward } from "./riskReward";
 export { evaluatePosition } from "./position";

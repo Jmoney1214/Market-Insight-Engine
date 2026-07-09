@@ -163,11 +163,37 @@ describe("unavailable agents never invent data (items 2, 3, 4, 20)", () => {
     expect(r.warnings.join(" ")).toMatch(/no level-2 depth/i);
   });
 
-  it("catalyst is UNAVAILABLE with no invented headlines", () => {
+  it("catalyst is UNAVAILABLE without supplied news (never invented)", () => {
+    // Fixtures supply no news, so the event carries no catalyst summary.
     const r = catalystAgent(ev);
+    expect(ev.catalyst).toBeNull();
     expect(r.status).toBe("UNAVAILABLE");
     expect(r.confidence).toBe(0);
     expect(r.supportingFactors).toEqual([]);
+  });
+
+  it("catalyst reads real supplied headlines — freshness only, bias stays NEUTRAL", () => {
+    const f = getFixture("AAPL")!;
+    const nowS = Math.floor((f.nowMs ?? Date.now()) / 1000);
+    const withNews = buildCopilotEvent({
+      symbol: f.symbol,
+      mode: f.mode,
+      dataSource: f.dataSource,
+      bars: f.bars,
+      quote: f.quote,
+      nowMs: f.nowMs,
+      news: [
+        { headline: "Company reports record quarter", source: "Wire", publishedAt: nowS - 2 * 3600 },
+        { headline: "Analyst raises price target", source: "Desk", publishedAt: nowS - 40 * 3600 },
+      ],
+    });
+    const r = catalystAgent(withNews);
+    expect(withNews.catalyst?.fresh24h).toBe(1);
+    expect(r.status).toBe("OK");
+    expect(r.bias).toBe("NEUTRAL"); // no sentiment inference from text, ever
+    expect(r.confidence).toBeLessThanOrEqual(0.5);
+    expect(r.supportingFactors.join(" ")).toContain("record quarter");
+    expect(r.warnings.join(" ")).toMatch(/not inferred/i);
   });
 
   it("memory is UNAVAILABLE with no invented edge", () => {

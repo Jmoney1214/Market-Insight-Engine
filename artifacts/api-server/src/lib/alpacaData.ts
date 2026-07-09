@@ -9,6 +9,7 @@ import {
   BENCHMARK_SYMBOL,
   CopilotDataError,
   fetchEarningsTime,
+  fetchFmpNews,
 } from "./copilotData.js";
 import { alpacaFeed } from "./providers/config.js";
 
@@ -251,7 +252,7 @@ export async function fetchAlpacaIntradayInput(
   mode: Mode = "LIVE",
 ): Promise<BuildEventInput> {
   const symbolUpper = symbol.toUpperCase();
-  const [rawBars, snapshot, benchmarkReturnPct, earningsTime, trades] =
+  const [rawBars, snapshot, benchmarkReturnPct, earningsTime, trades, news] =
     await Promise.all([
       requestAlpacaBars(symbolUpper),
       requestAlpacaSnapshot(symbolUpper).catch(() => null),
@@ -260,6 +261,7 @@ export async function fetchAlpacaIntradayInput(
         : fetchAlpacaBenchmarkReturnPct(),
       fetchEarningsTime(symbolUpper),
       fetchAlpacaTrades(symbolUpper),
+      fetchFmpNews(symbolUpper),
     ]);
 
   const bars = sliceLatestSession(rawBars);
@@ -298,6 +300,7 @@ export async function fetchAlpacaIntradayInput(
     bars,
     quote,
     trades,
+    news,
     priorClose,
     earningsTime,
     benchmarkReturnPct,

@@ -95,6 +95,35 @@ export interface RegimeRead {
   };
 }
 
+/** A single news headline supplied by an enrichment source (FMP). */
+export interface NewsItem {
+  headline: string;
+  source: string;
+  /** Epoch seconds of publication. */
+  publishedAt: number;
+  url?: string | null;
+}
+
+export interface CatalystItem {
+  headline: string;
+  source: string;
+  ageHours: number;
+}
+
+/**
+ * Deterministic catalyst summary computed from REAL supplied headlines only —
+ * counts and freshness, never sentiment or direction (that would be inference,
+ * which belongs to humans / the research agents). Null when no news was
+ * supplied (replay/fixtures), keeping the catalyst agent honestly UNAVAILABLE.
+ */
+export interface CatalystRead {
+  total: number;
+  fresh24h: number;
+  newestAgeHours: number | null;
+  /** Newest first, capped at 3. */
+  items: CatalystItem[];
+}
+
 /**
  * Signed-volume summary from the trade tape (tick rule). Present only when a
  * source supplies real trades (live SIP); replay/fixtures leave it null so the
@@ -146,6 +175,13 @@ export interface BuildEventInput {
    * order flow stays honestly UNAVAILABLE there. Out-of-band: never on the wire.
    */
   trades?: Trade[] | null;
+  /**
+   * Recent headlines for the symbol, when an enrichment source can supply them
+   * (FMP paid tier, live only). Drives the deterministic catalyst summary.
+   * Absent in replay/fixtures, so catalyst stays honestly UNAVAILABLE there.
+   * Out-of-band: never on the wire.
+   */
+  news?: NewsItem[] | null;
   /** Epoch ms "now" for deterministic age computation; defaults to Date.now(). */
   nowMs?: number;
   position?: PositionInput | null;
@@ -301,6 +337,10 @@ export interface CopilotEvent {
    * trades were supplied (replay/fixtures). The order-flow agent reads this.
    * Internal to the core event — not forwarded to the wire type. */
   orderFlow: OrderFlowRead | null;
+  /** Deterministic headline summary from supplied news, or null when no news
+   * was supplied (replay/fixtures). The catalyst agent reads this. Internal to
+   * the core event — not forwarded to the wire type. */
+  catalyst: CatalystRead | null;
   /** OHLCV bars underlying this event, oldest first; empty on data failure. */
   bars: Bar[];
 }
