@@ -55,9 +55,9 @@ Each backfilled `journal_entries` row (schema `lib/db/src/schema/journalEntries.
 
 | column | value |
 |---|---|
-| `mode` | `"REPLAY"` → maps to sample kind `paper` (out-of-sample bucket) |
+| `mode` | `"RESEARCH"` → sample kind `backtest` (ceiling `backtested_only`) — see §3.1 |
 | `symbol` | trade symbol |
-| `event_timestamp` | session date + entry time (ET), so it encodes the dedup key |
+| `event_timestamp` | session date + entry time, stored **as UTC (with offset)** so the dedup SELECT-then-skip can't miss across a DST boundary |
 | `manual_outcome` (jsonb) | the sample + provenance (below) |
 | `notes` | human-readable one-liner (e.g. `"MSTR rider 10:10→10:25 stop"`) |
 
@@ -67,6 +67,7 @@ Each backfilled `journal_entries` row (schema `lib/db/src/schema/journalEntries.
   "strategyName": "JUMPDAY_RIDER" | "LARGECAP_SCALPER",
   "outcomeConfidence": "MANUAL_CONFIRMED",
   "rMultiple": -0.96,
+  "pnlDollars": -239,        // price-based R and $ diverge by commission — carry both
   "action": "stop_hit" | "target_hit" | "closed",
   "regime": "TREND_DAY" | ... | null,
   "timeWindow": "open" | "morning" | "midday" | "afternoon" | "power_hour" | null,
@@ -89,6 +90,28 @@ Each backfilled `journal_entries` row (schema `lib/db/src/schema/journalEntries.
 - **Provenance stamp** (`source`/`configHash`/`gitSha`/`reportRef`): the audit-trail
   requirement — anyone can later reproduce exactly which engine produced which R.
 
+### 3.1 Evidence tier — `backtest`, not `paper` (second-reader block, resolved)
+
+These sessions were **studied during development** — July 2 and July 6 were dissected in
+postmortems and the engine/classifier was iterated with full knowledge of them. That is
+backtest evidence, not forward paper trades. Mapping them to `mode: "REPLAY"` (kind
+`paper`) would place them in the out-of-sample bucket, where 20 countable samples with
+edge reach **`paper_validated` — which unlocks L4 alerts** (`event.ts:58`) — *from
+development-era backtests alone*, shortcutting the very ladder the system exists to
+enforce.
+
+**Default: `mode: "RESEARCH"` → kind `backtest` → status ceiling `backtested_only`.**
+`paper_validated` / L4 can then only ever be earned by trades taken **going forward, after
+the config froze** — the definition of out-of-sample. Distinguishability is unaffected:
+the scoreboard already tracks `forwardSampleCount` vs `paperSampleCount` vs backtest
+separately, and the provenance stamp marks every row `replay_rerun`.
+
+**Escape hatch (explicit human decision, never a field default):** if a *specific* report
+date was a genuine post-config-freeze walk-forward (config demonstrably frozen before that
+date), the human may reclassify that date's rows to `REPLAY`/paper **at the staging step**.
+The tier is shown per-date in the staging table so this is a deliberate choice, not an
+inherited mapping.
+
 ## 4. Components (each independently testable)
 
 1. **Engine enrichment** — `engine.mjs record()` emits `stop` + `rMultiple`; `report.mjs`
@@ -105,15 +128,16 @@ Each backfilled `journal_entries` row (schema `lib/db/src/schema/journalEntries.
    and runs it through the real `journalOutcomeToSample()`; any row that would be dropped is
    surfaced, never silently written. *Interface:* `toSampleRow(candidate) → {row, countable,
    reason}`.
-5. **Staging + human confirmation** — prints all candidate rows (symbol, date, strategy, R,
-   action, countable?) as a table for review. **This review IS the `MANUAL_CONFIRMED`
-   act** — the script never auto-writes on a green diff; it waits for explicit "write it."
+5. **Staging + human confirmation** — prints all candidate rows (symbol, date, strategy,
+   **R and $P&L both**, action, tier, countable?) as a table for review. **This review IS
+   the `MANUAL_CONFIRMED` act** — the script never auto-writes on a green diff; it waits for
+   explicit "write it." The per-date tier column is where the §3.1 escape hatch is exercised.
 6. **Writer** — idempotent insert into `journal_entries` via the Supabase connector.
    Dedup key `(symbol, session date, strategy, entryHm)` checked against existing rows
    (SELECT-then-skip); a rerun cannot double-write. No keys handled by the assistant.
 7. **Verifier** — after write, re-runs `computeScoreboard(loadJournalSamples())` and prints
-   the per-hypothesis table + the `memory` lens output, showing `unproven → paper_pending`
-   (or `no_edge`) with real expectancy.
+   the per-hypothesis table + the `memory` lens output, showing `unproven → no_edge`
+   (or `insufficient_sample`) with real, measured expectancy.
 
 ## 5. Data flow
 
@@ -150,11 +174,16 @@ Each backfilled `journal_entries` row (schema `lib/db/src/schema/journalEntries.
 
 ## 8. Expected outcome (don't flinch)
 
-The ~26 trades net **≈ −$96 (12W / 14L)**. The likely first real reading is
-`paper_pending` with weak-to-negative expectancy on `JUMPDAY_RIDER`; if rider crosses 20
-countable samples it may read `no_edge`. **That is the loop working** — it is the drift
-signal edge-curator flagged, now measured instead of asserted. We journal the truth and
-report it plainly.
+The ~26 trades net **≈ −$96 (12W / 14L)**. Under the `backtest` tier (§3.1) with the
+default thresholds (`minBacktestSample: 20`, `minExpectancyR: 0.1`, `minPF: 1.2`):
+
+- `JUMPDAY_RIDER`: **`no_edge`** if it crosses 20 countable samples with negative
+  expectancy, otherwise **`insufficient_sample`**.
+- `LARGECAP_SCALPER`: **`insufficient_sample`** (too few trades).
+- Neither can reach `paper_validated` or unlock L4 from these replays — by construction.
+
+**That is the loop working** — it is the drift signal edge-curator flagged, now measured
+instead of asserted. We journal the truth and report it plainly.
 
 ## 9. Commit & coordination plan
 
