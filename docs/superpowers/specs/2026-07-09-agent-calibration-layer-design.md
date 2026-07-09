@@ -178,7 +178,10 @@ human (and, later, an optional advisory weighting that is itself never authorita
 
 Executable enforcement of §1. All must pass:
 1. Writing N `agent_findings` produces **zero** `TradeSample`s — `loadJournalSamples()` /
-   `computeScoreboard()` output is byte-identical before and after.
+   `computeScoreboard()` output is byte-identical before and after. **Assert this against
+   the actual live rows too:** with the real seeded `agent_findings` present in the DB,
+   `loadJournalSamples()` still yields the same sample set (the seeded findings produce
+   zero `TradeSample`s) — a real-data instance of this hard-wall test, not only synthetic.
 2. Writing `agent_findings` + `finding_grades` does **not** change any strategy's
    `validationStatus` for any hypothesis.
 3. The strategy scoreboard is a pure function of `journal_entries` only — a property test
