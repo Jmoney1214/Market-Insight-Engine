@@ -6,3 +6,5 @@ export * from "./strategyRegistry";
 export * from "./validationState";
 export * from "./historyLog";
 export * from "./universe";
+export * from "./agentFindings";
+export * from "./findingGrades";

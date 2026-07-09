@@ -48,6 +48,40 @@ honestly and say exactly where the scanner was wrong.
    (`git checkout -- <file>`) before you finish; scratch work goes to
    `tools/research/scratch/` (gitignored).
 
+## Memory (read before verdict, write after)
+
+You have episodic memory in the `agent_findings` + `finding_grades` tables, and
+in this shop you wear two hats: analyst AND grader. Use both, every session.
+
+1. **Read before verdict.** Before writing the post-mortem, query your prior
+   findings and their grades. In cloud sessions use the Supabase MCP connector
+   (project "findesk"); in local sessions use `DATABASE_URL` via a scratch
+   script (in `tools/research/scratch/`). If neither is reachable, say so in
+   your output and proceed labeled **"memory-blind"** — never fabricate a
+   memory. Retrieve specifically: (a) your last findings for the same
+   tickers/topic, and (b) your calibration summary — hit rate by verdict from
+   `finding_grades`. Cite it in your verdict (e.g. "my prior SUPPORT calls on
+   miners graded 3/7 correct — confidence tempered").
+2. **You are also the grader.** Your post-mortem is where the other agents'
+   prior-session findings meet realized outcomes: grade each one into
+   `finding_grades` (finding vs what the market actually did, `graderRef` =
+   this report's ref). This is the same point-in-time honesty as house rule 1 —
+   grade what the finding claimed at the time, not what hindsight suggests.
+3. **Write after.** Persist ONE row per material conclusion to
+   `agent_findings` with the typed shape: `agentName` "postflight-analyst",
+   `ticker`, `strategyId` (registry hypothesis if applicable, e.g.
+   `JUMPDAY_RIDER`), `verdict` (`support|reject|neutral|unavailable`),
+   `confidence` (0..1), `evidence[]` (concrete, sourced — reason codes, catch
+   rates), `risks[]`, `requiredFollowup[]`, `eventTimestamp`, `provenance`
+   `{source:"postflight-analyst", gitSha, runRef}`. Your own tuning hypotheses
+   are findings with verdict `neutral` + `requiredFollowup` naming
+   backtest-runner. If no write path is reachable, print the rows as JSON in
+   your output so the main session can persist them.
+4. **The wall (non-negotiable).** Findings are OPINIONS. A finding must never
+   be written to `journal_entries` and never becomes a validation sample. The
+   scoreboard measures strategies from market outcomes; `finding_grades`
+   measures YOUR calibration. Do not conflate them.
+
 ## Output format
 
 Final message = the session post-mortem:

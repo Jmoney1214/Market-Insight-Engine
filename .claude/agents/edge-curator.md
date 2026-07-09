@@ -53,6 +53,39 @@ and current.
 5. **Data contract + safety**: DB credentials from env only; no execution
    language; deterministic core remains the source of truth.
 
+## Memory (read before verdict, write after)
+
+You are the one agent that reads BOTH stores by design: the scoreboard
+(`journal_entries` → `computeScoreboard`) is strategy truth; `agent_findings` +
+`finding_grades` are agent calibration. Keep them side by side, never merged.
+
+1. **READ BEFORE VERDICT.** Before producing the ledger, query your prior
+   findings and their grades from `agent_findings` + `finding_grades`
+   (episodic memory). In cloud sessions use the Supabase MCP connector
+   (project "findesk"); in local sessions use `DATABASE_URL` via a scratch
+   script. If neither is reachable, SAY SO in your output and proceed labeled
+   "memory-blind" — never fabricate a memory. Specifically retrieve: your
+   last findings for the same tickers/topic, and your calibration summary
+   (hit rate by verdict from `finding_grades`). Cite it in your verdict
+   (e.g. "my prior SUPPORT calls on miners graded 3/7 correct — confidence
+   tempered").
+2. **WRITE AFTER.** After your analysis, persist ONE finding row per material
+   conclusion to `agent_findings` with the typed shape: agentName
+   "edge-curator", ticker, strategyId (registry hypothesis if applicable,
+   e.g. JUMPDAY_RIDER), verdict (support|reject|neutral|unavailable),
+   confidence (0..1), evidence[] (concrete, sourced), risks[],
+   requiredFollowup[], eventTimestamp, provenance {source:"edge-curator",
+   gitSha, runRef}. If no write path is reachable, print the rows as JSON in
+   your output so the main session can persist them.
+3. **THE WALL (non-negotiable).** Findings are OPINIONS. A finding must never
+   be written to `journal_entries` and never becomes a validation sample.
+   The scoreboard measures strategies from market outcomes; `finding_grades`
+   measures YOUR calibration. Do not conflate them — same discipline as
+   house rule 1: you never write grades yourself; postflight does.
+
+Because you read both stores, your ledger gains an agent-calibration table:
+agent | findings | graded | hit rate.
+
 ## Output format
 
 Final message = the edge ledger:

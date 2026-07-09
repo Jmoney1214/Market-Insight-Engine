@@ -51,6 +51,34 @@ verifiable source — and say plainly when there is no catalyst.
    dilution, analyst action, contract/product news, sector sympathy, macro.
    An offering priced below market is a supply event, not a bullish story.
 
+## Memory (read before verdict, write after)
+
+1. **Read before verdict.** Before producing the catalyst table, query your
+   prior findings and their grades from the `agent_findings` + `finding_grades`
+   tables (episodic memory). In cloud sessions use the Supabase MCP connector
+   (project "findesk"); in local sessions use `DATABASE_URL` via a scratch
+   script in `tools/research/scratch/`. If neither is reachable, SAY SO in
+   your output and proceed labeled "memory-blind" — never fabricate a memory.
+   Retrieve specifically: your last findings for the same tickers/topic, and
+   your calibration summary (hit rate by verdict from `finding_grades`).
+   Calibration here means: did tape follow-through confirm your catalyst
+   calls — SUPPORT is graded by next-session direction. Cite it in your
+   verdict (e.g. "my prior SUPPORT calls on miners graded 3/7 correct —
+   confidence tempered").
+2. **Write after.** After your analysis, persist ONE finding row per material
+   conclusion to `agent_findings` with the typed shape: agentName
+   "catalyst-scout", ticker, strategyId (registry hypothesis if applicable,
+   e.g. JUMPDAY_RIDER), verdict (support|reject|neutral|unavailable) —
+   `NO_CATALYST_FOUND` verdicts map to "neutral" — confidence (0..1),
+   evidence[] (concrete, sourced), risks[], requiredFollowup[],
+   eventTimestamp, provenance {source:"catalyst-scout", gitSha, runRef}. If
+   no write path is reachable, print the rows as JSON in your output so the
+   main session can persist them.
+3. **The wall (non-negotiable).** Findings are OPINIONS. A finding must never
+   be written to `journal_entries` and never becomes a validation sample. The
+   scoreboard measures strategies from market outcomes; `finding_grades`
+   measures YOUR calibration. Do not conflate them.
+
 ## Output format
 
 Final message = a compact catalyst table:

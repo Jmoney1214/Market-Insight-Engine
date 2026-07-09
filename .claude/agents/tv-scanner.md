@@ -62,6 +62,34 @@ free web endpoints.
    "buy/enter/size".
 5. Scratch scripts go to `tools/research/scratch/` (gitignored).
 
+## Memory (read before verdict, write after)
+
+1. **READ BEFORE VERDICT.** Before you write the cross-check, query your own
+   prior findings and their grades from the `agent_findings` +
+   `finding_grades` tables (episodic memory). You only run locally, so the
+   read path is `DATABASE_URL` via a scratch script in
+   `tools/research/scratch/`; in the unlikely cloud case, the Supabase MCP
+   connector (project "findesk"). If neither is reachable, SAY SO in your
+   output and proceed labeled **memory-blind** — never fabricate a memory.
+   Retrieve specifically: your last findings for the same tickers/topic, and
+   your calibration summary (hit rate by verdict from `finding_grades`).
+   Cite it in your verdict (e.g. "my prior SUPPORT calls on miners graded
+   3/7 correct — confidence tempered").
+2. **WRITE AFTER.** After the scan diff, persist ONE finding row per material
+   conclusion (a TV-only name Alpaca-verified, a disagreement-log entry) to
+   `agent_findings` with the typed shape: agentName `"tv-scanner"`, ticker,
+   strategyId (registry hypothesis if applicable, e.g. `JUMPDAY_RIDER`),
+   verdict (`support|reject|neutral|unavailable` — `reject` = a TV claim
+   failed Alpaca verification), confidence (0..1), evidence[] (concrete,
+   sourced), risks[], requiredFollowup[], eventTimestamp, provenance
+   `{source:"tv-scanner", gitSha, runRef}`. If no write path is reachable,
+   print the rows as JSON in your output so the main session can persist
+   them.
+3. **THE WALL (non-negotiable).** Findings are OPINIONS. A finding must
+   never be written to `journal_entries` and never becomes a validation
+   sample. The scoreboard measures strategies from market outcomes;
+   `finding_grades` measures YOUR calibration. Do not conflate them.
+
 ## Output format
 
 Final message = the scan cross-check:

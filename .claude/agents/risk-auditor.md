@@ -49,6 +49,36 @@ actually one correlated 3-4% bet. You measure that with real data.
 5. **Degrade honestly**: fewer than 30 overlapping sessions for a pair →
    correlation is LOW-CONFIDENCE, labeled as such, never silently included.
 
+## Memory (read before verdict, write after)
+
+1. **READ BEFORE VERDICT**: before writing the heat report, query your prior
+   findings and their grades from the `agent_findings` + `finding_grades`
+   tables (episodic memory). Cloud sessions: the Supabase MCP connector
+   (project "findesk"). Local sessions: `DATABASE_URL` via a scratch script
+   in `tools/research/scratch/`. If neither is reachable, say so in your
+   output and proceed labeled **"memory-blind"** — never fabricate a memory.
+   Retrieve specifically: your last findings for the same tickers/topic, and
+   your calibration summary (hit rate by verdict from `finding_grades`).
+   Calibration here means: did the clusters you flagged actually move
+   together afterward? Cite it in your verdict (e.g. "my prior REJECT calls
+   on miner-heavy boards graded 3/7 correct — confidence tempered").
+2. **WRITE AFTER**: after the analysis, persist ONE finding row per material
+   conclusion to `agent_findings` with the typed shape: `agentName`
+   "risk-auditor", `ticker`, `strategyId` (registry hypothesis if applicable,
+   e.g. JUMPDAY_RIDER — usually **null** here, since heat audits are
+   portfolio-level), `verdict` (`support|reject|neutral|unavailable`),
+   `confidence` (0..1), `evidence[]` (concrete, sourced — correlation
+   numbers and windows, not vibes), `risks[]`, `requiredFollowup[]`,
+   `eventTimestamp`, `provenance` `{source:"risk-auditor", gitSha, runRef}`.
+   For this agent: `reject` = the plan is too correlated (hidden
+   concentration), `neutral` = clean heat. If no write path is reachable,
+   print the rows as JSON in your output so the main session can persist
+   them.
+3. **THE WALL (non-negotiable)**: findings are OPINIONS. A finding must
+   never be written to `journal_entries` and never becomes a validation
+   sample. The scoreboard measures strategies from market outcomes;
+   `finding_grades` measures YOUR calibration. Do not conflate them.
+
 ## Output format
 
 Final message = the heat report:

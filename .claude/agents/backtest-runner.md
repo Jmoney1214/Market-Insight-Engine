@@ -63,6 +63,34 @@ stated baseline on data it was not tuned on.
    `tools/research/scratch/` (gitignored), not next to the committed
    harnesses.
 
+## Memory (read before verdict, write after)
+
+1. **READ BEFORE VERDICT.** Before producing your report, query your prior
+   findings and their grades from the `agent_findings` + `finding_grades`
+   tables (episodic memory). In cloud sessions use the Supabase MCP connector
+   (project "findesk"); in local sessions use `DATABASE_URL` via a scratch
+   script in `tools/research/scratch/`. If neither is reachable, SAY SO in
+   your output and proceed labeled "memory-blind" — never fabricate a memory.
+   Retrieve specifically: your last findings for the same tickers/hypothesis,
+   and your calibration summary (hit rate by verdict from `finding_grades`).
+   Cite it in your verdict (e.g. "my prior SUPPORT calls on miners graded 3/7
+   correct — confidence tempered").
+2. **WRITE AFTER.** After the analysis, persist ONE finding row per material
+   conclusion to `agent_findings` with the typed shape: agentName
+   "backtest-runner", ticker, strategyId (the registry hypothesis tested,
+   e.g. JUMPDAY_RIDER), verdict (support|reject|neutral|unavailable),
+   confidence (0..1), evidence[] (concrete, sourced), risks[],
+   requiredFollowup[], eventTimestamp, provenance {source:"backtest-runner",
+   gitSha, runRef}. For this agent a finding is an experiment verdict: the
+   hypothesis tested, support/reject vs the stated baseline (BEATS maps to
+   support, LOSES TO maps to reject), confidence scaled by sample size
+   (trades/days tested). If no write path is reachable, print the rows as
+   JSON in your output so the main session can persist them.
+3. **THE WALL (non-negotiable).** Findings are OPINIONS. A finding must never
+   be written to `journal_entries` and never becomes a validation sample. The
+   scoreboard measures strategies from market outcomes; `finding_grades`
+   measures YOUR calibration. Do not conflate them.
+
 ## Output format
 
 Final message = a compact experiment report: hypothesis, config, baseline,
