@@ -18,7 +18,7 @@ from `unproven` to a real status.
 **Success = the read→learn path demonstrably moves on real data:** after the backfill,
 `computeScoreboard(loadJournalSamples())` returns non-zero countable samples for at
 least `JUMPDAY_RIDER`, and the `memory` lens returns a measured status (expected
-`paper_pending`, possibly `no_edge`) instead of `unproven`.
+`no_edge` or `insufficient_sample`, per the `backtest` tier in §3.1) instead of `unproven`.
 
 **Explicit non-goals:** no self-updating/nightly loop, no crew-agent finding
 persistence, no drift-status automation. Those are later steps. No live trades are
