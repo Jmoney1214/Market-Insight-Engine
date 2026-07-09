@@ -26,3 +26,22 @@ export function parseTradedRows(md: string): MdTrade[] {
   }
   return out;
 }
+
+export type MdTradeDated = MdTrade & { date: string };
+const DATE_HEADER = /^##\s+(\d{4}-\d{2}-\d{2})\s*$/;
+
+/** Section-aware parse: attribute each traded row to the `## YYYY-MM-DD`
+ * section it falls under. Works for both single-date and multi-date reports. */
+export function parseTradedRowsByDate(md: string): MdTradeDated[] {
+  const out: MdTradeDated[] = [];
+  let date: string | null = null;
+  for (const raw of md.split("\n")) {
+    const line = raw.trim();
+    const h = DATE_HEADER.exec(line);
+    if (h) { date = h[1]; continue; }
+    const m = ROW.exec(line);
+    if (!m || !date) continue;
+    out.push({ symbol: m[1], cls: m[2], entryHm: m[3], reason: m[4], pnl: toNumber(m[5]), date });
+  }
+  return out;
+}

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseTradedRows } from "./parseReports.ts";
+import { parseTradedRows, parseTradedRowsByDate } from "./parseReports.ts";
 
 // Uses the REAL unicode arrow (→) and unicode minus (−) exactly as the reports do.
 const MD = [
@@ -26,4 +26,15 @@ test("parses the actual committed July 2 report (real-file integration)", () => 
   const abvx = rows.find((r) => r.symbol === "ABVX");
   assert.ok(mstr && mstr.entryHm === "10:10" && mstr.reason === "stop" && mstr.pnl === -239);
   assert.ok(abvx && abvx.entryHm === "09:50" && abvx.reason === "eod" && abvx.pnl === 230);
+});
+
+test("section-aware parse attributes trades to their ## date across a multi-date report", () => {
+  const md = readFileSync(resolve(import.meta.dirname, "../../../research/reports/2026-04-13_2026-04-17.md"), "utf8");
+  const rows = parseTradedRowsByDate(md);
+  // From the report: CRWV/OKLO/CRCL/IREN traded on 2026-04-14; IONQ/AVGO on 2026-04-15.
+  const iren = rows.find((r) => r.symbol === "IREN");
+  const ionq = rows.find((r) => r.symbol === "IONQ");
+  assert.ok(iren && iren.date === "2026-04-14", `IREN date ${iren?.date}`);
+  assert.ok(ionq && ionq.date === "2026-04-15", `IONQ date ${ionq?.date}`);
+  assert.ok(rows.every((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.date)), "every row has a date");
 });
