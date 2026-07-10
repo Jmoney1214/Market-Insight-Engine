@@ -18,8 +18,9 @@ class UnusedRealtimeTransport {
   }
 }
 
-// Read-only client. The publishable key + RLS-disabled tables allow SELECTs from
-// any environment without DATABASE_URL. The engine only ever reads. Returned as
+// Read-only client. RLS is ENABLED on all tables with anon/authenticated limited
+// to SELECT-only policies, so the publishable key can read from any environment
+// without DATABASE_URL — and cannot write. The engine only ever reads. Returned as
 // ReadClient (the narrow read surface) — the SupabaseClient is a structural
 // superset whose builder is thenable, so the cast is sound.
 export function getReadClient(): ReadClient {
