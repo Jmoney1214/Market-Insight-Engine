@@ -11,8 +11,8 @@ import {
 } from "./strategyLab";
 
 describe("strategy lab registry", () => {
-  it("ships the seven seed primary-edge hypotheses, all promotable", () => {
-    expect(PRIMARY_EDGE_HYPOTHESES).toHaveLength(7);
+  it("ships the nine primary-edge hypotheses (7 seed + 2 shipped engines), all promotable", () => {
+    expect(PRIMARY_EDGE_HYPOTHESES).toHaveLength(9);
     for (const s of PRIMARY_EDGE_HYPOTHESES) {
       expect(s.category).toBe("primary_edge");
       expect(s.promotable).toBe(true);
@@ -23,6 +23,9 @@ describe("strategy lab registry", () => {
     expect(names).toContain("OPENING_RANGE_FAILURE");
     expect(names).toContain("POST_EARNINGS_DRIFT");
     expect(names).toContain("VOLATILITY_COMPRESSION_BREAKOUT");
+    // the shipped engines — their absence was the learning loop's break
+    expect(names).toContain("JUMPDAY_RIDER");
+    expect(names).toContain("LARGECAP_SCALPER");
   });
 
   it("classifies entry-refinement folklore as non-promotable context", () => {

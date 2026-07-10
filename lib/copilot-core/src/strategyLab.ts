@@ -188,6 +188,55 @@ export const PRIMARY_EDGE_HYPOTHESES: StrategyDefinition[] = [
     minimumSampleCount: 20,
     note: null,
   },
+  // The two SHIPPED engine hypotheses (Pine + Node twins). Without these
+  // registry entries their journaled outcomes were silently dropped by
+  // journalOutcomeToSample() and could never count toward validation — the
+  // learning loop's architecture break found by edge-curator (2026-07-09).
+  {
+    hypothesisName: "JUMPDAY_RIDER",
+    primaryEdgeType: "gap",
+    category: "primary_edge",
+    promotable: true,
+    requiredData: [
+      "intraday_ohlcv",
+      "prior_session_close",
+      "premarket_dollar_volume",
+      "vwap",
+    ],
+    universe:
+      "Hyper-volatile jump-day names: avg daily range >= ~6.5%, price >= $20, gap >= +1.5% at the open, pre-market dollar volume >= $2M, multi-trade-day history >= 7/10",
+    setupConditions: [
+      "Gap >= +1.5% at the 9:30 open (long only; declines fall days)",
+      "First 9-EMA pullback-reclaim between 09:40 and 11:00: low <= EMA9, close > EMA9, close > VWAP, EMA9 > EMA20",
+    ],
+    entryRefinementFeatures: ["VWAP_reclaim", "higher_low"],
+    invalidationRules: ["Structural stop: min(low, low[1]) - 0.8% of close"],
+    targetRules: ["No fixed target — ride to the 15:50 flatten"],
+    holdingPeriod: "Intraday (entry window 09:40-11:00, flat by 15:50)",
+    costModel: STANDARD_COST,
+    minimumSampleCount: 20,
+    note: "The shipped rider engine (morning_scan_jumpday_long.pine + engine.mjs twin).",
+  },
+  {
+    hypothesisName: "LARGECAP_SCALPER",
+    primaryEdgeType: "momentum",
+    category: "primary_edge",
+    promotable: true,
+    requiredData: ["intraday_ohlcv", "dollar_volume", "vwap"],
+    universe:
+      "Large caps turning >= $8B/day in dollar volume; same morning trigger as the rider, capped exposure",
+    setupConditions: [
+      "Gap >= +1.5% at the open",
+      "9-EMA pullback-reclaim trigger with close > VWAP (max 3 trades/day)",
+    ],
+    entryRefinementFeatures: ["VWAP_reclaim"],
+    invalidationRules: ["Structural stop: min(low, low[1]) - 0.8% of close"],
+    targetRules: ["Fixed 1.5R target per trade"],
+    holdingPeriod: "Intraday, minutes to hours",
+    costModel: STANDARD_COST,
+    minimumSampleCount: 20,
+    note: "The shipped scalper engine (morning_scan_largecap_scalper.pine + engine.mjs twin).",
+  },
 ];
 
 const FOLKLORE_NOTE =

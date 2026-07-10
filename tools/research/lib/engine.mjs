@@ -137,8 +137,13 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
   const trades = []; let nT = 0, dayPnl = 0;
   const record = (exit, exitHm, reason) => {
     const pnl = (exit - pos.entry) * pos.qty - (pos.entry + exit) * pos.qty * commPct;
+    // True realized R off the ACTUAL fill: (exit - entry) / (entry - stop).
+    // entry - stop > 0 is guaranteed by the entry guard above. Additive output
+    // only — no rule change, so the Pine twin + parity contract are untouched.
+    const rMultiple = pos.entry > pos.stop ? round((exit - pos.entry) / (pos.entry - pos.stop), 2) : null;
     dayPnl += pnl; nT++;
-    trades.push({ entryHm: pos.entryHm, exitHm, entry: round(pos.entry), exit: round(exit), qty: pos.qty, pnl: round(pnl), reason });
+    trades.push({ entryHm: pos.entryHm, exitHm, entry: round(pos.entry), exit: round(exit),
+      stop: round(pos.stop), qty: pos.qty, pnl: round(pnl), rMultiple, reason });
     pos = null;
   };
   for (const b of dayBars) {

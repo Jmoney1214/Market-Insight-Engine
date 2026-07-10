@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Activity } from "lucide-react";
+import { Activity, BrainCircuit } from "lucide-react";
 import { TickerSearch } from "@/components/ticker-search";
 
 export function AppHeader() {
@@ -16,6 +16,19 @@ export function AppHeader() {
           <span className="text-base font-bold tracking-tight">
             Fin<span className="text-primary">Desk</span>
           </span>
+        </Link>
+        <Link
+          href="/memory"
+          data-testid="link-memory"
+          className={
+            "flex items-center gap-1.5 text-sm rounded-md px-2 py-1 border " +
+            (location === "/memory"
+              ? "border-primary/30 bg-primary/10 text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground")
+          }
+        >
+          <BrainCircuit className="w-4 h-4" />
+          Memory
         </Link>
         {!isHome ? (
           <div className="ml-auto w-full max-w-[260px]">

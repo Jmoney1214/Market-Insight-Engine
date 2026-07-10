@@ -56,6 +56,90 @@ export interface Bar {
   v: number;
 }
 
+/** A single executed trade off the tape. `t` epoch seconds, `p` price, `s` size. */
+export interface Trade {
+  t: number;
+  p: number;
+  s: number;
+}
+
+/**
+ * Deterministic intraday regime, derived purely from in-session bars + the
+ * time-of-day of the latest bar. Eight canonical states; `null` only when there
+ * are too few bars to classify (the agent then stays DEGRADED, never invents one).
+ */
+export type RegimeState =
+  | "OPENING_DRIVE"
+  | "ORB_WINDOW"
+  | "TREND_DAY"
+  | "RANGE_DAY"
+  | "CHOP"
+  | "LOW_VOL_AFTERNOON"
+  | "POWER_HOUR"
+  | "NEWS_SPIKE";
+
+export interface RegimeRead {
+  state: RegimeState | null;
+  /** Classification confidence, clamped [0,1]. 0 when state is null. */
+  confidence: number;
+  /** Directional lean of the backdrop; NEUTRAL for range/chop/low-vol states. */
+  trendBias: Direction | "NEUTRAL";
+  factors: string[];
+  metrics: {
+    /** Minutes since ET midnight of the latest bar, or null. */
+    etMinutes: number | null;
+    rvolLast: number | null;
+    driftAtr: number | null;
+    persistence: number | null;
+    rangeAtr: number | null;
+  };
+}
+
+/** A single news headline supplied by an enrichment source (FMP). */
+export interface NewsItem {
+  headline: string;
+  source: string;
+  /** Epoch seconds of publication. */
+  publishedAt: number;
+  url?: string | null;
+}
+
+export interface CatalystItem {
+  headline: string;
+  source: string;
+  ageHours: number;
+}
+
+/**
+ * Deterministic catalyst summary computed from REAL supplied headlines only —
+ * counts and freshness, never sentiment or direction (that would be inference,
+ * which belongs to humans / the research agents). Null when no news was
+ * supplied (replay/fixtures), keeping the catalyst agent honestly UNAVAILABLE.
+ */
+export interface CatalystRead {
+  total: number;
+  fresh24h: number;
+  newestAgeHours: number | null;
+  /** Newest first, capped at 3. */
+  items: CatalystItem[];
+}
+
+/**
+ * Signed-volume summary from the trade tape (tick rule). Present only when a
+ * source supplies real trades (live SIP); replay/fixtures leave it null so the
+ * order-flow agent stays honestly UNAVAILABLE rather than inferring flow from
+ * price bars alone.
+ */
+export interface OrderFlowRead {
+  buyVolume: number;
+  sellVolume: number;
+  delta: number;
+  /** buyVolume / (buyVolume + sellVolume), 0..1; 0.5 when no classified volume. */
+  buyRatio: number;
+  tradeCount: number;
+  pressure: "BUYING" | "SELLING" | "BALANCED";
+}
+
 /** A latest-quote snapshot. `quoteTime` is epoch seconds. */
 export interface Quote {
   bid: number | null;
@@ -85,6 +169,19 @@ export interface BuildEventInput {
   dataSource: string;
   bars: Bar[];
   quote?: Quote | null;
+  /**
+   * Trade tape for the current window, when a source can supply it (live SIP).
+   * Drives the order-flow signed-volume summary. Absent in replay/fixtures, so
+   * order flow stays honestly UNAVAILABLE there. Out-of-band: never on the wire.
+   */
+  trades?: Trade[] | null;
+  /**
+   * Recent headlines for the symbol, when an enrichment source can supply them
+   * (FMP paid tier, live only). Drives the deterministic catalyst summary.
+   * Absent in replay/fixtures, so catalyst stays honestly UNAVAILABLE there.
+   * Out-of-band: never on the wire.
+   */
+  news?: NewsItem[] | null;
   /** Epoch ms "now" for deterministic age computation; defaults to Date.now(). */
   nowMs?: number;
   position?: PositionInput | null;
@@ -233,6 +330,17 @@ export interface CopilotEvent {
    * the memory agent reads this. DEFAULT is insufficient_sample until outcomes
    * accumulate. Internal to the core event — not forwarded to the wire type. */
   validation: ValidationSnapshot;
+  /** Deterministic intraday regime from bars + time-of-day; the regime agent
+   * reads this. Internal to the core event — not forwarded to the wire type. */
+  regime: RegimeRead;
+  /** Signed-volume order-flow summary from the trade tape, or null when no
+   * trades were supplied (replay/fixtures). The order-flow agent reads this.
+   * Internal to the core event — not forwarded to the wire type. */
+  orderFlow: OrderFlowRead | null;
+  /** Deterministic headline summary from supplied news, or null when no news
+   * was supplied (replay/fixtures). The catalyst agent reads this. Internal to
+   * the core event — not forwarded to the wire type. */
+  catalyst: CatalystRead | null;
   /** OHLCV bars underlying this event, oldest first; empty on data failure. */
   bars: Bar[];
 }

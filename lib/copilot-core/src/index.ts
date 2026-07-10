@@ -24,6 +24,18 @@ export {
 export { evaluateGates } from "./gates";
 export type { GateResult } from "./gates";
 
+export { computeRegime, etMinutesOf, REGIME_MIN_BARS } from "./regime";
+export {
+  computeOrderFlow,
+  BUY_PRESSURE_RATIO,
+  SELL_PRESSURE_RATIO,
+} from "./orderFlow";
+export {
+  computeCatalyst,
+  FRESH_WINDOW_HOURS,
+  MAX_CATALYST_ITEMS,
+} from "./catalyst";
+
 export { computeRiskReward } from "./riskReward";
 export { evaluatePosition } from "./position";
 export { computeFeedQuality } from "./feedQuality";

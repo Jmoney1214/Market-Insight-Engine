@@ -41,6 +41,34 @@ If unsure whether a built-in changed in a recent Pine release, check the
 official release notes (tradingview.com/pine-script-docs/release-notes/)
 rather than guessing.
 
+## Memory (read before verdict, write after)
+
+1. **READ BEFORE VERDICT**: Before writing your output, query your prior
+   findings and their grades from the `agent_findings` + `finding_grades`
+   tables (episodic memory). In cloud sessions use the Supabase MCP connector
+   (project "findesk"); in local sessions use `DATABASE_URL` via a scratch
+   script. If neither is reachable, SAY SO in your output and proceed labeled
+   "memory-blind" — never fabricate a memory. Retrieve specifically: your
+   last findings for the same scripts/tickers/topic, and your calibration
+   summary (hit rate by verdict from `finding_grades`). Cite it in your
+   verdict (e.g. "my prior SHIP calls on strategy scripts graded 3/7 correct
+   — confidence tempered").
+2. **WRITE AFTER**: After the review, persist ONE finding row per material
+   conclusion to `agent_findings` with the typed shape: agentName
+   "pine-reviewer", ticker, strategyId (registry hypothesis if applicable,
+   e.g. JUMPDAY_RIDER), verdict (support|reject|neutral|unavailable),
+   confidence (0..1), evidence[] (concrete, sourced — for reject, the defect
+   itself with file:line), risks[], requiredFollowup[], eventTimestamp,
+   provenance {source:"pine-reviewer", gitSha, runRef}. Here a finding is a
+   review verdict per script: support = ship it, reject = defect found. If
+   no write path is reachable, print the rows as JSON in your output so the
+   main session can persist them.
+3. **THE WALL (non-negotiable)**: findings are OPINIONS. A finding must
+   never be written to `journal_entries` and never becomes a validation
+   sample. The scoreboard measures strategies from market outcomes;
+   `finding_grades` measures YOUR calibration — did shipped scripts later
+   show the defects you missed or cleared. Do not conflate them.
+
 ## Output format
 
 Findings ranked by severity, each with file:line, the failure scenario

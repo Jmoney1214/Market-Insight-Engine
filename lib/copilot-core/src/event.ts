@@ -2,8 +2,11 @@
 // passed in via BuildEventInput. Any hard block forces alertLevel "L5".
 
 import { MIN_CREDIBILITY } from "./constants";
+import { computeCatalyst } from "./catalyst";
 import { computeFeatures } from "./features";
 import { computeFeedQuality } from "./feedQuality";
+import { computeOrderFlow } from "./orderFlow";
+import { computeRegime } from "./regime";
 import { evaluateGates } from "./gates";
 import { evaluatePosition } from "./position";
 import { computeRiskReward } from "./riskReward";
@@ -133,6 +136,9 @@ export function buildCopilotEvent(input: BuildEventInput): CopilotEvent {
     feedQuality,
     warnings,
     validation,
+    regime: computeRegime(bars),
+    orderFlow: computeOrderFlow(input.trades ?? null),
+    catalyst: computeCatalyst(input.news ?? null, nowMs),
     bars,
   };
 
