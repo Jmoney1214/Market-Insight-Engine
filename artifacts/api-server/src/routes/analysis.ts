@@ -31,6 +31,7 @@ router.post("/analyze", async (req, res) => {
       sector: report.sector,
       industry: report.industry,
       overallRating: report.overallRating,
+      source: report.dataSource ?? "unknown",
       reportData: report as unknown as Record<string, unknown>,
     })
     .returning();
@@ -52,6 +53,7 @@ router.get("/reports", async (req, res) => {
       companyName: reportsTable.companyName,
       sector: reportsTable.sector,
       overallRating: reportsTable.overallRating,
+      source: reportsTable.source,
       generatedAt: reportsTable.generatedAt,
     })
     .from(reportsTable)

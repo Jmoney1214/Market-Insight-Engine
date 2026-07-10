@@ -29,7 +29,10 @@ export function generateMockReport(ticker: string, id: number) {
   const change52w = Math.round((Math.random() * 60 - 20) * 100) / 100;
 
   const ratings = ["BUY", "HOLD", "SELL", "WATCH"];
-  const rating = ratings[Math.floor(Math.random() * 3)]; // skew toward BUY/HOLD
+  // Deterministic placeholder (was Math.random() — a coin-flip verdict persisted as if real).
+  // Stable per ticker so the same name never yields a different "verdict" between runs. This is
+  // NOT a real signal; reports carry source='mock' so nothing downstream treats it as one.
+  const rating = ratings[(ticker.charCodeAt(0) + ticker.charCodeAt(ticker.length - 1)) % 3];
 
   return {
     id,

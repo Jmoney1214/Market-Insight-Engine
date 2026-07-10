@@ -32,5 +32,14 @@ describe("buildReport without provider keys", () => {
     expect(r.thesis.bull.targetPrice).toBeGreaterThan(0);
     expect(r.actionPlan.rating).toBe(r.overallRating);
     expect(r.financials.revenueHistory.length).toBeGreaterThan(0);
+    // Provenance marker: a no-keys report must be tagged 'mock' so nothing treats it as real.
+    expect(r.dataSource).toBe("mock");
+  });
+
+  it("mock rating is deterministic per ticker (no coin-flip verdict)", async () => {
+    const [a, b] = await Promise.all([buildReport("AAPL", 1), buildReport("AAPL", 2)]);
+    expect(a.overallRating).toBe(b.overallRating);
+    const nvda = await buildReport("NVDA", 3);
+    expect(["BUY", "HOLD", "SELL", "WATCH"]).toContain(nvda.overallRating);
   });
 });
