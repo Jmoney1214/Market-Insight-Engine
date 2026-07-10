@@ -9,6 +9,10 @@ export const reportsTable = pgTable("reports", {
   sector: text("sector").notNull(),
   industry: text("industry").notNull(),
   overallRating: text("overall_rating").notNull(),
+  // Data provenance: 'live' (rating from real provider data), 'partial' (live keys present but the
+  // rating fell back to placeholder), or 'mock' (no provider keys — whole report fabricated).
+  // Consumers MUST NOT treat overallRating as a real signal unless source = 'live'.
+  source: text("source").notNull().default("unknown"),
   reportData: jsonb("report_data").notNull(),
   generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
 });

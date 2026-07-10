@@ -6,6 +6,7 @@ import {
 import { buildCopilotEvent } from "@workspace/copilot-core";
 import { buildEventWithValidation } from "../../lib/validationResolver.js";
 import { coreEventToApiEvent } from "../../lib/copilotEvent.js";
+import { recordHistory } from "../../lib/history.js";
 import {
   CopilotDataError,
   INTRADAY_SOURCE,
@@ -41,7 +42,9 @@ router.get("/event", async (req, res) => {
       return;
     }
     const core = await buildEventWithValidation(mode ? { ...input, mode } : input);
-    res.json(GetCopilotEventResponse.parse(coreEventToApiEvent(core)));
+    const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core));
+    await recordHistory(apiEvent, req.log);
+    res.json(apiEvent);
     return;
   }
 
@@ -60,7 +63,9 @@ router.get("/event", async (req, res) => {
         ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
         : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
     const core = await buildEventWithValidation(input);
-    res.json(GetCopilotEventResponse.parse(coreEventToApiEvent(core)));
+    const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core));
+    await recordHistory(apiEvent, req.log);
+    res.json(apiEvent);
   } catch (err) {
     if (err instanceof CopilotDataError) {
       // Surface a deterministic DATA_FAILURE L5 event so consumers always get a
@@ -76,7 +81,9 @@ router.get("/event", async (req, res) => {
         bars: [],
         quote: null,
       });
-      res.json(GetCopilotEventResponse.parse(coreEventToApiEvent(core)));
+      const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core));
+      await recordHistory(apiEvent, req.log);
+      res.json(apiEvent);
       return;
     }
     req.log.error({ err }, "Unexpected error building copilot event");

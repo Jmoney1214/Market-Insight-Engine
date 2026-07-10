@@ -63,6 +63,8 @@ type TodaySetup = {
 type Report = ReturnType<typeof generateMockReport> & {
   fundamentals?: Fundamentals;
   todaySetup?: TodaySetup;
+  // Provenance so a consumer can tell a real verdict from a placeholder. Persisted to reports.source.
+  dataSource?: "live" | "partial" | "mock";
 };
 
 const round = (n: number, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
@@ -91,7 +93,7 @@ function headlineSentiment(title: string): "Bullish" | "Bearish" | "Neutral" {
  */
 export async function buildReport(ticker: string, id = 0): Promise<Report> {
   const base = generateMockReport(ticker, id);
-  if (!hasLiveData) return base;
+  if (!hasLiveData) return { ...base, dataSource: "mock" };
 
   const [
     quote,
@@ -308,16 +310,23 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
 
   // ---- Rating + scenarios + action plan ------------------------------------
   let finalRating = base.overallRating;
+  let ratingReal = false;
   if (ratingsSummary && ratingsSummary.consensus) {
     const c = ratingsSummary.consensus.toLowerCase();
     finalRating = c.includes("buy") ? "BUY" : c.includes("sell") ? "SELL" : "HOLD";
+    ratingReal = true;
   } else if (rating && Number.isFinite(rating.overallScore)) {
     finalRating = rating.overallScore >= 4 ? "BUY" : rating.overallScore <= 2 ? "SELL" : "HOLD";
+    ratingReal = true;
   } else if (consensus && price) {
     const up = (consensus - price) / price;
     finalRating = up >= 0.12 ? "BUY" : up <= -0.08 ? "SELL" : "HOLD";
+    ratingReal = true;
   }
   report.overallRating = finalRating;
+  // Rating from real provider data => 'live'; live keys present but rating fell back to the mock
+  // base value => 'partial' (overallRating is a placeholder, not a real verdict).
+  report.dataSource = ratingReal ? "live" : "partial";
 
   if (priceTarget) {
     report.thesis = {

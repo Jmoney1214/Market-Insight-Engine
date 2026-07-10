@@ -105,6 +105,12 @@ export function scanDay({ day, dailies, dayBarsMap, earnSet }) {
 export function resolveIntrabar(bar, stop, tgt, fillMode) {
   const hitStop = bar.l <= stop, hitTgt = bar.h >= tgt;
   if (hitStop && hitTgt) {
+    // Gap-through at the open is decisive and overrides fillMode: if the bar OPENED
+    // already through a level, that level is touched first — the other is unreachable
+    // before it. Without this, target_first books an impossible winning fill on a bar
+    // that gapped down straight through the stop.
+    if (bar.o <= stop) return "stop";
+    if (bar.o >= tgt) return "target";
     if (fillMode === "target_first") return "target";
     if (fillMode === "tv_ohlc_path")
       return Math.abs(bar.o - bar.h) < Math.abs(bar.o - bar.l) ? "target" : "stop";
