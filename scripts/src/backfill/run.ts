@@ -1,8 +1,8 @@
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
-import { toStagedRow, type Candidate } from "./mapper.ts";
-import { parseTradedRowsByDate } from "./parseReports.ts";
-import { diffTradeSets } from "./diff.ts";
+import { toStagedRow, type Candidate } from "./mapper.js";
+import { parseTradedRowsByDate } from "./parseReports.js";
+import { diffTradeSets } from "./diff.js";
 
 const ROOT = resolve(import.meta.dirname, "../../..");
 const BF = resolve(ROOT, "tools/research/backfill");

@@ -955,6 +955,10 @@ importers:
         version: 25.6.2
 
   scripts:
+    dependencies:
+      '@workspace/copilot-core':
+        specifier: workspace:*
+        version: link:../lib/copilot-core
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

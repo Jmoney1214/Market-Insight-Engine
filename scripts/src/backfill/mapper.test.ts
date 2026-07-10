@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toStagedRow, actionFromReason, timeWindowFromHm } from "./mapper.ts";
+import { toStagedRow, actionFromReason, timeWindowFromHm } from "./mapper.js";
 
 const base = {
   symbol: "MSTR", date: "2026-07-02", cls: "rider", entryHm: "10:10",

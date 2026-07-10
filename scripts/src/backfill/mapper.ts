@@ -1,6 +1,6 @@
 // Relative import into copilot-core's TS source (dependency-free) so this runs
 // under `npx tsx` without a workspace install — see the Task 0 deviation note.
-import { journalOutcomeToSample } from "../../../lib/copilot-core/src/index.ts";
+import { journalOutcomeToSample } from "@workspace/copilot-core";
 
 export type Candidate = {
   symbol: string; date: string; cls: string; entryHm: string;

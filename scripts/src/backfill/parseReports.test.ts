@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { parseTradedRows, parseTradedRowsByDate } from "./parseReports.ts";
+import { parseTradedRows, parseTradedRowsByDate } from "./parseReports.js";
 
 // Uses the REAL unicode arrow (→) and unicode minus (−) exactly as the reports do.
 const MD = [

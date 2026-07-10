@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { computeScoreboard, journalOutcomeToSample } from "../../../lib/copilot-core/src/index.ts";
+import { computeScoreboard, journalOutcomeToSample } from "@workspace/copilot-core";
 
 type Row = { mode: string; manual_outcome: unknown };
 

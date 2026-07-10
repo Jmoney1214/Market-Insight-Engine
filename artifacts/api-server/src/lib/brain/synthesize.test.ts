@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { synthesize } from "./synthesize.js";
 import type { EvidencePack } from "./types.js";

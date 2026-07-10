@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diffTradeSets } from "./diff.ts";
+import { diffTradeSets } from "./diff.js";
 
 const k = (symbol: string, entryHm: string) => ({ symbol, date: "2026-07-02", entryHm });
 

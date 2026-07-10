@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { scoreboardFromRows, retrieveForStrategy } from "./verify.ts";
+import { scoreboardFromRows, retrieveForStrategy } from "./verify.js";
 
 function row(r: number) {
   return { mode: "RESEARCH", manual_outcome: {
