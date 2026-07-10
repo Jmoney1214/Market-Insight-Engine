@@ -41,3 +41,40 @@ test("recordScanPicks throws when the insert rejects (no silent swallow)", async
     /db down/,
   );
 });
+
+import { gradePending } from "./scorecard.js";
+
+const pendingRow = { id: 1, symbol: "IREN", scanDate: "2026-07-09", list: "intraday", gapPct: 5.1, priceAtScan: 12.3 };
+const bar = { high: 13, low: 12, close: 12.8 };
+
+function fakeGradeDb(opts: { readThrows?: boolean; updateThrows?: boolean; rows?: any[] }) {
+  return {
+    select: () => ({ from: () => ({ where: () => ({ limit: async () => {
+      if (opts.readThrows) throw new Error("read failed");
+      return opts.rows ?? [pendingRow];
+    } }) }) }),
+    update: () => ({ set: () => ({ where: async () => {
+      if (opts.updateThrows) throw new Error("write failed");
+    } }) }),
+  } as any;
+}
+
+test("gradePending throws when the pending read fails (surfaced, not swallowed)", async () => {
+  await assert.rejects(
+    () => gradePending("2026-07-10", { database: fakeGradeDb({ readThrows: true }), getSessionBar: async () => bar }),
+    /read failed/,
+  );
+});
+
+test("gradePending grades a row against the session bar", async () => {
+  const n = await gradePending("2026-07-10", { database: fakeGradeDb({ rows: [pendingRow] }), getSessionBar: async () => bar });
+  assert.equal(n, 1);
+});
+
+test("gradePending skips (does not abort) when a per-row write fails", async () => {
+  const n = await gradePending("2026-07-10", {
+    database: fakeGradeDb({ rows: [pendingRow, { ...pendingRow, id: 2 }], updateThrows: true }),
+    getSessionBar: async () => bar,
+  });
+  assert.equal(n, 0); // both writes failed but the call still resolved
+});

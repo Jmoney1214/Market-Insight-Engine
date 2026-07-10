@@ -7,8 +7,9 @@
  *  - jump:     the session closed above the pre-market reference close
  *  - fall:     the session closed below the pre-market reference close
  *
- * All DB work is best-effort: failures are logged, never thrown, so the scan
- * and scheduler keep running even if the database is unavailable.
+ * DB read/insert errors are surfaced to the caller (thrown); only per-row
+ * grade-write failures are logged and skipped. The in-process scheduler
+ * wraps these calls in try/catch so it keeps running even on failure.
  */
 import { db, scanScorecardTable, type ScanScorecardRow } from "@workspace/db";
 import { eq, isNull, desc, and, lte } from "drizzle-orm";
@@ -61,26 +62,27 @@ export async function recordScanPicks(
   return inserted.length;
 }
 
-/** Grade all pending rows for sessions up to and including `maxDate`. */
-export async function gradePending(maxDate: string): Promise<number> {
-  let pending: ScanScorecardRow[] = [];
-  try {
-    pending = await db
-      .select()
-      .from(scanScorecardTable)
-      .where(and(isNull(scanScorecardTable.gradedAt), lte(scanScorecardTable.scanDate, maxDate)))
-      .limit(100);
-  } catch (err) {
-    logger.warn({ err: String(err) }, "Scorecard read failed (non-fatal)");
-    return 0;
-  }
+/** Grade all pending rows for sessions up to and including `maxDate`. The read
+ * failure is surfaced (thrown); a single per-row failure is logged and skipped. */
+export async function gradePending(
+  maxDate: string,
+  deps: { database: typeof db; getSessionBar: typeof alpaca.getSessionBar } = {
+    database: db,
+    getSessionBar: alpaca.getSessionBar,
+  },
+): Promise<number> {
+  const pending: ScanScorecardRow[] = await deps.database
+    .select()
+    .from(scanScorecardTable)
+    .where(and(isNull(scanScorecardTable.gradedAt), lte(scanScorecardTable.scanDate, maxDate)))
+    .limit(100);
   let graded = 0;
   for (const row of pending) {
-    const bar = await alpaca.getSessionBar(row.symbol, row.scanDate);
+    const bar = await deps.getSessionBar(row.symbol, row.scanDate);
     if (!bar) continue; // holiday/halt/no data yet — retry next pass
     const g = gradeRow(row.list as ScanList, row.gapPct, row.priceAtScan, bar);
     try {
-      await db
+      await deps.database
         .update(scanScorecardTable)
         .set({
           sessionClose: bar.close,
