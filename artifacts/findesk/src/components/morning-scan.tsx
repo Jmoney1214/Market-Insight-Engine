@@ -205,7 +205,7 @@ function CandidateList({
   onAnalyze: (symbol: string) => void;
   analyzing: string | null;
 }) {
-  if (list.length === 0) {
+  if (!list?.length) {
     return <p className="p-6 text-sm text-muted-foreground text-center">{empty}</p>;
   }
   return (
