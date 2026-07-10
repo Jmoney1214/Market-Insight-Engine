@@ -34,8 +34,13 @@ export function gradeRow(
   return { changePct, rangePct, hit };
 }
 
-/** Record the morning's picks (idempotent — unique per day/symbol/list). */
-export async function recordScanPicks(result: ScanResult, scanDate: string): Promise<void> {
+/** Record the morning's picks (idempotent — unique per day/symbol/list). Returns
+ * the count of newly-inserted rows; throws on a DB error so callers can surface it. */
+export async function recordScanPicks(
+  result: ScanResult,
+  scanDate: string,
+  database: typeof db = db,
+): Promise<number> {
   const rows = (["intraday", "jump", "fall"] as const).flatMap((list) => {
     const picks = list === "intraday" ? result.topIntraday : list === "jump" ? result.likelyJump : result.likelyFall;
     return picks.map((c) => ({
@@ -47,12 +52,13 @@ export async function recordScanPicks(result: ScanResult, scanDate: string): Pro
       priceAtScan: c.price,
     }));
   });
-  if (rows.length === 0) return;
-  try {
-    await db.insert(scanScorecardTable).values(rows).onConflictDoNothing();
-  } catch (err) {
-    logger.warn({ err: String(err) }, "Scorecard record failed (non-fatal)");
-  }
+  if (rows.length === 0) return 0;
+  const inserted = await database
+    .insert(scanScorecardTable)
+    .values(rows)
+    .onConflictDoNothing()
+    .returning({ id: scanScorecardTable.id });
+  return inserted.length;
 }
 
 /** Grade all pending rows for sessions up to and including `maxDate`. */
