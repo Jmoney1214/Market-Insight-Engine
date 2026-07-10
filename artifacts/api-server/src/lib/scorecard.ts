@@ -7,9 +7,13 @@
  *  - jump:     the session closed above the pre-market reference close
  *  - fall:     the session closed below the pre-market reference close
  *
- * DB read/insert errors are surfaced to the caller (thrown); only per-row
- * grade-write failures are logged and skipped. The in-process scheduler
- * wraps these calls in try/catch so it keeps running even on failure.
+ * `recordScanPicks` and `gradePending` surface DB read/insert errors to the
+ * caller (thrown) so failures are visible; within `gradePending`, per-row
+ * session-bar-fetch and grade-write failures are logged and skipped instead
+ * of aborting the batch. `getScorecard()` is best-effort: a read failure is
+ * logged and it returns an empty summary rather than throwing. The
+ * in-process scheduler wraps these calls in try/catch so it keeps running
+ * even on failure.
  */
 import { db, scanScorecardTable, type ScanScorecardRow } from "@workspace/db";
 import { eq, isNull, desc, and, lte } from "drizzle-orm";
@@ -63,7 +67,8 @@ export async function recordScanPicks(
 }
 
 /** Grade all pending rows for sessions up to and including `maxDate`. The read
- * failure is surfaced (thrown); a single per-row failure is logged and skipped. */
+ * failure is surfaced (thrown); a single per-row session-bar-fetch or grade-write
+ * failure is logged and skipped, never aborts the batch. */
 export async function gradePending(
   maxDate: string,
   deps: { database: typeof db; getSessionBar: typeof alpaca.getSessionBar } = {
@@ -78,7 +83,13 @@ export async function gradePending(
     .limit(100);
   let graded = 0;
   for (const row of pending) {
-    const bar = await deps.getSessionBar(row.symbol, row.scanDate);
+    let bar: Awaited<ReturnType<typeof deps.getSessionBar>>;
+    try {
+      bar = await deps.getSessionBar(row.symbol, row.scanDate);
+    } catch (err) {
+      logger.warn({ err: String(err) }, "Scorecard session-bar fetch failed (non-fatal)");
+      continue;
+    }
     if (!bar) continue; // holiday/halt/no data yet — retry next pass
     const g = gradeRow(row.list as ScanList, row.gapPct, row.priceAtScan, bar);
     try {

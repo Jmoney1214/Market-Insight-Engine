@@ -78,3 +78,16 @@ test("gradePending skips (does not abort) when a per-row write fails", async () 
   });
   assert.equal(n, 0); // both writes failed but the call still resolved
 });
+
+test("gradePending skips (does not abort) when a per-row session-bar fetch throws", async () => {
+  const row1 = { ...pendingRow, id: 1, symbol: "IREN" };
+  const row2 = { ...pendingRow, id: 2, symbol: "WULF" };
+  const n = await gradePending("2026-07-10", {
+    database: fakeGradeDb({ rows: [row1, row2] }),
+    getSessionBar: async (symbol: string) => {
+      if (symbol === "IREN") throw new Error("bar fetch failed");
+      return bar;
+    },
+  });
+  assert.equal(n, 1); // the throw for IREN skipped that row; WULF still graded
+});
