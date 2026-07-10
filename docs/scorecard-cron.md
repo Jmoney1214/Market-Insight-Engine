@@ -28,5 +28,5 @@ self-selects and is idempotent, extra hits (e.g. hourly) are harmless.
 ## Verify
 
 `curl -X POST https://<host>/api/scan/scorecard/run` on a weekday morning should return
-`{"action":"recorded","recorded":N}` with N > 0. Then the brain's session question for
+`{"action":"recorded","date":"YYYY-MM-DD","recorded":N}` with N > 0. Then the brain's session question for
 that date (`pnpm run brain "what happened on YYYY-MM-DD?"`) returns the real picks.
