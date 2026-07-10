@@ -8,8 +8,15 @@ const H = { "APCA-API-KEY-ID": KEY, "APCA-API-SECRET-KEY": SEC };
 const CACHE = new URL("./cache/", import.meta.url).pathname;
 mkdirSync(CACHE, { recursive: true });
 
+// Cache key MUST include the window: keying on symbol+timeframe alone collides across
+// date ranges, silently serving one window's bars for another (backtest-truth bug C1's sibling).
+export function cacheKey(symbol, timeframe, start, end) {
+  const d = (s) => String(s).slice(0, 10);
+  return `${symbol}_${timeframe}_${d(start)}_${d(end)}.json`;
+}
+
 async function bars(symbol, timeframe, start, end) {
-  const f = `${CACHE}${symbol}_${timeframe}.json`;
+  const f = `${CACHE}${cacheKey(symbol, timeframe, start, end)}`;
   if (existsSync(f)) return JSON.parse(readFileSync(f, "utf8"));
   let out = [], token;
   for (;;) {
@@ -36,6 +43,22 @@ const etParts = (iso) => {
   return { day: `${yyyy}-${mm}-${dd}`, hm: time.slice(0, 5) };
 };
 const ema = (prev, v, n) => { const k = 2 / (n + 1); return prev == null ? v : v * k + prev * (1 - k); };
+
+/** Pessimistic intrabar exit for a LONG position. Stop-before-target (matches Pine v6 semantics).
+ * Returns { exit, reason } or null. Gap-through and slippage are modelled truthfully:
+ *  - stop: if the bar OPENED at/below the stop, the stop price never traded — fill at the (worse)
+ *    open. Then slip adverse. (Booking pos.stop on a gap-down understates losses -> inflates PF.)
+ *  - flat: the time-flatten is a market SELL, so it must be slipped adverse like any exit
+ *    (booking the raw close flatters every non-stopped exit by ~1 slip). */
+export function resolveExit(bar, pos, slip, flatTime) {
+  if (bar.l <= pos.stop) {
+    const fill = Math.min(pos.stop, bar.o);   // gap-through -> the open, the price the tape traded
+    return { exit: fill - slip, reason: "stop" };
+  }
+  if (bar.h >= pos.tgt) return { exit: pos.tgt, reason: "target" };   // limit sell fills at target
+  if (bar.hm >= flatTime) return { exit: bar.c - slip, reason: "flat" };
+  return null;
+}
 
 export async function features(symbol) {
   const daily = await bars(symbol, "1Day", "2025-05-01T00:00:00Z", "2026-07-02T23:59:00Z");
@@ -84,6 +107,12 @@ export async function run(symbol, cfg) {
     let cumPV = 0, cumV = 0, e9 = null, e20 = null;
     let orH = null, orL = null, orDone = false, rthCount = 0;
     let pos = null, dayPnl = 0, nTrades = 0, nWins = 0, pending = null, prevBar = null;
+    const book = (exit) => {
+      const pnl = (exit - pos.entry) * pos.qty - (pos.entry + exit) * pos.qty * cfg.commPct;
+      equity += pnl; dayPnl += pnl; nTrades++; if (pnl > 0) nWins++;
+      trades.push({ day, pnl });
+      pos = null;
+    };
     for (const b of dbars) {
       const tp = (b.h + b.l + b.c) / 3;
       cumPV += tp * b.v; cumV += b.v;
@@ -106,16 +135,8 @@ export async function run(symbol, cfg) {
         pending = null;
       }
       if (pos && rth) {
-        let exit = null;
-        if (b.l <= pos.stop) exit = pos.stop - slip;
-        else if (b.h >= pos.tgt) exit = pos.tgt;
-        else if (b.hm >= cfg.flatTime) exit = b.c;
-        if (exit != null) {
-          const pnl = (exit - pos.entry) * pos.qty - (pos.entry + exit) * pos.qty * cfg.commPct;
-          equity += pnl; dayPnl += pnl; nTrades++; if (pnl > 0) nWins++;
-          trades.push({ day, pnl });
-          pos = null;
-        }
+        const ex = resolveExit(b, pos, slip, cfg.flatTime);
+        if (ex) book(ex.exit);
       }
       const canSignal = rth && b.hm >= cfg.entryFrom && b.hm <= cfg.entryTo && !pos && !pending &&
         nTrades < cfg.maxTrades && dayPnl > -cfg.dayLoss;
@@ -129,6 +150,9 @@ export async function run(symbol, cfg) {
       }
       prevBar = b;
     }
+    // Never leave a position unbooked at day-end: dropping the (usually losing) tail trade
+    // silently removes it from the sample and inflates PF. Flatten at the last bar's close.
+    if (pos) book(dbars[dbars.length - 1].c - slip);
     if (nTrades > 0) dayStats.push({ day, dayPnl, nWins });
   }
   const pnls = trades.map(t => t.pnl);
