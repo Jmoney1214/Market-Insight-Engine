@@ -20,8 +20,9 @@ export const breakoutCandidatesTable = pgTable("breakout_candidates", {
   runDateTickerKey: unique("breakout_candidates_run_date_ticker_key").on(t.runDate, t.ticker),
 }));
 
+// NB: `id` is generatedAlwaysAsIdentity, so drizzle-zod already excludes it from the insert
+// schema — omitting it again throws "Unrecognized key" under zod v4. Only omit createdAt.
 export const insertBreakoutCandidateSchema = createInsertSchema(breakoutCandidatesTable).omit({
-  id: true,
   createdAt: true,
 });
 export type InsertBreakoutCandidate = z.infer<typeof insertBreakoutCandidateSchema>;
