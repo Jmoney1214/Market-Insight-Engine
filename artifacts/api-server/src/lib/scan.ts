@@ -18,6 +18,8 @@ import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
 import { atr, rsi, rangeStats } from "./providers/indicators.js";
 import { classifyCandidate, type TradeClass } from "./classify.js";
+import { db, breakoutCandidatesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 export type ScanCandidate = {
   symbol: string;
@@ -142,6 +144,21 @@ export function startScanScheduler(): void {
   logger.info("Scan scheduler started (weekdays: refresh 07:00-16:00 ET, record 08:15-09:30, grade after close)");
 }
 
+/** Today's Breakout Watch tickers from quant-research (near-miss scalp queue). Best-effort —
+ * a DB hiccup must never break the scan. */
+async function loadBreakoutTickers(): Promise<Set<string>> {
+  try {
+    const rows = await db
+      .select({ ticker: breakoutCandidatesTable.ticker })
+      .from(breakoutCandidatesTable)
+      .where(eq(breakoutCandidatesTable.runDate, todayNY()));
+    return new Set(rows.map((r) => r.ticker.toUpperCase()));
+  } catch (err) {
+    logger.warn({ err: String(err) }, "breakout_candidates load failed (non-fatal)");
+    return new Set<string>();
+  }
+}
+
 export async function runPremarketScan(refresh = false): Promise<ScanResult> {
   // Trading-day simulation: SCAN_AS_OF freezes the board at a historical moment.
   // Checked by presence (not validity) so a malformed value errors loudly
@@ -159,6 +176,17 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     /^[A-Z]{1,5}$/.test(u.symbol),
   );
   const bySymbol = new Map(universe.map((u) => [u.symbol, u]));
+
+  // Union in the quant-research Breakout Watch near-miss names so the committee always researches
+  // them (verdicts flow to agent_findings). Additive; Alpaca snapshots/bars fill real data below.
+  const breakout = await loadBreakoutTickers();
+  for (const sym of breakout) {
+    if (!bySymbol.has(sym) && /^[A-Z]{1,5}$/.test(sym)) {
+      const u = { symbol: sym, companyName: "", price: 0, volume: 0, marketCap: 0, beta: 1 };
+      universe.push(u);
+      bySymbol.set(sym, u);
+    }
+  }
 
   // Persist today's constituents once (survivorship-bias fix for the offline
   // backtester). Fire-and-forget: snapshot failures never block the scan.
@@ -199,6 +227,16 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
   prelims.sort((a, b) => b.prelim - a.prelim);
   const finalists = prelims.slice(0, ENRICH_N);
 
+  // Force breakout-watch names that got a snapshot into the finalists even if below the cut —
+  // the whole point is that the committee sees them.
+  const finalistSet = new Set(finalists.map((f) => f.symbol));
+  for (const p of prelims) {
+    if (breakout.has(p.symbol) && !finalistSet.has(p.symbol)) {
+      finalists.push(p);
+      finalistSet.add(p.symbol);
+    }
+  }
+
   // News overlay only for finalists (single multi-symbol call).
   const newsMap = (await alpaca.getNewsMulti(finalists.map((f) => f.symbol))) ?? new Map();
 
@@ -228,6 +266,8 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     }
 
     const reasons: string[] = [];
+    if (breakout.has(f.symbol))
+      reasons.push("On the quant-research Breakout Watch (near-miss scalp — spread/grade just missed)");
     if (multiTradeDays != null && multiTradeDays >= 7)
       reasons.push(`Ranged ≥2% on ${multiTradeDays} of last 10 days (multi-trade profile)`);
     if (Math.abs(f.gapPct) >= GAP_THRESHOLD)
