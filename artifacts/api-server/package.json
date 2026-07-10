@@ -9,7 +9,7 @@
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "brain:test": "node --import tsx --test src/lib/brain/*.test.ts",
+    "brain:test": "tsx --test src/lib/brain/*.test.ts",
     "brain": "tsx src/brain/cli.ts"
   },
   "dependencies": {
