@@ -142,6 +142,45 @@ export function startScanScheduler(): void {
   logger.info("Scan scheduler started (weekdays: refresh 07:00-16:00 ET, record 08:15-09:30, grade after close)");
 }
 
+export type CaptureResult =
+  | { action: "recorded"; date: string; recorded: number }
+  | { action: "graded"; graded: number };
+
+export interface CaptureDeps {
+  runPremarketScan: (refresh: boolean) => Promise<ScanResult>;
+  recordScanPicks: (result: ScanResult, scanDate: string) => Promise<number>;
+  gradePending: (maxDate: string) => Promise<number>;
+}
+
+/**
+ * Self-selects the scorecard job by the NY clock, reusing the same window
+ * constants as the in-process scheduler so the two can never diverge:
+ *  - weekday & inside the record window (08:15-09:30 ET) -> record the picks.
+ *  - otherwise -> grade pending vs the real SIP session bar (safe default; a
+ *    call with nothing pending honestly returns graded: 0).
+ * Errors propagate so the trigger endpoint surfaces them.
+ */
+export async function runScorecardCapture(
+  clock: { minutes: number; isWeekday: boolean } = nyClock(),
+  deps?: CaptureDeps,
+): Promise<CaptureResult> {
+  let d = deps;
+  if (!d) {
+    const s = await import("./scorecard.js");
+    d = { runPremarketScan, recordScanPicks: s.recordScanPicks, gradePending: s.gradePending };
+  }
+  const { minutes, isWeekday } = clock;
+  if (isWeekday && minutes >= RECORD_START && minutes <= RECORD_END) {
+    const result = await d.runPremarketScan(true);
+    const date = todayNYDate();
+    const recorded = await d.recordScanPicks(result, date);
+    return { action: "recorded", date, recorded };
+  }
+  const maxDate = minutes >= GRADE_AFTER ? todayNYDate() : todayNY(-1);
+  const graded = await d.gradePending(maxDate);
+  return { action: "graded", graded };
+}
+
 export async function runPremarketScan(refresh = false): Promise<ScanResult> {
   // Trading-day simulation: SCAN_AS_OF freezes the board at a historical moment.
   // Checked by presence (not validity) so a malformed value errors loudly
