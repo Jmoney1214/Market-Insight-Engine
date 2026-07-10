@@ -20,8 +20,25 @@ if (!question) {
   process.exit(2);
 }
 
-const db = getReadClient();
-const complete = anthropicCompleter(new Anthropic());
-const out = await diagnose({ db, complete }, question);
-console.log("\n" + out.answer + "\n");
-if (out.citations.length) console.log("cited:", out.citations.join(", "));
+/** One clean line from any failure — Anthropic API error, missing env, or DB
+ * read — instead of a raw stack. Still surfaces the real cause; never fakes. */
+function reason(err: unknown): string {
+  if (err && typeof err === "object") {
+    const e = err as { status?: number; error?: { error?: { message?: string } }; message?: string };
+    const apiMsg = e.error?.error?.message;
+    if (apiMsg) return e.status ? `${apiMsg} (HTTP ${e.status})` : apiMsg;
+    if (typeof e.message === "string" && e.message) return e.message;
+  }
+  return String(err);
+}
+
+try {
+  const db = getReadClient();
+  const complete = anthropicCompleter(new Anthropic());
+  const out = await diagnose({ db, complete }, question);
+  console.log("\n" + out.answer + "\n");
+  if (out.citations.length) console.log("cited:", out.citations.join(", "));
+} catch (err) {
+  console.error("brain: " + reason(err));
+  process.exit(1);
+}
