@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { strategyEvidence, sessionEvidence, systemEvidence } from "./evidence.ts";
+import { strategyEvidence, sessionEvidence, systemEvidence } from "./evidence.js";
 
 // Fake read client: returns fixed journal rows for the strategy query.
 function fakeDb(rows: any[]) {

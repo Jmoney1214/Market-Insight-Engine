@@ -4,6 +4,7 @@ import analysisRouter from "./analysis";
 import watchlistRouter from "./watchlist";
 import scanRouter from "./scan";
 import copilotRouter from "./copilot";
+import brainRouter from "./brain";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(analysisRouter);
 router.use(watchlistRouter);
 router.use(scanRouter);
 router.use("/copilot", copilotRouter);
+router.use("/brain", brainRouter);
 
 export default router;

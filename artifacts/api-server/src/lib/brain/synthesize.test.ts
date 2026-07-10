@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { synthesize } from "./synthesize.ts";
-import type { EvidencePack } from "./types.ts";
+import { synthesize } from "./synthesize.js";
+import type { EvidencePack } from "./types.js";
 
 const pack: EvidencePack = { subject: { kind: "strategy", id: "JUMPDAY_RIDER" }, facts: [
   { source: "scoreboard", id: "JUMPDAY_RIDER", data: { status: "no_edge", sampleCount: 31, expectancyR: -0.29 } },

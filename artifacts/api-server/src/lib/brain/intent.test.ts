@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseIntent } from "./intent.ts";
+import { parseIntent } from "./intent.js";
 
 test("routes a registered strategy name to a strategy subject", () => {
   assert.deepEqual(parseIntent("why did JUMPDAY_RIDER go no_edge?"), { kind: "strategy", id: "JUMPDAY_RIDER" });

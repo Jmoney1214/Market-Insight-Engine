@@ -1,6 +1,6 @@
 import { computeScoreboard, journalOutcomeToSample } from "@workspace/copilot-core";
-import type { EvidenceFact, EvidencePack } from "./types.ts";
-import type { ReadClient } from "./supabaseClient.ts";
+import type { EvidenceFact, EvidencePack } from "./types.js";
+import type { ReadClient } from "./supabaseClient.js";
 
 /** Journal rows for a strategy -> scoreboard row + per-trade facts + regime/time
  * splits, each tagged with its source so the synthesizer can cite it. */
@@ -12,10 +12,15 @@ export async function strategyEvidence(db: ReadClient, strategyId: string): Prom
   const rows = (data ?? []).filter((r) => r.manual_outcome?.strategyName === strategyId);
 
   const facts: EvidenceFact[] = [];
-  const samples = rows
-    .map((r) => journalOutcomeToSample({ mode: r.mode, manualOutcome: r.manual_outcome }))
-    .filter((s): s is NonNullable<typeof s> => s !== null);
-  const board = computeScoreboard(samples).find((s) => s.hypothesisName === strategyId);
+  // flatMap both maps and drops nulls with narrowing — no explicit type predicate,
+  // so it stays clean under noImplicitAny regardless of the imported types.
+  const samples = rows.flatMap((r) => {
+    const s = journalOutcomeToSample({ mode: r.mode, manualOutcome: r.manual_outcome });
+    return s ? [s] : [];
+  });
+  const board = computeScoreboard(samples).find(
+    (s: { hypothesisName: string }) => s.hypothesisName === strategyId,
+  );
   if (board) {
     facts.push({
       source: "scoreboard",

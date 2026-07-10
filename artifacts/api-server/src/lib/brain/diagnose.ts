@@ -1,8 +1,8 @@
-import { parseIntent } from "./intent.ts";
-import { strategyEvidence, sessionEvidence, systemEvidence } from "./evidence.ts";
-import { synthesize, type Completer } from "./synthesize.ts";
-import type { ReadClient } from "./supabaseClient.ts";
-import type { EvidencePack, GroundedAnswer } from "./types.ts";
+import { parseIntent } from "./intent.js";
+import { strategyEvidence, sessionEvidence, systemEvidence } from "./evidence.js";
+import { synthesize, type Completer } from "./synthesize.js";
+import type { ReadClient } from "./supabaseClient.js";
+import type { EvidencePack, GroundedAnswer } from "./types.js";
 
 /** The one read-only engine: intent -> evidence (Supabase) -> synthesize (Claude).
  * Shared by the CLI and the POST /brain/ask route. Zero write-back. */

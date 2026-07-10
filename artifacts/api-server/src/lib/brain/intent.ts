@@ -1,4 +1,4 @@
-import type { Subject } from "./types.ts";
+import type { Subject } from "./types.js";
 
 // The registered promotable hypotheses (mirror strategyLab). Extend as the
 // registry grows; unknown names fall through to session/system routing.

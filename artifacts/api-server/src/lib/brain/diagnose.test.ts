@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { diagnose } from "./diagnose.ts";
+import { diagnose } from "./diagnose.js";
 
 const db = { from() { return { select: async () => ({ data: [
   { mode: "RESEARCH", manual_outcome: { strategyName: "JUMPDAY_RIDER", outcomeConfidence: "MANUAL_CONFIRMED", rMultiple: -1, action: "stop_hit", timeWindow: "morning" } },

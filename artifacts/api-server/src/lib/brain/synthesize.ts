@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { EvidencePack, GroundedAnswer } from "./types.ts";
+import type { EvidencePack, GroundedAnswer } from "./types.js";
 
 export type Completer = (system: string, user: string) => Promise<string>;
 
