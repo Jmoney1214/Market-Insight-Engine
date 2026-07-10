@@ -1,0 +1,63 @@
+name: CI
+
+# Gate every change: run the workspace tests, the standalone backtest suite, and typecheck.
+# Until this existed the TypeScript tests never ran in CI (0 checks on PRs #25/#26).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # @workspace/db reads DATABASE_URL at import; the pool connects lazily, so a placeholder is
+  # enough for unit tests (they never touch a real DB — matches artifacts/api-server/vitest.config.ts).
+  DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+
+jobs:
+  # Backtest engine tests are plain node:test (zero deps) — the fastest, most reliable signal.
+  backtest:
+    name: backtest (node:test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tools/research/test/
+
+  # Workspace unit tests (vitest across artifacts/*). Build the composite libs first so the
+  # api-server tests can resolve @workspace/* at runtime.
+  unit-tests:
+    name: unit tests (pnpm -w test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build workspace libs (emits @workspace/* dist for runtime resolution)
+        run: pnpm run typecheck:libs
+      - run: pnpm -w test
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
