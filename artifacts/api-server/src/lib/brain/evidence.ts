@@ -60,3 +60,51 @@ export async function strategyEvidence(db: ReadClient, strategyId: string): Prom
     note: rows.length === 0 ? `no journal samples for ${strategyId}` : undefined,
   };
 }
+
+/** Scan-scorecard picks + catch-rate for one trading day — the "did the predictor
+ * call it" evidence for a session-level question. */
+export async function sessionEvidence(db: ReadClient, date: string): Promise<EvidencePack> {
+  const { data, error } = await db.from("scan_scorecard").select(
+    "scan_date, symbol, list, score, gap_pct, price_at_scan, change_pct, range_pct, hit");
+  if (error) throw new Error(`scan_scorecard read failed: ${String(error)}`);
+  const picks = (data ?? []).filter((r) => r.scan_date === date);
+  const facts: EvidenceFact[] = picks.map((p, i) => ({
+    source: "pick",
+    id: `${date}#${i}`,
+    data: {
+      symbol: p.symbol, list: p.list, gapPct: p.gap_pct, changePct: p.change_pct,
+      rangePct: p.range_pct, hit: p.hit,
+    },
+  }));
+  const hits = picks.filter((p) => p.hit === true).length;
+  facts.push({ source: "catchRate", id: date, data: { picks: picks.length, hits } });
+  return {
+    subject: { kind: "session", date },
+    facts,
+    note: picks.length === 0 ? `no scorecard picks recorded for ${date}` : undefined,
+  };
+}
+
+/** Recent history_log rows + an alert-level breakdown — the "why did a run break"
+ * evidence. Postgres/API logs (management API via SUPABASE_ACCESS_TOKEN) are a
+ * later add; their absence is reported, never fabricated. */
+export async function systemEvidence(db: ReadClient, sinceHours: number): Promise<EvidencePack> {
+  const { data, error } = await db.from("history_log").select(
+    "id, event_id, symbol, mode, alert_level, created_at");
+  if (error) throw new Error(`history_log read failed: ${String(error)}`);
+  const rows = data ?? [];
+  const facts: EvidenceFact[] = rows.slice(0, 50).map((r, i) => ({ source: "log", id: `log#${i}`, data: r }));
+  const byAlertLevel: Record<string, number> = {};
+  rows.forEach((r) => {
+    const lvl = r.alert_level ?? "unknown";
+    byAlertLevel[lvl] = (byAlertLevel[lvl] ?? 0) + 1;
+  });
+  facts.push({ source: "split", id: "byAlertLevel", data: byAlertLevel });
+  return {
+    subject: { kind: "system", sinceHours },
+    facts,
+    note: rows.length === 0
+      ? "no history_log rows; Postgres/API logs need SUPABASE_ACCESS_TOKEN (not configured)"
+      : undefined,
+  };
+}
