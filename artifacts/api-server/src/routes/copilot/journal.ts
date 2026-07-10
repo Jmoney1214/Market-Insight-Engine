@@ -5,6 +5,15 @@ import { CreateJournalEntryBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+/** Stable dedup key from the journaled event snapshot, if it carries one. */
+export function eventIdOf(snapshot: unknown): string | null {
+  if (snapshot && typeof snapshot === "object" && "eventId" in snapshot) {
+    const v = (snapshot as { eventId?: unknown }).eventId;
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return null;
+}
+
 function serialize(row: typeof journalEntriesTable.$inferSelect) {
   return {
     id: row.id,
@@ -46,9 +55,11 @@ router.post("/journal", async (req, res) => {
     eventTs = parsedDate;
   }
 
+  const eventId = eventIdOf(eventSnapshot);
   const [inserted] = await db
     .insert(journalEntriesTable)
     .values({
+      eventId,
       mode,
       symbol,
       eventTimestamp: eventTs,
@@ -56,7 +67,18 @@ router.post("/journal", async (req, res) => {
       manualOutcome: manualOutcome ?? null,
       notes: notes ?? null,
     })
+    .onConflictDoNothing({ target: journalEntriesTable.eventId })
     .returning();
+
+  if (!inserted) {
+    // Idempotent replay: this event was already journaled (double-click / retry). Return the
+    // existing row (200) rather than double-counting the outcome into the edge scoreboard.
+    const [existing] = eventId
+      ? await db.select().from(journalEntriesTable).where(eq(journalEntriesTable.eventId, eventId)).limit(1)
+      : [];
+    res.status(existing ? 200 : 201).json(existing ? serialize(existing) : { deduped: true });
+    return;
+  }
 
   res.status(201).json(serialize(inserted));
 });

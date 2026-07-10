@@ -87,7 +87,11 @@ export async function resolveValidation(stack: TriggerStack): Promise<Validation
       expectancyR: score.expectancyR,
     };
   } catch (err) {
-    logger.warn({ err: String(err), hypothesis }, "validation resolve failed; using default");
+    // Keep the fail-safe fallback (a DB blip must never block/alter a live event), but log at
+    // ERROR: reaching here means the read-back is BROKEN, which is different from the normal
+    // "no journal data yet" path (that returns DEFAULT above without throwing). Surfacing it as
+    // error makes a silently-broken memory loop alertable instead of indistinguishable from empty.
+    logger.error({ err: String(err), hypothesis }, "validation read-back FAILED; falling back to insufficient_sample");
     return DEFAULT_VALIDATION;
   }
 }
