@@ -61,20 +61,20 @@ function fakeGradeDb(opts: { readThrows?: boolean; updateThrows?: boolean; rows?
 
 test("gradePending throws when the pending read fails (surfaced, not swallowed)", async () => {
   await assert.rejects(
-    () => gradePending("2026-07-10", { database: fakeGradeDb({ readThrows: true }), getSessionBar: async () => bar }),
+    () => gradePending("2026-07-10", { database: fakeGradeDb({ readThrows: true }), getSessionBar: (async () => bar) as any }),
     /read failed/,
   );
 });
 
 test("gradePending grades a row against the session bar", async () => {
-  const n = await gradePending("2026-07-10", { database: fakeGradeDb({ rows: [pendingRow] }), getSessionBar: async () => bar });
+  const n = await gradePending("2026-07-10", { database: fakeGradeDb({ rows: [pendingRow] }), getSessionBar: (async () => bar) as any });
   assert.equal(n, 1);
 });
 
 test("gradePending skips (does not abort) when a per-row write fails", async () => {
   const n = await gradePending("2026-07-10", {
     database: fakeGradeDb({ rows: [pendingRow, { ...pendingRow, id: 2 }], updateThrows: true }),
-    getSessionBar: async () => bar,
+    getSessionBar: (async () => bar) as any,
   });
   assert.equal(n, 0); // both writes failed but the call still resolved
 });
@@ -84,10 +84,10 @@ test("gradePending skips (does not abort) when a per-row session-bar fetch throw
   const row2 = { ...pendingRow, id: 2, symbol: "WULF" };
   const n = await gradePending("2026-07-10", {
     database: fakeGradeDb({ rows: [row1, row2] }),
-    getSessionBar: async (symbol: string) => {
+    getSessionBar: (async (symbol: string) => {
       if (symbol === "IREN") throw new Error("bar fetch failed");
       return bar;
-    },
+    }) as any,
   });
   assert.equal(n, 1); // the throw for IREN skipped that row; WULF still graded
 });
