@@ -83,8 +83,10 @@ artifacts/api-server/src/brain/cli.ts      # ask-brain "<question>"
    Each returns a typed `EvidencePack` (structured JSON, every fact tagged with its source
    table + id).
 3. **Synthesizer** (`synthesize.ts`, Claude) — given the question + `EvidencePack`, returns a
-   grounded answer. Model: **`claude-sonnet-5`** (balanced reasoning for causal analysis;
-   confirm via the claude-api reference at build). System prompt enforces §6.
+   grounded answer. **Model `claude-opus-4-8`, adaptive thinking** (`thinking: {type:
+   "adaptive"}`), **structured output** (`output_config.format` → `{ answer, citations[] }`),
+   via the official **`@anthropic-ai/sdk`** (already vendored at `^0.78.0`). System prompt
+   enforces §6. `ANTHROPIC_API_KEY` in env.
 4. **diagnose** (`diagnose.ts`) — `intent → evidence → synthesize`, returns
    `{ answer, citations, evidencePack }`.
 5. **Entry points** — CLI (`ask-brain "…"` prints the answer) + `POST /brain/ask
