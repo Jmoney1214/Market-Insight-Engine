@@ -21,7 +21,12 @@ Query Supabase (project "findesk"; cloud: MCP connector, local: DATABASE_URL
 scratch script) for TODAY plus the trailing 10 sessions:
 1. All rows in `agent_findings` (all agents), newest first.
 2. All `finding_grades` joined to them.
-3. Per-agent calibration: hit rate + avg score by verdict.
+3. Per-agent calibration: prefer the COMPUTED report — `GET /api/calibration`
+   on the api-server (per-writer suggestedWeight, byVerdict, byConfidenceBucket
+   from `computeAgentCalibration` in copilot-core). If the server is down,
+   compute the same cells from the raw tables — never re-derive weights from
+   narrative memory when the computed numbers are reachable. Routine writers
+   (`*/routine`) and subagent writers are SEPARATE track records; never blend.
 4. Strategy scoreboard context read-only (journal_entries → computeScoreboard)
    when reachable.
 If the DB is unreachable, say so and stop — a brain without memory must not

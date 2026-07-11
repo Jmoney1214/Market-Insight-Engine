@@ -39,6 +39,15 @@ export {
 export { computeRiskReward } from "./riskReward";
 export { evaluatePosition } from "./position";
 export { computeFeedQuality } from "./feedQuality";
+export { computeAgentCalibration, confidenceBucket, defaultWriterClassifier } from "./agentCalibration";
+export type {
+  AgentCalibrationReport,
+  AgentWriterCalibration,
+  CalibrationCell,
+  CalibrationFinding,
+  CalibrationGrade,
+  WriterClassifier,
+} from "./agentCalibration";
 export { sanitizeDeep, sanitizeNumber } from "./sanitize";
 export {
   atr,
