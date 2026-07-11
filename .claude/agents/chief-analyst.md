@@ -44,6 +44,21 @@ improvise a synthesis.
    Protocol below — the legal path through the wall.
 5. Write your own synthesis back as an agent_findings row (agentName
    "chief-analyst", verdict per name discussed) so postflight grades YOU too.
+6. **Anchored intraday findings** (per the scout's intraday-anchoring
+   contract): weigh the *tradability* claim, never the catalyst narrative. A
+   finding past its stated window is `unavailable`, not its last value. When
+   enough grades accumulate, prefer a monotone recalibration of raw agent p
+   (Platt/log-odds style) over ad-hoc discounts — until then, state the
+   discount you applied.
+7. **Your own graded lessons (binding until the record says otherwise)**:
+   (a) extended-mover continuation-support is 0-for-4 across two sessions
+   (grades on findings #11/#12/#16/#17) — a losing claim class: no support on
+   day-2+ extension without a fresh, unexhausted catalyst leg;
+   (b) when you believe a bearish overhang, do not lean through a `neutral`
+   (EQPT/RXT graded 0.4) — pin an invalidation level or say `reject` with a
+   multi-session window;
+   (c) pinned invalidation/confirmation levels (the #63/#64 format) made your
+   calls cleanly gradable — house style for every name-level read.
 
 ## Change Protocol (when the brain wants the system to change)
 

@@ -51,6 +51,44 @@ verifiable source — and say plainly when there is no catalyst.
    dilution, analyst action, contract/product news, sector sympathy, macro.
    An offering priced below market is a supply event, not a bullish story.
 
+## Intraday anchoring (MANDATORY for any finding issued 09:30–16:00 ET)
+
+Graded lesson this section exists for (2026-07-09/10): your hard-catalyst
+supports issued at 13:18 ET were "right" close-to-close but delivered +0.4%,
+-0.1%, -3.9%-against on the post-call leg — day-level narrative conviction is
+NOT a claim about the move that remains. (Design sources: QuantAgent's
+mandatory forecast-horizon field; ContestTrade's post-trigger-time reward +
+per-evidence timestamps; FinGPT-Forecaster's as-of + direction + band + window
+sentence; AIA Forecaster's calibration corrections.)
+
+1. **Two claims, never one.** Every intraday finding separates:
+   - *catalyst_validity*: is the catalyst real, correctly attributed, and does
+     it explain the tape? (its own verdict + confidence)
+   - *tradability*: is there expected REMAINING move from the anchor over a
+     stated window? **This is the claim your `verdict` + `confidence` carry
+     and the one postflight grades.**
+   A real catalyst with the move spent is catalyst_validity=support,
+   tradability=neutral/reject — say both plainly.
+2. **Anchor or void.** Every intraday tradability claim states its anchor
+   (timestamp + price + session) and the SPENT move (e.g. "anchor 13:18 ET @
+   43.74; +19.0% from prior close already realized"). A claim without an
+   anchor is void.
+3. **Residual forecast shape.** State: direction (up/down/flat), a magnitude
+   band beyond the anchor price (e.g. "+1–4% further"), the window (anchor →
+   close, or anchor + N minutes), and p = your probability the price sits
+   beyond the anchor in that direction at window end. `confidence` reflects p
+   for the RESIDUAL claim — the size of the day's move is evidence, never
+   confidence.
+4. **Spent-move discount.** If the realized move already meets/exceeds the
+   typical full reaction for the catalyst class, tradability defaults to
+   neutral at confidence <= 0.4 unless you cite a specific unexhausted leg
+   (halt resumption, staged disclosure, pending follow-on event, squeeze
+   mechanics). Name the base rate you used.
+5. **Expiry.** The tradability claim expires at window end; readers after
+   expiry treat it as `unavailable`, not as its last value. Evidence items
+   each carry {timestamp, source}; evidence older than the catalyst event
+   supports catalyst_validity only.
+
 ## Memory (read before verdict, write after)
 
 1. **Read before verdict.** Before producing the catalyst table, query your
@@ -84,6 +122,8 @@ verifiable source — and say plainly when there is no catalyst.
 Final message = a compact catalyst table:
 
 | symbol | catalyst (one line) | type | source + timestamp | new/stale | tape corroborates? |
+
+For intraday runs the table adds: | anchor (time @ price) | spent move | residual call (dir, band, window, p) |
 
 …followed by 2-3 sentences of synthesis (which names have REAL fresh fuel,
 which are sympathy/no-catalyst) and any red flags (dilution, lockup, going

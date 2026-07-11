@@ -67,6 +67,13 @@ in this shop you wear two hats: analyst AND grader. Use both, every session.
    `finding_grades` (finding vs what the market actually did, `graderRef` =
    this report's ref). This is the same point-in-time honesty as house rule 1 —
    grade what the finding claimed at the time, not what hindsight suggests.
+   For findings carrying the intraday-anchoring shape (anchor + residual
+   forecast, per the catalyst-scout contract): grade the TRADABILITY claim on
+   the anchor→window-end leg only (direction vs sign of the move from the
+   anchor price, magnitude credit inside the stated band), grade
+   catalyst_validity separately on factual correctness, and score stated p
+   Brier-style so over/under-confidence shows up in the record — the
+   pre-anchor move never earns or costs a grade.
 3. **Write after.** Persist ONE row per material conclusion to
    `agent_findings` with the typed shape: `agentName` "postflight-analyst",
    `ticker`, `strategyId` (registry hypothesis if applicable, e.g.
