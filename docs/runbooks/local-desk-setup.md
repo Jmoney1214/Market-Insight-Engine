@@ -55,17 +55,19 @@ DATABASE_URL=postgresql://postgres.<project-ref>:<DB_PASSWORD>@aws-0-us-east-1.p
 - Values live ONLY in `.env` (gitignored) and the Replit/production Secrets panel.
   Never commit them; never paste them into chats or issues.
 
-Optional (notifications + agent identity):
+Optional (agent identity):
 
 ```
-TELEGRAM_BOT_TOKEN=     # from @BotFather; enables scan alerts + /api/notify/test
-TELEGRAM_CHAT_ID=       # message your bot once, then read chat id from /getUpdates
 AGENT_TOKENS=           # "desk-claude:<random>,codex:<random>" — names agents in the audit log
 REQUIRE_AGENT_TOKEN=    # leave unset. 'true' rejects anonymous API calls — breaks browser UIs until they carry a credential
 ```
 
 Give the gateway its identity by adding `--env MIE_API_TOKEN=<random>` (the same
 token listed in `AGENT_TOKENS`) to the `claude mcp add` command.
+
+Alerting is handled through TradingView (native app-push/email alerts), driven
+by the supervised `tradingview-mcp` on the operator's machine — the desk server
+sends no notifications itself.
 
 ## 3. Run the desk (Terminal A)
 
