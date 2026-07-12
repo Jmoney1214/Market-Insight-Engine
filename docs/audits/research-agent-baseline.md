@@ -122,7 +122,13 @@ User-Agent, FRED API key, BLS v2 key, BEA key; licensed-news providers (deferred
   journal idempotency, no execution authority. **Freeze for the benchmark: commit `0e0d9e2`.**
 - `B1_EXISTING_SYSTEM_RECONFIG` — partially maps to this repo (committee readers, desk agents,
   no-settings-UI, no-promotion rules). Its `Context OS` and `CODEX-STOCKS` planes remain absent.
-- `CODEX-STOCKS` repo: still does not exist; research layer will be housed here (buildout plan §2).
+- `CODEX-STOCKS` repo: **not accessible in this session's repository scope**, but the federated-vs-attached
+  competitive brief (2026-07-12) reports it exists remotely (inspected commit `4a7f630`), alongside a
+  Context Engineering OS router repo. The earlier "does not exist" finding is therefore corrected to
+  "exists, outside this session's access." **Blocking decision before Phase 1:** CODEX-STOCKS remains
+  the research owner (federated) or Market formally absorbs it (attached). The in-repo
+  `artifacts/research-service` placement in the buildout plan is **provisional on that decision** —
+  two research authorities must never operate simultaneously.
 - Companion repo `Brain-stocks`: unchanged; crypto bot; out of scope (pattern reference only).
 
 ## 11. Proposed file-by-file changes for Phase 1

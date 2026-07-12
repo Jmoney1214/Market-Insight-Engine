@@ -33,16 +33,16 @@ live system rather than replacing a mock**. The mapping:
 
 | Brief concept | Implementation here | Why |
 |---|---|---|
-| `CODEX-STOCKS` repo (research owner) | New workspace package **`artifacts/research-service`** | Repo doesn't exist; the monorepo keeps the versioned contract boundary so extraction later is mechanical |
+| `CODEX-STOCKS` repo (research owner) | **Provisional:** new workspace package **`artifacts/research-service`** | CODEX-STOCKS exists remotely (competitive brief 2026-07-12, commit `4a7f630`) but is outside this session's access. **Ownership decision gate before Phase 1** (§9.0): federate (CODEX stays research owner) or absorb (this package becomes canonical). The versioned contract boundary makes either outcome mechanical; two research authorities must never run at once |
 | Shared contracts repo | New package **`lib/research-contracts`** | Same contract-first culture as `lib/api-spec` and `lib/copilot-core`; consumed by research-service and api-server |
 | Existing deterministic scanner | **Exists** — breakout candidates → morning scan (`lib/db/src/schema/breakoutCandidates.ts`, PR #28) | Add a thin emitter that maps accepted scan candidates into `CandidateSeed` contracts; do not build a second scanner |
 | Temporal durable workflow | **Postgres-backed state machine** (v1) with the brief's exact states/outcomes; Temporal adoption is a later swap | One fewer platform before value ships; states/contracts are Temporal-shaped already |
 | Supabase operational brain | **Exists literally** — dedicated Supabase project hosts the Postgres (`replit.md:14`, RLS on, direct-Postgres only) | Add the research/evidence/operations schema layout with append-only enforcement and real migration files (today: `drizzle push`) |
 | S3 Object Lock evidence store | **Deferred.** V1: append-only tables + RFC 8785/SHA-256 hashes on every object | The hashing discipline lands now; WORM storage is a bolt-on later |
-| mTLS/JWT outbox→inbox delivery | **Typed in-process function call** behind the same `PacketDeliveryRequest/Receipt` contracts | One deployable in v1; the wire protocol activates when the services split |
+| mTLS/JWT outbox→inbox delivery | **Transactional outbox/inbox in Postgres** behind the same `PacketDeliveryRequest/Receipt` contracts, consumed in-process in v1 | Idempotency keys, durable receipts, and supersession semantics exist from day one even without a wire; mTLS/JWT activates when the services split |
 | Market-Insight deterministic core | **Exists** — `copilot-core` (detectors, features, gates, edge scoreboard) + deterministic committee fallback | The packet consumer feeds verified research context INTO this core; research output never writes signals, gates, or scores |
 | "Deterministic committee output" | **Exists** — `lib/copilot-committee` ten lenses + guardrails + orchestrator | The brief's committee concept is already built; CandidatePackets become a new, provenance-audited input to it |
-| CopilotEvent → Market Desk UI | **Both exist** — `copilot-core/src/event.ts` + `artifacts/desk` Terminal | Extend CopilotEvent with research-packet fields (respecting the 4-edit contract chain in `.agents/memory/copilot-event-contract.md`); render sources/UNKNOWNs/conflicts in the Desk |
+| CopilotEvent → Market Desk UI | **Both exist** — `copilot-core/src/event.ts` + `artifacts/desk` Terminal | Verified packets are referenced **beside** CopilotEvent (packet ID + hash), **never inside the event's deterministic trigger/gate hash path** — research context must not be able to alter what fires or blocks. Desk renders sources/UNKNOWNs/conflicts from the referenced packet. Any event-shape change respects the 4-edit contract chain in `.agents/memory/copilot-event-contract.md` |
 | LLM runtime | **Exists** — `integrations-anthropic-ai` / `-gemini-ai` / `-openai-ai-server` behind provider selection with deterministic fallback | Research agents reuse this layer; the brief's OpenAI-SDK prescription is satisfied by the gateway pattern, not a new framework |
 | ClickHouse / Datadog / Kafka / enterprise procurement | **All deferred** per the brief's own "measured gap" rule | No measured gap yet |
 
@@ -229,14 +229,30 @@ handling, wrong-entity rate, latency p50/p95, cost per packet.
 
 ## 9. Standing decisions
 
-1. **Agent runtime: resolved.** Research agents reuse the repo's existing provider-selection layer
+0. **BLOCKING — research ownership topology.** CODEX-STOCKS exists remotely (competitive brief
+   2026-07-12, commit `4a7f630`); Context Engineering OS exists as an outer business router. Before
+   Phase 1 ships, the owner must decide: **federate** (CODEX-STOCKS remains research owner; this
+   repo implements only the packet consumer boundary) or **absorb** (this plan's
+   `artifacts/research-service` becomes canonical and CODEX-STOCKS is retired after parity is
+   proved — preserve the remote until then). The contracts in Phase 1 are identical under both
+   outcomes, so Phase 1 may proceed; Phase 2+ placement may not. Two research authorities must
+   never operate simultaneously.
+1. **Cache is not audit.** The market-data cache (L1/L2), the evidence store, and operational logs
+   are separate concerns with different stores, retention, entitlement, and mutation policies. The
+   cache is mutable and disposable; evidence rows are append-only and hashed; neither substitutes
+   for the other.
+2. **Per-agent identity, not a shared bearer token.** Every agent invocation carries its own
+   principal (manifest ID + version) through the tool gateway and into audit rows; a shared service
+   token defeats scope enforcement and attribution. Wire-level auth (mTLS/JWT) arrives when the
+   services split, but per-agent attribution exists from Phase 3.
+3. **Agent runtime: resolved.** Research agents reuse the repo's existing provider-selection layer
    (`lib/integrations-anthropic-ai` / `-gemini-ai` / `-openai-ai-server`) with the committee's
    deterministic-fallback pattern (`COPILOT_LLM_PROVIDER=none` in tests). No new agent framework;
    manifests + tool gateway wrap the existing integrations.
-2. **Reference code is never copied** — patterns are reimplemented in TypeScript
+4. **Reference code is never copied** — patterns are reimplemented in TypeScript
    (AgenticTrading is OpenMDW-1.0; all six references are research-grade). One ADR per imported
    pattern in `docs/decisions/`.
-3. **Enterprise procurement follows measured gaps**, not the brief's P0 list: SEC/FRED/BLS/BEA
+5. **Enterprise procurement follows measured gaps**, not the brief's P0 list: SEC/FRED/BLS/BEA
    (free) and one market-data key are sufficient through Phase 8.
-4. **Licensing/entitlement review** (data vendor display/non-display/model-input rights) is with
+6. **Licensing/entitlement review** (data vendor display/non-display/model-input rights) is with
    counsel; the `EntitlementPolicy` gateway lands before any licensed feed does.
