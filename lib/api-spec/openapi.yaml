@@ -145,6 +145,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Market data providers not configured — the API refuses to fabricate a report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /reports:
     get:
