@@ -47,14 +47,16 @@ export interface ScoutRunResult {
   memoryLines: number;
 }
 
-const verdictEnum = z.enum(["support", "reject", "neutral", "unavailable"]);
+const lower = (v: unknown) => (typeof v === "string" ? v.toLowerCase() : v);
+const upper = (v: unknown) => (typeof v === "string" ? v.toUpperCase() : v);
+const verdictEnum = z.preprocess(lower, z.enum(["support", "reject", "neutral", "unavailable"]));
 
 const modelCallSchema = z.object({
   ticker: z.string().min(1),
   verdict: verdictEnum,
-  catalystTier: z.enum(["HARD", "SOFT", "SYMPATHY", "NONE"]),
+  catalystTier: z.preprocess(upper, z.enum(["HARD", "SOFT", "SYMPATHY", "NONE"])),
   catalyst: z.string(), // one line, with source + timestamp, or "none found"
-  direction: z.enum(["up", "down", "flat"]),
+  direction: z.preprocess(lower, z.enum(["up", "down", "flat"])),
   /** P(price beyond anchor in `direction` at window end), per the anchoring contract. */
   p: z.number().min(0).max(1),
   magnitudeBandPct: z.tuple([z.number(), z.number()]),
