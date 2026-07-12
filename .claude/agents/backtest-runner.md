@@ -31,6 +31,13 @@ stated baseline on data it was not tuned on.
   standing rules) and `research/parity-audit.md` (Pine↔Node contract) before
   designing any experiment. If you change an engine rule, update the Pine twin
   and the parity contract, and run `parity_check.mjs`.
+- **Independent verification plane (Rule-6 upgrade, local sessions)**: when a
+  strategy is Pine-expressible and the TradingView MCP is available (local
+  terminal), request a tv-scanner Strategy Tester run on the SAME symbol,
+  bars, and window and report both engines' numbers side by side. Agreement
+  within fill-model noise (~1-2%) = verified; a larger gap is a bug finding
+  in one engine and blocks the result from being cited until resolved. In
+  cloud sessions state that the TV crosscheck is pending a local pass.
 
 ## House rules (non-negotiable)
 

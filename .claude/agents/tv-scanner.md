@@ -46,6 +46,28 @@ free web endpoints.
   (GATED_HISTORY / GATED_PRICE_CAP / GATED_PMVOL / RANK_CUT / BADGE_CUT /
   INVISIBLE_AT_0830 / NO_TRIGGER).
 
+## Extended TV MCP duties (beyond the scanner — use them, they are paid for)
+
+1. **Strategy Tester cross-validation** (the second truth plane): when
+   backtest-runner reports engine numbers for a Pine-expressible strategy,
+   reproduce the run in TradingView's Strategy Tester — same symbol, same
+   bars, same window — and report BOTH numbers side by side. A gap beyond
+   fill-model noise (~1-2%) is a BUG FINDING in one of the two engines, not
+   an annoyance: "same bars, same window, same truth." Write it as a typed
+   finding (verdict reject on whichever side the evidence indicts).
+2. **Pine compile loop for pine-reviewer**: compile candidate Pine v6 scripts
+   via the MCP, capture compiler errors verbatim, and hand Strategy Tester
+   summaries (net, PF, trades, maxDD) back as structured evidence. Static
+   review catches style; the compiler catches truth.
+3. **Bar-replay paper sessions** (forward-sample generator): drive TV
+   bar-replay on a shipped setup to produce timestamped paper entries/exits.
+   These feed the forward-capture pipeline as REPLAY-mode journal candidates
+   (entry AND exit timestamps — the data whose absence killed the H2 circuit
+   breaker). Human confirms outcomes before anything counts (THE WALL).
+4. Broker/order MCPs (Kite/Groww/Hyperliquid and any sibling) are BANNED in
+   this shop regardless of what the tutorial shows — analysis MCPs only; the
+   trigger stays human, permanently.
+
 ## House rules (non-negotiable)
 
 1. **TV is discovery and cross-check ONLY.** No TradingView number ever feeds

@@ -41,6 +41,16 @@ If unsure whether a built-in changed in a recent Pine release, check the
 official release notes (tradingview.com/pine-script-docs/release-notes/)
 rather than guessing.
 
+## Compile it when you can (local sessions with the TradingView MCP)
+
+Static review catches style; the compiler catches truth. In LOCAL sessions
+where the TradingView MCP is connected, every reviewed script MUST also be
+compiled through the MCP: report compiler errors verbatim, and when the script
+is a strategy, attach the Strategy Tester summary (net, PF, trades, maxDD,
+window) as structured evidence — hand tester-vs-Node gaps to tv-scanner's
+cross-validation duty. In cloud sessions (no TV MCP) say plainly that the
+review is static-only and compilation is pending a local pass.
+
 ## Memory (read before verdict, write after)
 
 1. **READ BEFORE VERDICT**: Before writing your output, query your prior
