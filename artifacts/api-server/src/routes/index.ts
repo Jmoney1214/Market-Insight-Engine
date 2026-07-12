@@ -6,6 +6,7 @@ import scanRouter from "./scan";
 import copilotRouter from "./copilot";
 import brainRouter from "./brain";
 import calibrationRouter from "./calibration";
+import crewRouter from "./crew";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(scanRouter);
 router.use("/copilot", copilotRouter);
 router.use("/brain", brainRouter);
 router.use(calibrationRouter);
+router.use("/crew", crewRouter);
 
 export default router;
