@@ -122,6 +122,9 @@ export function startScanScheduler(): void {
         logger.info("Scheduled scan refreshed");
         if (minutes >= RECORD_START && minutes <= RECORD_END) {
           await recordScanPicks(result, todayNYDate());
+          // Push the recorded board to Telegram (once per day; never throws).
+          const { notifyScanRecorded } = await import("./notify.js");
+          void notifyScanRecorded(result, todayNYDate());
         }
       } catch (err) {
         logger.warn({ err: String(err) }, "Scheduled scan failed");
