@@ -229,14 +229,15 @@ handling, wrong-entity rate, latency p50/p95, cost per packet.
 
 ## 9. Standing decisions
 
-0. **BLOCKING — research ownership topology.** CODEX-STOCKS exists remotely (competitive brief
-   2026-07-12, commit `4a7f630`); Context Engineering OS exists as an outer business router. Before
-   Phase 1 ships, the owner must decide: **federate** (CODEX-STOCKS remains research owner; this
-   repo implements only the packet consumer boundary) or **absorb** (this plan's
-   `artifacts/research-service` becomes canonical and CODEX-STOCKS is retired after parity is
-   proved — preserve the remote until then). The contracts in Phase 1 are identical under both
-   outcomes, so Phase 1 may proceed; Phase 2+ placement may not. Two research authorities must
-   never operate simultaneously.
+0. **RESOLVED — one canonical build (ADR 0001).** Market-Insight-Engine is the only product;
+   research ownership is absorbed here. CODEX-STOCKS (remote `4a7f630`) and Context Engineering OS
+   are frozen outside the launch path — preserved, documented, not developed as competing
+   products. Additionally, **release gate R0 precedes everything in this plan**: the existing
+   fixture-driven loop (scanner → CopilotEvent → gates → committee → Desk → journal → scoreboard)
+   must be proven end to end before research Phase 2+ ships; Phase 1 (contracts) may proceed in
+   parallel since it touches no runtime. R1 is exactly one research slice: Seed → Lead → Catalyst
+   Verifier → Source Guardian → packet → read-only context beside CopilotEvent. Macro/IPO agents,
+   streaming, caching expansion, and the 12-arm registry all wait behind R1.
 1. **Cache is not audit.** The market-data cache (L1/L2), the evidence store, and operational logs
    are separate concerns with different stores, retention, entitlement, and mutation policies. The
    cache is mutable and disposable; evidence rows are append-only and hashed; neither substitutes
