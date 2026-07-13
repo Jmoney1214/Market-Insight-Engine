@@ -49,27 +49,22 @@ export const MarketSessionContextSchema = z
   })
   .strict();
 
-const SipPreflightShape = {
-  provider: z.literal("ALPACA_SIP"),
-  checkedAt: z.string().datetime({ offset: true }),
-  endpoint: z.string().url(),
-  probeSymbol: z.string().min(1),
-  httpStatus: z.number().int().min(100).max(599).nullable(),
-  durationMs: z.number().int().nonnegative(),
-  attempt: z.number().int().positive(),
-  responseBodySha256: Sha256Schema.nullable(),
-  marketTimestamp: z.string().datetime({ offset: true }).nullable(),
-  marketSession: MarketSessionContextSchema,
-};
-
-function sipPreflightVariant<const Status extends string>(status: Status) {
-  return z
-    .object({
-      ...SipPreflightShape,
-      status: z.literal(status),
-    })
-    .strict();
-}
+export const ClassifiedProviderResponseSchema = z
+  .object({
+    kind: z.enum([
+      "SUCCESS",
+      "AUTH_ERROR",
+      "ENTITLEMENT_ERROR",
+      "RATE_LIMIT_ERROR",
+      "PROVIDER_ERROR",
+      "SCHEMA_ERROR",
+      "TIMEOUT",
+      "EMPTY",
+      "UNKNOWN",
+    ]),
+    redactedBodyJson: z.string().min(1).nullable(),
+  })
+  .strict();
 
 export const SipPreflightStatusSchema = z.enum([
   "SIP_REALTIME",
@@ -81,25 +76,75 @@ export const SipPreflightStatusSchema = z.enum([
   "UNKNOWN",
 ]);
 
-export const SipRealtimePreflightSchema = z
+const AlpacaSipPreflightObjectSchema = z
   .object({
-    ...SipPreflightShape,
-    status: z.literal("SIP_REALTIME"),
-    httpStatus: z.literal(200),
-    responseBodySha256: Sha256Schema,
-    marketTimestamp: z.string().datetime({ offset: true }),
+    provider: z.literal("ALPACA_SIP"),
+    status: SipPreflightStatusSchema,
+    checkedAt: z.string().datetime({ offset: true }),
+    requestStartedAt: z.string().datetime({ offset: true }),
+    responseReceivedAt: z.string().datetime({ offset: true }).nullable(),
+    endpoint: z.string().url(),
+    feed: z.literal("sip"),
+    probeSymbol: z.string().min(1),
+    httpStatus: z.number().int().min(100).max(599).nullable(),
+    durationMs: z.number().int().nonnegative(),
+    attempt: z.number().int().positive(),
+    classifiedResponse: ClassifiedProviderResponseSchema,
+    responseBodySha256: Sha256Schema.nullable(),
+    marketTimestamp: z.string().datetime({ offset: true }).nullable(),
+    marketSession: MarketSessionContextSchema,
   })
   .strict();
 
-export const SipPreflightResultSchema = z.discriminatedUnion("status", [
-  SipRealtimePreflightSchema,
-  sipPreflightVariant("SIP_DELAYED_ONLY"),
-  sipPreflightVariant("IEX_ONLY"),
-  sipPreflightVariant("AUTH_FAILED"),
-  sipPreflightVariant("RATE_LIMITED"),
-  sipPreflightVariant("PROVIDER_UNAVAILABLE"),
-  sipPreflightVariant("UNKNOWN"),
-]);
+type AlpacaSipPreflight = z.infer<typeof AlpacaSipPreflightObjectSchema>;
+
+function hasSipFeed(endpoint: string): boolean {
+  return new URL(endpoint).searchParams.get("feed") === "sip";
+}
+
+function refineAlpacaSipPreflight(
+  result: AlpacaSipPreflight,
+  context: z.RefinementCtx,
+): void {
+  if (!hasSipFeed(result.endpoint)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["endpoint"],
+      message: "Alpaca SIP probes must explicitly request feed=sip",
+    });
+  }
+
+  if (result.status === "SIP_REALTIME") {
+    if (
+      result.httpStatus !== 200 ||
+      result.responseReceivedAt === null ||
+      result.classifiedResponse.kind !== "SUCCESS" ||
+      result.responseBodySha256 === null ||
+      result.marketTimestamp === null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "SIP_REALTIME requires a complete successful SIP response and market timestamp",
+      });
+    }
+  }
+}
+
+export const SipPreflightResultSchema =
+  AlpacaSipPreflightObjectSchema.superRefine(refineAlpacaSipPreflight);
+
+export const SipRealtimePreflightSchema =
+  AlpacaSipPreflightObjectSchema.superRefine((result, context) => {
+    if (result.status !== "SIP_REALTIME") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["status"],
+        message: "expected SIP_REALTIME",
+      });
+    }
+    refineAlpacaSipPreflight(result, context);
+  });
 
 export const FmpEndpointFamilySchema = z.enum(["profile", "news", "quote"]);
 export const FmpPreflightStatusSchema = z.enum([
@@ -116,65 +161,207 @@ export const FmpPreflightStatusSchema = z.enum([
 
 const FmpRequiredShape = {
   provider: z.literal("FMP"),
+  status: FmpPreflightStatusSchema,
   checkedAt: z.string().datetime({ offset: true }),
-  endpointFamily: FmpEndpointFamilySchema,
-  endpoint: z.string().url(),
-  probeSymbol: z.string().min(1),
+  requestStartedAt: z.string().datetime({ offset: true }).nullable(),
+  responseReceivedAt: z.string().datetime({ offset: true }).nullable(),
+  endpointFamily: FmpEndpointFamilySchema.nullable(),
+  endpoint: z.string().url().nullable(),
+  probeSymbol: z.string().min(1).nullable(),
   httpStatus: z.number().int().min(100).max(599).nullable(),
   durationMs: z.number().int().nonnegative(),
-  attempt: z.number().int().positive(),
+  attempt: z.number().int().nonnegative(),
+  classifiedResponse: ClassifiedProviderResponseSchema.nullable(),
   responseBodySha256: Sha256Schema.nullable(),
 };
 
-function fmpPreflightVariant<const Status extends string>(status: Status) {
-  return z
-    .object({
-      ...FmpRequiredShape,
-      status: z.literal(status),
-    })
-    .strict();
-}
-
-export const FmpAvailablePreflightSchema = z
+const FmpPreflightObjectSchema = z
   .object({
     ...FmpRequiredShape,
-    status: z.literal("AVAILABLE"),
-    httpStatus: z.number().int().min(200).max(299),
-    responseBodySha256: Sha256Schema,
   })
   .strict();
 
-export const FmpNotRequiredPreflightSchema = z
+type FmpPreflight = z.infer<typeof FmpPreflightObjectSchema>;
+
+function refineFmpPreflight(
+  result: FmpPreflight,
+  context: z.RefinementCtx,
+): void {
+  if (result.status === "NOT_REQUIRED") {
+    if (
+      result.requestStartedAt !== null ||
+      result.responseReceivedAt !== null ||
+      result.endpointFamily !== null ||
+      result.endpoint !== null ||
+      result.probeSymbol !== null ||
+      result.httpStatus !== null ||
+      result.durationMs !== 0 ||
+      result.attempt !== 0 ||
+      result.classifiedResponse !== null ||
+      result.responseBodySha256 !== null
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "NOT_REQUIRED cannot claim an FMP request or response",
+      });
+    }
+    return;
+  }
+
+  if (
+    result.requestStartedAt === null ||
+    result.endpointFamily === null ||
+    result.endpoint === null ||
+    result.probeSymbol === null ||
+    result.attempt < 1 ||
+    result.classifiedResponse === null
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "required FMP probes require complete request evidence",
+    });
+  }
+
+  if (
+    result.status === "AVAILABLE" &&
+    (result.httpStatus === null ||
+      result.httpStatus < 200 ||
+      result.httpStatus > 299 ||
+      result.responseReceivedAt === null ||
+      result.classifiedResponse?.kind !== "SUCCESS" ||
+      result.responseBodySha256 === null)
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "AVAILABLE requires a complete successful FMP response",
+    });
+  }
+}
+
+export const FmpPreflightResultSchema =
+  FmpPreflightObjectSchema.superRefine(refineFmpPreflight);
+
+export const FmpAvailablePreflightSchema = FmpPreflightObjectSchema.superRefine(
+  (result, context) => {
+    if (result.status !== "AVAILABLE") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["status"],
+        message: "expected AVAILABLE",
+      });
+    }
+    refineFmpPreflight(result, context);
+  },
+);
+
+export const FmpNotRequiredPreflightSchema =
+  FmpPreflightObjectSchema.superRefine((result, context) => {
+    if (result.status !== "NOT_REQUIRED") {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["status"],
+        message: "expected NOT_REQUIRED",
+      });
+    }
+    refineFmpPreflight(result, context);
+  });
+
+export const ModelProviderPreflightStatusSchema = z.enum([
+  "AVAILABLE",
+  "AUTH_FAILED",
+  "RATE_LIMITED",
+  "PROVIDER_UNAVAILABLE",
+  "SCHEMA_INVALID",
+  "TIMED_OUT",
+  "UNKNOWN",
+]);
+
+const ModelProviderPreflightShape = {
+  status: ModelProviderPreflightStatusSchema,
+  checkedAt: z.string().datetime({ offset: true }),
+  requestStartedAt: z.string().datetime({ offset: true }),
+  responseReceivedAt: z.string().datetime({ offset: true }).nullable(),
+  endpoint: z.string().url(),
+  requestedModelId: z.string().min(1),
+  returnedModelId: z.string().min(1).nullable(),
+  httpStatus: z.number().int().min(100).max(599).nullable(),
+  durationMs: z.number().int().nonnegative(),
+  attempt: z.number().int().positive(),
+  providerRequestId: z.string().min(1).nullable(),
+  classifiedResponse: ClassifiedProviderResponseSchema,
+  responseBodySha256: Sha256Schema.nullable(),
+};
+
+const OpenAiPreflightObjectSchema = z
   .object({
-    provider: z.literal("FMP"),
-    status: z.literal("NOT_REQUIRED"),
-    checkedAt: z.string().datetime({ offset: true }),
-    endpointFamily: z.null(),
-    endpoint: z.null(),
-    probeSymbol: z.null(),
-    httpStatus: z.null(),
-    durationMs: z.literal(0),
-    attempt: z.literal(0),
-    responseBodySha256: z.null(),
+    provider: z.literal("OPENAI"),
+    ...ModelProviderPreflightShape,
   })
   .strict();
 
-export const FmpPreflightResultSchema = z.discriminatedUnion("status", [
-  FmpNotRequiredPreflightSchema,
-  FmpAvailablePreflightSchema,
-  fmpPreflightVariant("AUTH_FAILED"),
-  fmpPreflightVariant("ENTITLEMENT_FAILED"),
-  fmpPreflightVariant("RATE_LIMITED"),
-  fmpPreflightVariant("PROVIDER_UNAVAILABLE"),
-  fmpPreflightVariant("SCHEMA_INVALID"),
-  fmpPreflightVariant("TIMED_OUT"),
-  fmpPreflightVariant("UNKNOWN"),
-]);
+const AnthropicPreflightObjectSchema = z
+  .object({
+    provider: z.literal("ANTHROPIC"),
+    ...ModelProviderPreflightShape,
+  })
+  .strict();
 
-export const ProviderPreflightResultSchema = z.union([
-  SipPreflightResultSchema,
-  FmpPreflightResultSchema,
-]);
+type ModelProviderPreflight =
+  | z.infer<typeof OpenAiPreflightObjectSchema>
+  | z.infer<typeof AnthropicPreflightObjectSchema>;
+
+function refineModelProviderPreflight(
+  result: ModelProviderPreflight,
+  context: z.RefinementCtx,
+): void {
+  if (
+    result.status === "AVAILABLE" &&
+    (result.httpStatus === null ||
+      result.httpStatus < 200 ||
+      result.httpStatus > 299 ||
+      result.responseReceivedAt === null ||
+      result.returnedModelId === null ||
+      result.providerRequestId === null ||
+      result.classifiedResponse.kind !== "SUCCESS" ||
+      result.responseBodySha256 === null)
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "AVAILABLE requires a complete successful model response",
+    });
+  }
+}
+
+export const OpenAiPreflightResultSchema =
+  OpenAiPreflightObjectSchema.superRefine(refineModelProviderPreflight);
+export const AnthropicPreflightResultSchema =
+  AnthropicPreflightObjectSchema.superRefine(refineModelProviderPreflight);
+
+const DiscriminatedProviderPreflightResultSchema = z.discriminatedUnion(
+  "provider",
+  [
+    AlpacaSipPreflightObjectSchema,
+    FmpPreflightObjectSchema,
+    OpenAiPreflightObjectSchema,
+    AnthropicPreflightObjectSchema,
+  ],
+);
+
+export const ProviderPreflightResultSchema =
+  DiscriminatedProviderPreflightResultSchema.superRefine((result, context) => {
+    switch (result.provider) {
+      case "ALPACA_SIP":
+        refineAlpacaSipPreflight(result, context);
+        break;
+      case "FMP":
+        refineFmpPreflight(result, context);
+        break;
+      case "OPENAI":
+      case "ANTHROPIC":
+        refineModelProviderPreflight(result, context);
+        break;
+    }
+  });
 
 export const ResearchRunSchema = z
   .object({

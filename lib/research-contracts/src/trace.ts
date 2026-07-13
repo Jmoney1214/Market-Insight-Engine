@@ -2,11 +2,10 @@ import { z } from "zod";
 
 import { PrincipalSchema } from "./auth.js";
 import {
-  FmpPreflightStatusSchema,
+  ProviderPreflightResultSchema,
   ResearchOutcomeSchema,
   RunFailureReasonSchema,
   RunStateSchema,
-  SipPreflightStatusSchema,
 } from "./run.js";
 import { ModelProviderSchema, Sha256Schema } from "./version.js";
 
@@ -83,6 +82,8 @@ const TraceEventShape = {
   spanId: z.string().min(1),
   parentSpanId: z.string().min(1).nullable(),
   principal: PrincipalSchema,
+  credentialId: z.string().min(1),
+  owningServicePrincipalId: z.string().min(1).nullable(),
   versionSnapshotId: z.string().uuid(),
   attempt: z.number().int().positive(),
   status: TraceStatusSchema,
@@ -110,12 +111,7 @@ const RunStateChangedPayloadSchema = z
 
 const ProviderPreflightPayloadSchema = z
   .object({
-    provider: z.enum(["ALPACA_SIP", "FMP", "OPENAI", "ANTHROPIC"]),
-    status: z.union([SipPreflightStatusSchema, FmpPreflightStatusSchema]),
-    endpoint: z.string().url().nullable(),
-    probeSymbol: z.string().min(1).nullable(),
-    redactedResponseJson: z.string().min(1).nullable(),
-    responseBodySha256: Sha256Schema.nullable(),
+    preflight: ProviderPreflightResultSchema,
   })
   .strict();
 
@@ -295,23 +291,47 @@ export const AgentFinishedTraceSchema = traceVariant(
   AgentLifecyclePayloadSchema,
 );
 
-export const TraceEventSchema = z.discriminatedUnion("kind", [
-  RunStateChangedTraceSchema,
-  ProviderPreflightTraceSchema,
-  AgentStartedTraceSchema,
-  ModelCallIntentTraceSchema,
-  ModelRequestTraceSchema,
-  ModelResponseTraceSchema,
-  ToolCallIntentTraceSchema,
-  ToolRequestTraceSchema,
-  ToolResponseTraceSchema,
-  RetryScheduledTraceSchema,
-  ErrorTraceSchema,
-  GraderRequestTraceSchema,
-  GraderResultTraceSchema,
-  GateResultTraceSchema,
-  AgentFinishedTraceSchema,
-]);
+export const TraceEventSchema = z
+  .discriminatedUnion("kind", [
+    RunStateChangedTraceSchema,
+    ProviderPreflightTraceSchema,
+    AgentStartedTraceSchema,
+    ModelCallIntentTraceSchema,
+    ModelRequestTraceSchema,
+    ModelResponseTraceSchema,
+    ToolCallIntentTraceSchema,
+    ToolRequestTraceSchema,
+    ToolResponseTraceSchema,
+    RetryScheduledTraceSchema,
+    ErrorTraceSchema,
+    GraderRequestTraceSchema,
+    GraderResultTraceSchema,
+    GateResultTraceSchema,
+    AgentFinishedTraceSchema,
+  ])
+  .superRefine((event, context) => {
+    if (event.principal.kind === "agent") {
+      if (
+        event.owningServicePrincipalId !== event.principal.servicePrincipalId
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["owningServicePrincipalId"],
+          message:
+            "agent traces must name the service principal bound to the agent",
+        });
+      }
+      return;
+    }
+
+    if (event.owningServicePrincipalId !== null) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["owningServicePrincipalId"],
+        message: "non-agent traces cannot claim an owning service principal",
+      });
+    }
+  });
 
 export type TraceKind = z.infer<typeof TraceKindSchema>;
 export type TraceEvent = z.infer<typeof TraceEventSchema>;

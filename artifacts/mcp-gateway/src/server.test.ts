@@ -55,13 +55,14 @@ describe("mcp gateway", () => {
   });
 
   it("reports unreachable API as a tool error, not a crash", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockRejectedValue(new Error("unreachable test API")),
-    );
+    const fetchSpy = vi
+      .fn()
+      .mockRejectedValue(new Error("unreachable test API"));
+    vi.stubGlobal("fetch", fetchSpy);
     const client = await connectedClient();
     const result = await client.callTool({ name: "get_watchlist", arguments: {} });
     expect(result.isError).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledOnce();
   });
 
   it("does not accept fixture source or historical mode on ordinary live tools", async () => {

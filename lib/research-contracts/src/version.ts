@@ -18,14 +18,53 @@ export const ManifestVersionSchema = z
   })
   .strict();
 
-export const ModelVersionSchema = z
+const ExactModelVersionSchema = z
   .object({
     provider: ModelProviderSchema,
     requestedModelId: z.string().min(1),
-    returnedModelPolicy: z.enum(["EXACT", "ALLOWLIST"]),
+    returnedModelPolicy: z.literal("EXACT"),
+    allowedReturnedModelIds: z.tuple([z.string().min(1)]),
+  })
+  .strict();
+
+const AllowlistedModelVersionSchema = z
+  .object({
+    provider: ModelProviderSchema,
+    requestedModelId: z.string().min(1),
+    returnedModelPolicy: z.literal("ALLOWLIST"),
     allowedReturnedModelIds: z.array(z.string().min(1)).min(1),
   })
   .strict();
+
+export const ModelVersionSchema = z
+  .discriminatedUnion("returnedModelPolicy", [
+    ExactModelVersionSchema,
+    AllowlistedModelVersionSchema,
+  ])
+  .superRefine((model, context) => {
+    if (
+      model.returnedModelPolicy === "EXACT" &&
+      model.allowedReturnedModelIds[0] !== model.requestedModelId
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["allowedReturnedModelIds", 0],
+        message:
+          "EXACT requires the sole returned model ID to equal the request",
+      });
+    }
+
+    if (
+      new Set(model.allowedReturnedModelIds).size !==
+      model.allowedReturnedModelIds.length
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["allowedReturnedModelIds"],
+        message: "returned model allowlists cannot contain duplicates",
+      });
+    }
+  });
 
 export const ArtifactVersionSchema = z
   .object({
@@ -102,14 +141,25 @@ export const ConfiguredVersionSnapshotSchema = z
 
 export const ObservedModelVersionSchema = z
   .object({
-    provider: ModelProviderSchema,
-    requestedModelId: z.string().min(1),
+    configuredModel: ModelVersionSchema,
     returnedModelId: z.string().min(1),
     providerResponseId: z.string().min(1),
     providerRequestId: z.string().min(1).nullable(),
-    resolutionSatisfied: z.boolean(),
   })
-  .strict();
+  .strict()
+  .superRefine((observation, context) => {
+    if (
+      !observation.configuredModel.allowedReturnedModelIds.includes(
+        observation.returnedModelId,
+      )
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["returnedModelId"],
+        message: "returned model ID does not satisfy the configured policy",
+      });
+    }
+  });
 
 export const ObservedVersionSnapshotSchema = z
   .object({
@@ -130,6 +180,7 @@ export const RunVersionSnapshotSchema = z.discriminatedUnion("snapshotKind", [
 
 export type Sha256 = z.infer<typeof Sha256Schema>;
 export type ModelProvider = z.infer<typeof ModelProviderSchema>;
+export type ModelVersion = z.infer<typeof ModelVersionSchema>;
 export type ConfiguredVersionSnapshot = z.infer<
   typeof ConfiguredVersionSnapshotSchema
 >;

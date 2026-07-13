@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  ActiveSuiteManifestSchema,
   AgentOutputSchema,
   canonicalJson,
   CandidatePacketDraftSchema,
@@ -11,17 +12,23 @@ import {
   EvidenceLinkSchema,
   EvidenceNodeSchema,
   FmpPreflightResultSchema,
+  FiveBatchTrialMatrixSchema,
   GovernanceDecisionSchema,
   GraderResultSchema,
   hmacCanonical,
   InstrumentClassSchema,
+  ModelVersionSchema,
+  ObservedModelVersionSchema,
   PrincipalSchema,
+  ProviderPreflightResultSchema,
   ResearchRunSchema,
   RunStateSchema,
   sha256Canonical,
   SipPreflightResultSchema,
   TraceEventSchema,
   TraceKindSchema,
+  TrialBatchSchema,
+  TrialSeriesSchema,
 } from "./index.js";
 
 describe("canonical hashing", () => {
@@ -128,6 +135,38 @@ describe("canonical hashing", () => {
     expect(() => canonicalJson(accessorBacked)).toThrow(TypeError);
   });
 
+  it("rejects hostile proxies before invoking any trap", () => {
+    let trapInvocations = 0;
+    const hostile = new Proxy(
+      { value: 1 },
+      {
+        getPrototypeOf() {
+          trapInvocations += 1;
+          throw new Error("getPrototypeOf trap executed");
+        },
+        ownKeys() {
+          trapInvocations += 1;
+          throw new Error("ownKeys trap executed");
+        },
+        getOwnPropertyDescriptor() {
+          trapInvocations += 1;
+          throw new Error("descriptor trap executed");
+        },
+        get() {
+          trapInvocations += 1;
+          throw new Error("get trap executed");
+        },
+      },
+    );
+
+    expect(() => canonicalJson(hostile)).toThrow(
+      new TypeError(
+        "Canonical JSON requires JSON data: proxies are not JSON data",
+      ),
+    );
+    expect(trapInvocations).toBe(0);
+  });
+
   it("produces stable lowercase SHA-256 and HMAC-SHA-256 digests", () => {
     const first = { b: 2, a: 1 };
     const second = { a: 1, b: 2 };
@@ -189,12 +228,19 @@ describe("run and provider-preflight contracts", () => {
     provider: "ALPACA_SIP",
     status: "SIP_REALTIME",
     checkedAt: timestamp,
+    requestStartedAt: timestamp,
+    responseReceivedAt: timestamp,
     endpoint:
       "https://data.alpaca.markets/v2/stocks/SPY/quotes/latest?feed=sip",
+    feed: "sip",
     probeSymbol: "SPY",
     httpStatus: 200,
     durationMs: 45,
     attempt: 1,
+    classifiedResponse: {
+      kind: "SUCCESS",
+      redactedBodyJson: '{"latestQuote":{"t":"2026-07-12T15:30:00.000Z"}}',
+    },
     responseBodySha256: hash,
     marketTimestamp: timestamp,
     marketSession: {
@@ -213,12 +259,15 @@ describe("run and provider-preflight contracts", () => {
         provider: "FMP",
         status: "NOT_REQUIRED",
         checkedAt: timestamp,
+        requestStartedAt: null,
+        responseReceivedAt: null,
         endpointFamily: null,
         endpoint: null,
         probeSymbol: null,
         httpStatus: null,
         durationMs: 0,
         attempt: 0,
+        classifiedResponse: null,
         responseBodySha256: null,
       }).status,
     ).toBe("NOT_REQUIRED");
@@ -227,6 +276,8 @@ describe("run and provider-preflight contracts", () => {
         provider: "FMP",
         status: "NOT_REQUIRED",
         checkedAt: timestamp,
+        requestStartedAt: timestamp,
+        responseReceivedAt: timestamp,
         endpointFamily: "profile",
         endpoint:
           "https://financialmodelingprep.com/stable/profile-symbol?symbol=SPY",
@@ -234,6 +285,10 @@ describe("run and provider-preflight contracts", () => {
         httpStatus: 200,
         durationMs: 1,
         attempt: 1,
+        classifiedResponse: {
+          kind: "SUCCESS",
+          redactedBodyJson: "{}",
+        },
         responseBodySha256: hash,
       }).success,
     ).toBe(false);
@@ -244,6 +299,16 @@ describe("run and provider-preflight contracts", () => {
       SipPreflightResultSchema.safeParse({
         ...sipRealtime,
         feedFallback: "iex",
+      }).success,
+    ).toBe(false);
+    expect(
+      SipPreflightResultSchema.safeParse({ ...sipRealtime, feed: "iex" })
+        .success,
+    ).toBe(false);
+    expect(
+      SipPreflightResultSchema.safeParse({
+        ...sipRealtime,
+        endpoint: "https://data.alpaca.markets/v2/stocks/SPY/quotes/latest",
       }).success,
     ).toBe(false);
   });
@@ -262,6 +327,8 @@ describe("run and provider-preflight contracts", () => {
         provider: "FMP",
         status: "AVAILABLE",
         checkedAt: timestamp,
+        requestStartedAt: timestamp,
+        responseReceivedAt: timestamp,
         endpointFamily: "profile",
         endpoint:
           "https://financialmodelingprep.com/stable/profile-symbol?symbol=SPY",
@@ -269,7 +336,98 @@ describe("run and provider-preflight contracts", () => {
         httpStatus: null,
         durationMs: 1,
         attempt: 1,
+        classifiedResponse: null,
         responseBodySha256: null,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("models every provider as an exhaustive discriminated variant", () => {
+    const fmpAvailable = {
+      provider: "FMP",
+      status: "AVAILABLE",
+      checkedAt: timestamp,
+      requestStartedAt: timestamp,
+      responseReceivedAt: timestamp,
+      endpointFamily: "profile",
+      endpoint:
+        "https://financialmodelingprep.com/stable/profile-symbol?symbol=SPY",
+      probeSymbol: "SPY",
+      httpStatus: 200,
+      durationMs: 30,
+      attempt: 1,
+      classifiedResponse: {
+        kind: "SUCCESS",
+        redactedBodyJson: '[{"symbol":"SPY"}]',
+      },
+      responseBodySha256: hash,
+    };
+    const openAiAvailable = {
+      provider: "OPENAI",
+      status: "AVAILABLE",
+      checkedAt: timestamp,
+      requestStartedAt: timestamp,
+      responseReceivedAt: timestamp,
+      endpoint: "https://api.openai.com/v1/responses",
+      requestedModelId: "gpt-snapshot",
+      returnedModelId: "gpt-snapshot",
+      httpStatus: 200,
+      durationMs: 70,
+      attempt: 1,
+      providerRequestId: "openai-request-1",
+      classifiedResponse: {
+        kind: "SUCCESS",
+        redactedBodyJson: '{"status":"completed"}',
+      },
+      responseBodySha256: hash,
+    };
+    const anthropicAuthFailure = {
+      provider: "ANTHROPIC",
+      status: "AUTH_FAILED",
+      checkedAt: timestamp,
+      requestStartedAt: timestamp,
+      responseReceivedAt: timestamp,
+      endpoint: "https://api.anthropic.com/v1/messages",
+      requestedModelId: "claude-snapshot",
+      returnedModelId: null,
+      httpStatus: 401,
+      durationMs: 60,
+      attempt: 1,
+      providerRequestId: "anthropic-request-1",
+      classifiedResponse: {
+        kind: "AUTH_ERROR",
+        redactedBodyJson: '{"error":"authentication_error"}',
+      },
+      responseBodySha256: otherHash,
+    };
+
+    for (const result of [
+      sipRealtime,
+      fmpAvailable,
+      openAiAvailable,
+      anthropicAuthFailure,
+    ]) {
+      expect(ProviderPreflightResultSchema.safeParse(result).success).toBe(
+        true,
+      );
+    }
+
+    expect(
+      ProviderPreflightResultSchema.safeParse({
+        ...sipRealtime,
+        status: "AVAILABLE",
+      }).success,
+    ).toBe(false);
+    expect(
+      ProviderPreflightResultSchema.safeParse({
+        ...openAiAvailable,
+        status: "SIP_REALTIME",
+      }).success,
+    ).toBe(false);
+    expect(
+      ProviderPreflightResultSchema.safeParse({
+        ...anthropicAuthFailure,
+        status: "NOT_REQUIRED",
       }).success,
     ).toBe(false);
   });
@@ -398,6 +556,74 @@ describe("version snapshot contracts", () => {
         .success,
     ).toBe(false);
   });
+
+  it("enforces exact and allowlisted returned-model identities", () => {
+    const exact = {
+      provider: "openai",
+      requestedModelId: "gpt-snapshot",
+      returnedModelPolicy: "EXACT",
+      allowedReturnedModelIds: ["gpt-snapshot"],
+    };
+    const allowlist = {
+      provider: "anthropic",
+      requestedModelId: "claude-routing-id",
+      returnedModelPolicy: "ALLOWLIST",
+      allowedReturnedModelIds: ["claude-snapshot-a", "claude-snapshot-b"],
+    };
+
+    expect(ModelVersionSchema.safeParse(exact).success).toBe(true);
+    expect(ModelVersionSchema.safeParse(allowlist).success).toBe(true);
+    expect(
+      ModelVersionSchema.safeParse({
+        ...exact,
+        allowedReturnedModelIds: ["gpt-snapshot", "other-model"],
+      }).success,
+    ).toBe(false);
+    expect(
+      ModelVersionSchema.safeParse({
+        ...exact,
+        allowedReturnedModelIds: ["other-model"],
+      }).success,
+    ).toBe(false);
+
+    const exactObservation = {
+      configuredModel: exact,
+      returnedModelId: "gpt-snapshot",
+      providerResponseId: "response-exact",
+      providerRequestId: "request-exact",
+    };
+    const allowlistedObservation = {
+      configuredModel: allowlist,
+      returnedModelId: "claude-snapshot-b",
+      providerResponseId: "response-allowlisted",
+      providerRequestId: "request-allowlisted",
+    };
+
+    expect(ObservedModelVersionSchema.safeParse(exactObservation).success).toBe(
+      true,
+    );
+    expect(
+      ObservedModelVersionSchema.safeParse(allowlistedObservation).success,
+    ).toBe(true);
+    expect(
+      ObservedModelVersionSchema.safeParse({
+        ...exactObservation,
+        returnedModelId: "unexpected-model",
+      }).success,
+    ).toBe(false);
+    expect(
+      ObservedModelVersionSchema.safeParse({
+        ...allowlistedObservation,
+        returnedModelId: "claude-not-allowlisted",
+      }).success,
+    ).toBe(false);
+    expect(
+      ObservedModelVersionSchema.safeParse({
+        ...exactObservation,
+        resolutionSatisfied: true,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe("trace contracts", () => {
@@ -436,6 +662,8 @@ describe("trace contracts", () => {
         manifestVersion: "1.0.0",
         scopes: ["tool:market-data"],
       },
+      credentialId: "credential-agent-lead",
+      owningServicePrincipalId: "research-service",
       versionSnapshotId: "22222222-2222-4222-8222-222222222222",
       kind: "MODEL_RESPONSE",
       attempt: 1,
@@ -474,18 +702,69 @@ describe("trace contracts", () => {
     };
 
     expect(TraceEventSchema.parse(event).kind).toBe("MODEL_RESPONSE");
-    const {
-      redactedResponseJson: _redactedResponseJson,
-      ...hashOnlyPayload
-    } = event.payload;
+    const { redactedResponseJson: _redactedResponseJson, ...hashOnlyPayload } =
+      event.payload;
     expect(
-      TraceEventSchema.safeParse({ ...event, payload: hashOnlyPayload }).success,
+      TraceEventSchema.safeParse({ ...event, payload: hashOnlyPayload })
+        .success,
     ).toBe(false);
     expect(TraceEventSchema.safeParse({ ...event, payload: {} }).success).toBe(
       false,
     );
     expect(
       TraceEventSchema.safeParse({ ...event, hiddenRetry: true }).success,
+    ).toBe(false);
+    expect(
+      TraceEventSchema.safeParse({
+        ...event,
+        owningServicePrincipalId: "eval-service",
+      }).success,
+    ).toBe(false);
+    const { credentialId: _credentialId, ...withoutCredential } = event;
+    expect(TraceEventSchema.safeParse(withoutCredential).success).toBe(false);
+
+    const sipPreflight = {
+      provider: "ALPACA_SIP",
+      status: "SIP_REALTIME",
+      checkedAt: timestamp,
+      requestStartedAt: timestamp,
+      responseReceivedAt: timestamp,
+      endpoint:
+        "https://data.alpaca.markets/v2/stocks/SPY/quotes/latest?feed=sip",
+      feed: "sip",
+      probeSymbol: "SPY",
+      httpStatus: 200,
+      durationMs: 45,
+      attempt: 1,
+      classifiedResponse: {
+        kind: "SUCCESS",
+        redactedBodyJson: '{"latestQuote":{"t":"2026-07-12T15:30:00.000Z"}}',
+      },
+      responseBodySha256: hash,
+      marketTimestamp: timestamp,
+      marketSession: {
+        session: "REGULAR",
+        calendarDate: "2026-07-12",
+        evaluatedAt: timestamp,
+      },
+    };
+    const preflightTrace = {
+      ...event,
+      kind: "PROVIDER_PREFLIGHT",
+      name: "alpaca-sip-preflight",
+      payload: { preflight: sipPreflight },
+      usage: null,
+      cost: null,
+      evidenceIds: [],
+    };
+    expect(TraceEventSchema.safeParse(preflightTrace).success).toBe(true);
+    expect(
+      TraceEventSchema.safeParse({
+        ...preflightTrace,
+        payload: {
+          preflight: { ...sipPreflight, provider: "OPENAI" },
+        },
+      }).success,
     ).toBe(false);
   });
 });
@@ -529,9 +808,9 @@ describe("evidence and lineage contracts", () => {
 
   it("uses discriminated immutable evidence nodes and directional links", () => {
     expect(EvidenceNodeSchema.parse(passage).kind).toBe("PASSAGE");
-    expect(EvidenceNodeSchema.safeParse({ ...claim, runId: null }).success).toBe(
-      false,
-    );
+    expect(
+      EvidenceNodeSchema.safeParse({ ...claim, runId: null }).success,
+    ).toBe(false);
     expect(EvidenceLinkSchema.parse(supportLink).relation).toBe("SUPPORTS");
     expect(
       EvidenceLinkSchema.safeParse({
@@ -626,8 +905,11 @@ describe("evaluation and typed-decision contracts", () => {
       decisionId: "decision-1",
       verdict: "APPROVE",
       rationale: "All exact release gates passed.",
-      subjectId: otherHash,
-      subjectSha256: otherHash,
+      subject: {
+        subjectType: "RELEASE",
+        releaseFingerprintSha256: hash,
+        releaseEvaluationSha256: otherHash,
+      },
       revision: 1,
       supersedesDecisionId: null,
       humanPrincipalId: "human-1",
@@ -637,7 +919,6 @@ describe("evaluation and typed-decision contracts", () => {
       nonce: "nonce-1",
       attestationKeyId: "decision-key-v1",
       attestationHmacSha256: hash,
-      releaseFingerprintSha256: hash,
       releasePolicySha256: otherHash,
       activeSuiteSha256: hash,
       rubricSha256: otherHash,
@@ -649,6 +930,196 @@ describe("evaluation and typed-decision contracts", () => {
     expect(
       GovernanceDecisionSchema.safeParse({ ...decision, unsigned: true })
         .success,
+    ).toBe(false);
+    expect(
+      GovernanceDecisionSchema.safeParse({
+        ...decision,
+        subject: {
+          subjectType: "PRINCIPAL",
+          principalId: "principal-1",
+          principalSha256: hash,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      GovernanceDecisionSchema.safeParse({
+        ...decision,
+        releaseFingerprintSha256: otherHash,
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("active suite and repeated-trial contracts", () => {
+  const zeroToleranceTags = [
+    "FALSE_CATALYST",
+    "WRONG_ENTITY_OR_SECURITY",
+    "STALE_AS_NEW",
+    "MISSED_CORRECTION_OR_RETRACTION",
+    "UNSUPPORTED_MATERIAL_CLAIM",
+    "NON_SUPPORTING_CITATION",
+  ];
+  const providers = ["ALPACA_SIP", "FMP", "OPENAI", "ANTHROPIC"];
+
+  function activeSuiteFixture() {
+    const cases = InstrumentClassSchema.options.flatMap(
+      (instrumentClass, classIndex) =>
+        (["POSITIVE", "NEGATIVE"] as const).map(
+          (catalystPolarity, polarityIndex) => {
+            const caseIndex = classIndex * 2 + polarityIndex;
+            const outageProvider = providers[caseIndex];
+            return {
+              caseRevisionId: `case-${classIndex + 1}-${catalystPolarity.toLowerCase()}-r1`,
+              instrumentClass,
+              catalystPolarity,
+              failureTags: caseIndex < 3 ? zeroToleranceTags : [],
+              requiredProviderConditions: [
+                {
+                  provider: outageProvider ?? "ALPACA_SIP",
+                  condition:
+                    outageProvider === undefined
+                      ? "AVAILABLE"
+                      : "OUTAGE_FAIL_CLOSED",
+                  endpointFamily: outageProvider === "FMP" ? "profile" : null,
+                },
+              ],
+              expectedLabelSha256: caseIndex % 2 === 0 ? hash : otherHash,
+            };
+          },
+        ),
+    );
+
+    return {
+      suiteManifestId: "active-golden-suite",
+      suiteVersion: "1.0.0",
+      createdAt: timestamp,
+      rubricVersion: "1.0.0",
+      rubricSha256: otherHash,
+      cases,
+      activeSuiteSha256: hash,
+    };
+  }
+
+  function trialSeriesFixture() {
+    return {
+      trialSeriesId: "series-1",
+      releaseFingerprintSha256: hash,
+      activeSuiteSha256: hash,
+      rubricSha256: otherHash,
+      releasePolicySha256: otherHash,
+      status: "PASSED",
+      startedAt: timestamp,
+      completedAt: timestamp,
+    };
+  }
+
+  function trialBatchFixture(ordinal: number) {
+    const suite = activeSuiteFixture();
+    return {
+      trialBatchId: `batch-${ordinal}`,
+      trialSeriesId: "series-1",
+      ordinal,
+      releaseFingerprintSha256: hash,
+      activeSuiteSha256: hash,
+      rubricSha256: otherHash,
+      releasePolicySha256: otherHash,
+      verdict: "PASS",
+      startedAt: timestamp,
+      completedAt: timestamp,
+      caseResults: suite.cases.map((entry, caseIndex) => ({
+        caseRevisionId: entry.caseRevisionId,
+        runId: `00000000-0000-4000-8000-${String(ordinal * 100 + caseIndex).padStart(12, "0")}`,
+        verdict: "PASS",
+        outputSha256: caseIndex % 2 === 0 ? hash : otherHash,
+        providerResponseIds: [`provider-${ordinal}-${caseIndex}`],
+        deterministicGraderResultIds: [`code-grade-${ordinal}-${caseIndex}`],
+        opposingModelGraderResultId: `model-grade-${ordinal}-${caseIndex}`,
+        cachedProviderResponsesUsed: false,
+      })),
+    };
+  }
+
+  function fiveBatchMatrixFixture() {
+    const suite = activeSuiteFixture();
+    return {
+      trialMatrixId: "matrix-1",
+      series: trialSeriesFixture(),
+      batches: [1, 2, 3, 4, 5].map(trialBatchFixture),
+      humanCaseGrades: suite.cases.map((entry, caseIndex) => ({
+        caseRevisionId: entry.caseRevisionId,
+        bundleSha256: caseIndex % 2 === 0 ? hash : otherHash,
+        verdict: "PASS",
+        humanGradeId: `human-grade-${caseIndex}`,
+      })),
+      complete: true,
+      matrixSha256: hash,
+    };
+  }
+
+  it("requires the full active-suite coverage matrix", () => {
+    const manifest = activeSuiteFixture();
+    expect(ActiveSuiteManifestSchema.safeParse(manifest).success).toBe(true);
+    expect(
+      ActiveSuiteManifestSchema.safeParse({
+        ...manifest,
+        cases: manifest.cases.slice(0, 19),
+      }).success,
+    ).toBe(false);
+    expect(
+      ActiveSuiteManifestSchema.safeParse({
+        ...manifest,
+        cases: manifest.cases.map((entry, index) =>
+          index < 2
+            ? {
+                ...entry,
+                failureTags: entry.failureTags.filter(
+                  (tag) => tag !== "FALSE_CATALYST",
+                ),
+              }
+            : entry,
+        ),
+      }).success,
+    ).toBe(false);
+  });
+
+  it("types series and batches and requires one complete five-batch matrix", () => {
+    const series = trialSeriesFixture();
+    const firstBatch = trialBatchFixture(1);
+    const matrix = fiveBatchMatrixFixture();
+
+    expect(TrialSeriesSchema.safeParse(series).success).toBe(true);
+    expect(TrialBatchSchema.safeParse(firstBatch).success).toBe(true);
+    expect(FiveBatchTrialMatrixSchema.safeParse(matrix).success).toBe(true);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.slice(0, 4),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch, index) =>
+          index === 4 ? { ...batch, ordinal: 4 } : batch,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch, index) =>
+          index === 4
+            ? {
+                ...batch,
+                caseResults: batch.caseResults.map((result, caseIndex) =>
+                  caseIndex === 0
+                    ? { ...result, providerResponseIds: ["provider-1-0"] }
+                    : result,
+                ),
+              }
+            : batch,
+        ),
+      }).success,
     ).toBe(false);
   });
 });

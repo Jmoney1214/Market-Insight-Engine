@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { types as utilTypes } from "node:util";
 
 function fail(reason: string): never {
   throw new TypeError(`Canonical JSON requires JSON data: ${reason}`);
@@ -80,6 +81,14 @@ function serializeObject(
 }
 
 function serialize(value: unknown, ancestors: Set<object>): string {
+  if (
+    ((typeof value === "object" && value !== null) ||
+      typeof value === "function") &&
+    utilTypes.isProxy(value)
+  ) {
+    fail("proxies are not JSON data");
+  }
+
   if (value === null) {
     return "null";
   }
