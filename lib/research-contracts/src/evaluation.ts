@@ -609,9 +609,22 @@ export const HumanCaseBundleGradeSchema = z
   })
   .strict();
 
+function haveSameStringSet(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((value, index) => value === sortedRight[index])
+  );
+}
+
 export const FiveBatchTrialMatrixSchema = z
   .object({
     trialMatrixId: z.string().min(1),
+    activeSuiteManifest: ActiveSuiteManifestSchema,
     series: TrialSeriesSchema,
     batches: z.array(TrialBatchSchema).length(5),
     humanCaseGrades: z.array(HumanCaseBundleGradeSchema).min(1),
@@ -620,6 +633,26 @@ export const FiveBatchTrialMatrixSchema = z
   })
   .strict()
   .superRefine((matrix, context) => {
+    if (
+      matrix.series.activeSuiteSha256 !==
+      matrix.activeSuiteManifest.activeSuiteSha256
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["series", "activeSuiteSha256"],
+        message: "trial series hash does not match the embedded active suite",
+      });
+    }
+    if (
+      matrix.series.rubricSha256 !== matrix.activeSuiteManifest.rubricSha256
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["series", "rubricSha256"],
+        message: "trial series rubric does not match the active suite rubric",
+      });
+    }
+
     const ordinals = matrix.batches.map((batch) => batch.ordinal);
     if (
       new Set(ordinals).size !== 5 ||
@@ -630,6 +663,15 @@ export const FiveBatchTrialMatrixSchema = z
         path: ["batches"],
         message:
           "trial matrix requires exactly one batch at each ordinal 1 through 5",
+      });
+    }
+
+    const trialBatchIds = matrix.batches.map((batch) => batch.trialBatchId);
+    if (new Set(trialBatchIds).size !== trialBatchIds.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["batches"],
+        message: "independent trial batches require distinct batch IDs",
       });
     }
 
@@ -658,22 +700,22 @@ export const FiveBatchTrialMatrixSchema = z
       }
     }
 
-    const referenceCaseIds = matrix.batches[0]?.caseResults
-      .map((result) => result.caseRevisionId)
-      .sort();
-    if (referenceCaseIds !== undefined) {
-      const referenceCaseSet = JSON.stringify(referenceCaseIds);
-      for (const [batchIndex, batch] of matrix.batches.entries()) {
-        const batchCaseSet = JSON.stringify(
-          batch.caseResults.map((result) => result.caseRevisionId).sort(),
-        );
-        if (batchCaseSet !== referenceCaseSet) {
-          context.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["batches", batchIndex, "caseResults"],
-            message: "every trial batch must contain the same case revisions",
-          });
-        }
+    const activeCaseRevisionIds = matrix.activeSuiteManifest.cases.map(
+      (suiteCase) => suiteCase.caseRevisionId,
+    );
+    for (const [batchIndex, batch] of matrix.batches.entries()) {
+      if (
+        !haveSameStringSet(
+          batch.caseResults.map((result) => result.caseRevisionId),
+          activeCaseRevisionIds,
+        )
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["batches", batchIndex, "caseResults"],
+          message:
+            "every trial batch must contain the exact active suite case revisions",
+        });
       }
     }
 
@@ -701,6 +743,15 @@ export const FiveBatchTrialMatrixSchema = z
       });
     }
 
+    const deterministicGraderResultIds = matrix.batches.flatMap((batch) =>
+      batch.caseResults.flatMap(
+        (result) => result.deterministicGraderResultIds,
+      ),
+    );
+    const opposingModelGraderResultIds = matrix.batches.flatMap((batch) =>
+      batch.caseResults.map((result) => result.opposingModelGraderResultId),
+    );
+
     const humanCaseRevisionIds = matrix.humanCaseGrades.map(
       (grade) => grade.caseRevisionId,
     );
@@ -717,15 +768,25 @@ export const FiveBatchTrialMatrixSchema = z
         message: "human case grades and their IDs must be unique",
       });
     }
-    if (
-      referenceCaseIds !== undefined &&
-      JSON.stringify([...humanCaseRevisionIds].sort()) !==
-        JSON.stringify(referenceCaseIds)
-    ) {
+    if (!haveSameStringSet(humanCaseRevisionIds, activeCaseRevisionIds)) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["humanCaseGrades"],
         message: "every trial case requires exactly one human bundle grade",
+      });
+    }
+
+    const everyGraderResultId = [
+      ...deterministicGraderResultIds,
+      ...opposingModelGraderResultIds,
+      ...humanGradeIds,
+    ];
+    if (new Set(everyGraderResultId).size !== everyGraderResultId.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["batches"],
+        message:
+          "deterministic, opposing-model, and human grader result IDs must be globally unique",
       });
     }
 

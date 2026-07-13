@@ -11,6 +11,7 @@ import {
   EvidenceGraphSchema,
   EvidenceLinkSchema,
   EvidenceNodeSchema,
+  FmpPreflightStatusSchema,
   FmpPreflightResultSchema,
   FiveBatchTrialMatrixSchema,
   GovernanceDecisionSchema,
@@ -18,12 +19,14 @@ import {
   hmacCanonical,
   InstrumentClassSchema,
   ModelVersionSchema,
+  ModelProviderPreflightStatusSchema,
   ObservedModelVersionSchema,
   PrincipalSchema,
   ProviderPreflightResultSchema,
   ResearchRunSchema,
   RunStateSchema,
   sha256Canonical,
+  SipPreflightStatusSchema,
   SipPreflightResultSchema,
   TraceEventSchema,
   TraceKindSchema,
@@ -375,6 +378,7 @@ describe("run and provider-preflight contracts", () => {
       durationMs: 70,
       attempt: 1,
       providerRequestId: "openai-request-1",
+      providerResponseId: "openai-response-1",
       classifiedResponse: {
         kind: "SUCCESS",
         redactedBodyJson: '{"status":"completed"}',
@@ -394,6 +398,7 @@ describe("run and provider-preflight contracts", () => {
       durationMs: 60,
       attempt: 1,
       providerRequestId: "anthropic-request-1",
+      providerResponseId: null,
       classifiedResponse: {
         kind: "AUTH_ERROR",
         redactedBodyJson: '{"error":"authentication_error"}',
@@ -430,6 +435,374 @@ describe("run and provider-preflight contracts", () => {
         status: "NOT_REQUIRED",
       }).success,
     ).toBe(false);
+  });
+
+  it("enforces coherent HTTP, classification, and evidence for every provider status", () => {
+    const sipByStatus = {
+      SIP_REALTIME: sipRealtime,
+      SIP_DELAYED_ONLY: {
+        ...sipRealtime,
+        status: "SIP_DELAYED_ONLY",
+        httpStatus: 403,
+        classifiedResponse: {
+          kind: "ENTITLEMENT_ERROR",
+          redactedBodyJson: '{"error":"delayed SIP only"}',
+        },
+        marketTimestamp: null,
+      },
+      IEX_ONLY: {
+        ...sipRealtime,
+        status: "IEX_ONLY",
+        httpStatus: 403,
+        classifiedResponse: {
+          kind: "ENTITLEMENT_ERROR",
+          redactedBodyJson: '{"error":"sip entitlement required"}',
+        },
+        marketTimestamp: null,
+      },
+      AUTH_FAILED: {
+        ...sipRealtime,
+        status: "AUTH_FAILED",
+        httpStatus: 401,
+        classifiedResponse: {
+          kind: "AUTH_ERROR",
+          redactedBodyJson: '{"error":"unauthorized"}',
+        },
+        marketTimestamp: null,
+      },
+      RATE_LIMITED: {
+        ...sipRealtime,
+        status: "RATE_LIMITED",
+        httpStatus: 429,
+        classifiedResponse: {
+          kind: "RATE_LIMIT_ERROR",
+          redactedBodyJson: '{"error":"rate limit"}',
+        },
+        marketTimestamp: null,
+      },
+      PROVIDER_UNAVAILABLE: {
+        ...sipRealtime,
+        status: "PROVIDER_UNAVAILABLE",
+        httpStatus: 503,
+        classifiedResponse: {
+          kind: "PROVIDER_ERROR",
+          redactedBodyJson: '{"error":"unavailable"}',
+        },
+        marketTimestamp: null,
+      },
+      UNKNOWN: {
+        ...sipRealtime,
+        status: "UNKNOWN",
+        responseReceivedAt: null,
+        httpStatus: null,
+        classifiedResponse: {
+          kind: "UNKNOWN",
+          redactedBodyJson: null,
+        },
+        responseBodySha256: null,
+        marketTimestamp: null,
+      },
+    };
+
+    const fmpResponseBase = {
+      provider: "FMP",
+      checkedAt: timestamp,
+      requestStartedAt: timestamp,
+      responseReceivedAt: timestamp,
+      endpointFamily: "profile",
+      endpoint:
+        "https://financialmodelingprep.com/stable/profile-symbol?symbol=SPY",
+      probeSymbol: "SPY",
+      durationMs: 30,
+      attempt: 1,
+      responseBodySha256: hash,
+    };
+    const fmpByStatus = {
+      NOT_REQUIRED: {
+        provider: "FMP",
+        status: "NOT_REQUIRED",
+        checkedAt: timestamp,
+        requestStartedAt: null,
+        responseReceivedAt: null,
+        endpointFamily: null,
+        endpoint: null,
+        probeSymbol: null,
+        httpStatus: null,
+        durationMs: 0,
+        attempt: 0,
+        classifiedResponse: null,
+        responseBodySha256: null,
+      },
+      AVAILABLE: {
+        ...fmpResponseBase,
+        status: "AVAILABLE",
+        httpStatus: 200,
+        classifiedResponse: {
+          kind: "SUCCESS",
+          redactedBodyJson: '[{"symbol":"SPY"}]',
+        },
+      },
+      AUTH_FAILED: {
+        ...fmpResponseBase,
+        status: "AUTH_FAILED",
+        httpStatus: 401,
+        classifiedResponse: {
+          kind: "AUTH_ERROR",
+          redactedBodyJson: '{"error":"unauthorized"}',
+        },
+      },
+      ENTITLEMENT_FAILED: {
+        ...fmpResponseBase,
+        status: "ENTITLEMENT_FAILED",
+        httpStatus: 403,
+        classifiedResponse: {
+          kind: "ENTITLEMENT_ERROR",
+          redactedBodyJson: '{"error":"plan required"}',
+        },
+      },
+      RATE_LIMITED: {
+        ...fmpResponseBase,
+        status: "RATE_LIMITED",
+        httpStatus: 429,
+        classifiedResponse: {
+          kind: "RATE_LIMIT_ERROR",
+          redactedBodyJson: '{"error":"rate limit"}',
+        },
+      },
+      PROVIDER_UNAVAILABLE: {
+        ...fmpResponseBase,
+        status: "PROVIDER_UNAVAILABLE",
+        httpStatus: 503,
+        classifiedResponse: {
+          kind: "PROVIDER_ERROR",
+          redactedBodyJson: '{"error":"unavailable"}',
+        },
+      },
+      SCHEMA_INVALID: {
+        ...fmpResponseBase,
+        status: "SCHEMA_INVALID",
+        httpStatus: 200,
+        classifiedResponse: {
+          kind: "SCHEMA_ERROR",
+          redactedBodyJson: '{"unexpected":true}',
+        },
+      },
+      TIMED_OUT: {
+        ...fmpResponseBase,
+        status: "TIMED_OUT",
+        responseReceivedAt: null,
+        httpStatus: null,
+        classifiedResponse: {
+          kind: "TIMEOUT",
+          redactedBodyJson: null,
+        },
+        responseBodySha256: null,
+      },
+      UNKNOWN: {
+        ...fmpResponseBase,
+        status: "UNKNOWN",
+        responseReceivedAt: null,
+        httpStatus: null,
+        classifiedResponse: {
+          kind: "UNKNOWN",
+          redactedBodyJson: null,
+        },
+        responseBodySha256: null,
+      },
+    };
+
+    function modelPreflights(provider: "OPENAI" | "ANTHROPIC") {
+      const endpoint =
+        provider === "OPENAI"
+          ? "https://api.openai.com/v1/responses"
+          : "https://api.anthropic.com/v1/messages";
+      const requestedModelId =
+        provider === "OPENAI" ? "gpt-snapshot" : "claude-snapshot";
+      const responseBase = {
+        provider,
+        checkedAt: timestamp,
+        requestStartedAt: timestamp,
+        responseReceivedAt: timestamp,
+        endpoint,
+        requestedModelId,
+        returnedModelId: null,
+        durationMs: 70,
+        attempt: 1,
+        providerRequestId: `${provider.toLowerCase()}-request`,
+        providerResponseId: null,
+        responseBodySha256: hash,
+      };
+      return {
+        AVAILABLE: {
+          ...responseBase,
+          status: "AVAILABLE",
+          returnedModelId: requestedModelId,
+          providerResponseId: `${provider.toLowerCase()}-response`,
+          httpStatus: 200,
+          classifiedResponse: {
+            kind: "SUCCESS",
+            redactedBodyJson: '{"status":"completed"}',
+          },
+        },
+        AUTH_FAILED: {
+          ...responseBase,
+          status: "AUTH_FAILED",
+          httpStatus: 401,
+          classifiedResponse: {
+            kind: "AUTH_ERROR",
+            redactedBodyJson: '{"error":"unauthorized"}',
+          },
+        },
+        RATE_LIMITED: {
+          ...responseBase,
+          status: "RATE_LIMITED",
+          httpStatus: 429,
+          classifiedResponse: {
+            kind: "RATE_LIMIT_ERROR",
+            redactedBodyJson: '{"error":"rate limit"}',
+          },
+        },
+        PROVIDER_UNAVAILABLE: {
+          ...responseBase,
+          status: "PROVIDER_UNAVAILABLE",
+          httpStatus: 503,
+          classifiedResponse: {
+            kind: "PROVIDER_ERROR",
+            redactedBodyJson: '{"error":"unavailable"}',
+          },
+        },
+        SCHEMA_INVALID: {
+          ...responseBase,
+          status: "SCHEMA_INVALID",
+          httpStatus: 200,
+          classifiedResponse: {
+            kind: "SCHEMA_ERROR",
+            redactedBodyJson: '{"unexpected":true}',
+          },
+        },
+        TIMED_OUT: {
+          ...responseBase,
+          status: "TIMED_OUT",
+          responseReceivedAt: null,
+          httpStatus: null,
+          providerRequestId: null,
+          classifiedResponse: {
+            kind: "TIMEOUT",
+            redactedBodyJson: null,
+          },
+          responseBodySha256: null,
+        },
+        UNKNOWN: {
+          ...responseBase,
+          status: "UNKNOWN",
+          responseReceivedAt: null,
+          httpStatus: null,
+          providerRequestId: null,
+          classifiedResponse: {
+            kind: "UNKNOWN",
+            redactedBodyJson: null,
+          },
+          responseBodySha256: null,
+        },
+      };
+    }
+
+    const openAiByStatus = modelPreflights("OPENAI");
+    const anthropicByStatus = modelPreflights("ANTHROPIC");
+    expect(Object.keys(sipByStatus).sort()).toEqual(
+      [...SipPreflightStatusSchema.options].sort(),
+    );
+    expect(Object.keys(fmpByStatus).sort()).toEqual(
+      [...FmpPreflightStatusSchema.options].sort(),
+    );
+    expect(Object.keys(openAiByStatus).sort()).toEqual(
+      [...ModelProviderPreflightStatusSchema.options].sort(),
+    );
+    expect(Object.keys(anthropicByStatus).sort()).toEqual(
+      [...ModelProviderPreflightStatusSchema.options].sort(),
+    );
+
+    const validResults = [
+      ...Object.values(sipByStatus),
+      ...Object.values(fmpByStatus),
+      ...Object.values(openAiByStatus),
+      ...Object.values(anthropicByStatus),
+    ];
+    expect(validResults).toHaveLength(30);
+    for (const result of validResults) {
+      expect(
+        ProviderPreflightResultSchema.safeParse(result).success,
+        `${result.provider}:${result.status} should be valid`,
+      ).toBe(true);
+    }
+
+    function contradictoryResult(result: Record<string, unknown>) {
+      if (result.status === "NOT_REQUIRED") {
+        return {
+          ...result,
+          requestStartedAt: timestamp,
+          responseReceivedAt: timestamp,
+          httpStatus: 200,
+          classifiedResponse: {
+            kind: "SUCCESS",
+            redactedBodyJson: "{}",
+          },
+          responseBodySha256: hash,
+        };
+      }
+      if (
+        result.status === "SIP_REALTIME" ||
+        result.status === "SIP_DELAYED_ONLY" ||
+        result.status === "AVAILABLE"
+      ) {
+        return {
+          ...result,
+          httpStatus: 401,
+          classifiedResponse: {
+            kind: "AUTH_ERROR",
+            redactedBodyJson: '{"error":"unauthorized"}',
+          },
+        };
+      }
+      return {
+        ...result,
+        responseReceivedAt: timestamp,
+        httpStatus: 200,
+        classifiedResponse: {
+          kind: "SUCCESS",
+          redactedBodyJson: '{"status":"completed"}',
+        },
+        responseBodySha256: hash,
+        ...(result.provider === "ALPACA_SIP"
+          ? { marketTimestamp: timestamp }
+          : {}),
+        ...(result.provider === "OPENAI" || result.provider === "ANTHROPIC"
+          ? {
+              returnedModelId: result.requestedModelId,
+              providerResponseId: "contradictory-success-response",
+            }
+          : {}),
+      };
+    }
+
+    for (const result of validResults) {
+      expect(
+        ProviderPreflightResultSchema.safeParse(contradictoryResult(result))
+          .success,
+        `${result.provider}:${result.status} contradiction should fail`,
+      ).toBe(false);
+      if (result.status !== "NOT_REQUIRED") {
+        const incompleteResponseEvidence =
+          result.responseReceivedAt === null
+            ? { ...result, responseBodySha256: hash }
+            : { ...result, responseBodySha256: null };
+        expect(
+          ProviderPreflightResultSchema.safeParse(incompleteResponseEvidence)
+            .success,
+          `${result.provider}:${result.status} incomplete evidence should fail`,
+        ).toBe(false);
+      }
+    }
   });
 
   it("keeps workflow state, terminal outcome, and failure reason separate", () => {
@@ -1043,6 +1416,7 @@ describe("active suite and repeated-trial contracts", () => {
     const suite = activeSuiteFixture();
     return {
       trialMatrixId: "matrix-1",
+      activeSuiteManifest: suite,
       series: trialSeriesFixture(),
       batches: [1, 2, 3, 4, 5].map(trialBatchFixture),
       humanCaseGrades: suite.cases.map((entry, caseIndex) => ({
@@ -1093,7 +1467,37 @@ describe("active suite and repeated-trial contracts", () => {
     expect(
       FiveBatchTrialMatrixSchema.safeParse({
         ...matrix,
+        batches: matrix.batches.map((batch, index) =>
+          index === 0
+            ? { ...batch, caseResults: [...batch.caseResults].reverse() }
+            : batch,
+        ),
+      }).success,
+    ).toBe(true);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
         batches: matrix.batches.slice(0, 4),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch, batchIndex) =>
+          batchIndex === 4
+            ? {
+                ...batch,
+                caseResults: batch.caseResults.map((result, caseIndex) =>
+                  caseIndex === 0
+                    ? {
+                        ...result,
+                        opposingModelGraderResultId: "code-grade-1-0",
+                      }
+                    : result,
+                ),
+              }
+            : batch,
+        ),
       }).success,
     ).toBe(false);
     expect(
@@ -1118,6 +1522,92 @@ describe("active suite and repeated-trial contracts", () => {
                 ),
               }
             : batch,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        activeSuiteManifest: {
+          ...matrix.activeSuiteManifest,
+          activeSuiteSha256: otherHash,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        activeSuiteManifest: {
+          ...matrix.activeSuiteManifest,
+          rubricSha256: hash,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch) => ({
+          ...batch,
+          caseResults: batch.caseResults.slice(0, 1),
+        })),
+        humanCaseGrades: matrix.humanCaseGrades.slice(0, 1),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch, index) =>
+          index === 4
+            ? { ...batch, trialBatchId: matrix.batches[0].trialBatchId }
+            : batch,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch, batchIndex) =>
+          batchIndex === 4
+            ? {
+                ...batch,
+                caseResults: batch.caseResults.map((result, caseIndex) =>
+                  caseIndex === 0
+                    ? {
+                        ...result,
+                        deterministicGraderResultIds: ["code-grade-1-0"],
+                      }
+                    : result,
+                ),
+              }
+            : batch,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        batches: matrix.batches.map((batch, batchIndex) =>
+          batchIndex === 4
+            ? {
+                ...batch,
+                caseResults: batch.caseResults.map((result, caseIndex) =>
+                  caseIndex === 0
+                    ? {
+                        ...result,
+                        opposingModelGraderResultId: "model-grade-1-0",
+                      }
+                    : result,
+                ),
+              }
+            : batch,
+        ),
+      }).success,
+    ).toBe(false);
+    expect(
+      FiveBatchTrialMatrixSchema.safeParse({
+        ...matrix,
+        humanCaseGrades: matrix.humanCaseGrades.map((grade, index) =>
+          index === 0 ? { ...grade, humanGradeId: "model-grade-1-0" } : grade,
         ),
       }).success,
     ).toBe(false);
