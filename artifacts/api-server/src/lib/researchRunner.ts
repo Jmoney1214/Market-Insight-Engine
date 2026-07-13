@@ -52,6 +52,13 @@ const NEWS_WINDOW_HOURS = 48;
 const PACKET_TTL_HOURS = 8;
 const FILING_TEXT_CAP = 8000;
 
+/** Filing forms that can actually substantiate a catalyst / dilution claim. */
+const MATERIAL_FORMS = new Set([
+  "8-K", "8-K/A", "6-K", "10-Q", "10-K", "20-F",
+  "424B1", "424B2", "424B3", "424B4", "424B5",
+  "S-1", "S-1/A", "S-3", "S-3/A", "F-1", "F-3",
+]);
+
 /** One CORE claim derived from the verified catalyst (audited fail-closed). */
 export function claimFromCatalyst(record: CatalystRecord, now: string): Claim | null {
   const sourceIds = [...record.primarySourceIds, ...record.secondarySourceIds];
@@ -100,7 +107,11 @@ async function gatherEvidence(symbol: string, now: string): Promise<GatheredEvid
       cik = await edgar.lookupCik(symbol);
       if (cik) {
         filingRefs = (await edgar.getSubmissions(cik)) ?? [];
-        const latest = filingRefs.find((f) => f.primaryDocument);
+        // Prefer a material filing for the audit document — a Form 144 or
+        // ownership form can't substantiate a catalyst claim.
+        const latest =
+          filingRefs.find((f) => f.primaryDocument && MATERIAL_FORMS.has(f.form)) ??
+          filingRefs.find((f) => f.primaryDocument);
         if (latest) {
           const filing = await edgar.getFiling(latest, { symbols: [symbol], now });
           if (filing) {
