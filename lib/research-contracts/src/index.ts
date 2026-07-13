@@ -1,6 +1,7 @@
 // Public API for the research-layer contracts package.
 export * from "./contracts";
 export * from "./manifest";
+export * from "./fixtures";
 export {
   HASH_FIELD,
   canonicalize,

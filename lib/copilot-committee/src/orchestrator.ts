@@ -11,6 +11,7 @@
 import type { CopilotEvent } from "@workspace/copilot-core";
 import type {
   AgentRead,
+  CommitteeExtras,
   CommitteeProvider,
   CommitteeResult,
   CommitteeSource,
@@ -138,8 +139,9 @@ function finalize(input: FinalizeInput): CommitteeResult {
 export async function runCommittee(
   event: CopilotEvent,
   provider?: CommitteeProvider | null,
+  extras?: CommitteeExtras,
 ): Promise<CommitteeResult> {
-  const reads = runAgents(event);
+  const reads = runAgents(event, extras);
   const agents = readsToArray(reads);
 
   let dashboardRead: DashboardRead = synthesize(event, reads);

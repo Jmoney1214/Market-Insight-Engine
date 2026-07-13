@@ -511,7 +511,7 @@ export const ExplainCopilotEventResponse = zod.object({
   "provider": zod.string(),
   "degraded": zod.boolean(),
   "agents": zod.array(zod.object({
-  "agent": zod.enum(['technical', 'pattern', 'regime', 'order_flow', 'catalyst', 'position', 'memory', 'bull_case', 'bear_case', 'risk_critic']),
+  "agent": zod.enum(['technical', 'pattern', 'regime', 'order_flow', 'catalyst', 'position', 'memory', 'sentiment', 'bull_case', 'bear_case', 'risk_critic']),
   "status": zod.enum(['OK', 'DEGRADED', 'UNAVAILABLE']),
   "bias": zod.enum(['BULLISH', 'BEARISH', 'NEUTRAL', 'MIXED', 'UNKNOWN']),
   "confidence": zod.number().describe('Clamped to [0,1]'),
@@ -921,7 +921,7 @@ export const ExplainReplayEventResponse = zod.object({
   "provider": zod.string(),
   "degraded": zod.boolean(),
   "agents": zod.array(zod.object({
-  "agent": zod.enum(['technical', 'pattern', 'regime', 'order_flow', 'catalyst', 'position', 'memory', 'bull_case', 'bear_case', 'risk_critic']),
+  "agent": zod.enum(['technical', 'pattern', 'regime', 'order_flow', 'catalyst', 'position', 'memory', 'sentiment', 'bull_case', 'bear_case', 'risk_critic']),
   "status": zod.enum(['OK', 'DEGRADED', 'UNAVAILABLE']),
   "bias": zod.enum(['BULLISH', 'BEARISH', 'NEUTRAL', 'MIXED', 'UNKNOWN']),
   "confidence": zod.number().describe('Clamped to [0,1]'),

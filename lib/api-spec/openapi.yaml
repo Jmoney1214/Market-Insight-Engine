@@ -1370,6 +1370,7 @@ components:
             - catalyst
             - position
             - memory
+            - sentiment
             - bull_case
             - bear_case
             - risk_critic

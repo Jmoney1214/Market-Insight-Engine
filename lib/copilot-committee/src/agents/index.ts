@@ -1,5 +1,5 @@
 import type { CopilotEvent } from "@workspace/copilot-core";
-import type { AgentRead, CommitteeReads } from "../types";
+import type { AgentRead, CommitteeExtras, CommitteeReads } from "../types";
 import { technicalAgent } from "./technical";
 import { patternAgent } from "./pattern";
 import { regimeAgent } from "./regime";
@@ -7,6 +7,7 @@ import { orderFlowAgent } from "./orderFlow";
 import { catalystAgent } from "./catalyst";
 import { positionAgent } from "./position";
 import { memoryAgent } from "./memory";
+import { sentimentAgent } from "./sentiment";
 import { bullCaseAgent } from "./bullCase";
 import { bearCaseAgent } from "./bearCase";
 import { riskCriticAgent } from "./riskCritic";
@@ -19,13 +20,14 @@ export {
   catalystAgent,
   positionAgent,
   memoryAgent,
+  sentimentAgent,
   bullCaseAgent,
   bearCaseAgent,
   riskCriticAgent,
 };
 
 /** Runs every deterministic specialist agent in dependency order. */
-export function runAgents(event: CopilotEvent): CommitteeReads {
+export function runAgents(event: CopilotEvent, extras?: CommitteeExtras): CommitteeReads {
   const technical = technicalAgent(event);
   const pattern = patternAgent(event);
   const regime = regimeAgent(event);
@@ -33,8 +35,9 @@ export function runAgents(event: CopilotEvent): CommitteeReads {
   const catalyst = catalystAgent(event);
   const position = positionAgent(event);
   const memory = memoryAgent(event);
+  const sentiment = sentimentAgent(event, extras?.sentiment);
 
-  const sub = [technical, pattern, regime, orderFlow, catalyst, position, memory];
+  const sub = [technical, pattern, regime, orderFlow, catalyst, position, memory, sentiment];
   const bullCase = bullCaseAgent(event, sub);
   const bearCase = bearCaseAgent(event, sub);
   const riskCritic = riskCriticAgent(event, [...sub, bullCase, bearCase]);
@@ -47,6 +50,7 @@ export function runAgents(event: CopilotEvent): CommitteeReads {
     catalyst,
     position,
     memory,
+    sentiment,
     bullCase,
     bearCase,
     riskCritic,
@@ -63,6 +67,7 @@ export function readsToArray(reads: CommitteeReads): AgentRead[] {
     reads.catalyst,
     reads.position,
     reads.memory,
+    reads.sentiment,
     reads.bullCase,
     reads.bearCase,
     reads.riskCritic,

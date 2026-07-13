@@ -20,6 +20,7 @@ const AGENT_NAMES = [
   "catalyst",
   "position",
   "memory",
+  "sentiment",
   "bull_case",
   "bear_case",
   "risk_critic",
@@ -48,7 +49,7 @@ describe("GET /api/copilot/explain (items 12, 13, 18)", () => {
     // items 13 & 18: no AI integration configured -> deterministic provider.
     expect(res.body.provider).toBe("deterministic");
     expect(Array.isArray(res.body.agents)).toBe(true);
-    expect(res.body.agents).toHaveLength(10);
+    expect(res.body.agents).toHaveLength(11);
     expect(
       res.body.agents.map((a: { agent: string }) => a.agent).sort(),
     ).toEqual([...AGENT_NAMES].sort());
@@ -120,7 +121,7 @@ describe("replay surface requires no API keys (items 12, 23)", () => {
     expect(res.status).toBe(200);
     expect(res.body.source).toBe("multi_agent_committee");
     expect(res.body.provider).toBe("deterministic");
-    expect(res.body.agents).toHaveLength(10);
+    expect(res.body.agents).toHaveLength(11);
     expect(res.text).not.toMatch(/\bNaN\b|\bInfinity\b/);
   });
 });

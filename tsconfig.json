@@ -32,6 +32,9 @@
     },
     {
       "path": "./lib/research-adapters"
+    },
+    {
+      "path": "./lib/research-agents"
     }
   ]
 }

@@ -57,7 +57,7 @@ describe("committee — deterministic read over all fixtures", () => {
       expect(result.degraded).toBe(false);
 
       // Exactly the ten specialist reads, each schema-valid.
-      expect(result.agents).toHaveLength(10);
+      expect(result.agents).toHaveLength(11);
       for (const agent of result.agents) {
         expect(validateAgentRead(agent)).toEqual([]);
       }
