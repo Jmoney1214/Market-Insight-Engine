@@ -1,0 +1,22 @@
+{
+  "name": "@workspace/research-contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "codegen": "REGEN=1 vitest run src/schema-sync.test.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.6.1",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "vitest": "^4.1.9"
+  }
+}

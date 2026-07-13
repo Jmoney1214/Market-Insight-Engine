@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "CandidatePacket"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "packetId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "packetRevision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "supersedesPacketId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "candidateId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Z0-9.\\-=^]{1,12}$"
+    },
+    "researchOutcome": {
+      "type": "string",
+      "enum": [
+        "COMPLETE",
+        "PARTIAL",
+        "BLOCKED",
+        "FAILED",
+        "CANCELED",
+        "TIMED_OUT",
+        "BUDGET_EXCEEDED"
+      ]
+    },
+    "researchMode": {
+      "type": "string",
+      "enum": [
+        "FAST",
+        "STANDARD",
+        "DEEP"
+      ]
+    },
+    "checks": {
+      "type": "object",
+      "properties": {
+        "catalyst": {
+          "type": "string",
+          "enum": [
+            "NOT_REQUIRED",
+            "COMPLETED",
+            "FAILED",
+            "UNKNOWN"
+          ]
+        },
+        "sourceAudit": {
+          "type": "string",
+          "enum": [
+            "NOT_REQUIRED",
+            "COMPLETED",
+            "FAILED",
+            "UNKNOWN"
+          ]
+        },
+        "sentiment": {
+          "type": "string",
+          "enum": [
+            "NOT_REQUIRED",
+            "COMPLETED",
+            "FAILED",
+            "UNKNOWN"
+          ]
+        },
+        "macro": {
+          "type": "string",
+          "enum": [
+            "NOT_REQUIRED",
+            "COMPLETED",
+            "FAILED",
+            "UNKNOWN"
+          ]
+        },
+        "capitalStructure": {
+          "type": "string",
+          "enum": [
+            "NOT_REQUIRED",
+            "COMPLETED",
+            "FAILED",
+            "UNKNOWN"
+          ]
+        }
+      },
+      "required": [
+        "catalyst",
+        "sourceAudit",
+        "sentiment",
+        "macro",
+        "capitalStructure"
+      ],
+      "additionalProperties": false
+    },
+    "catalystRecordIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "textFactorIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "sentimentReadingId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "macroContextId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "capitalStructureId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "sourceAuditIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "conflictIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "unknownFields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "reasonCode": {
+            "type": "string"
+          },
+          "attemptedSourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            }
+          },
+          "blocking": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "reasonCode",
+          "attemptedSourceIds",
+          "blocking"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "includedSourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "dependencyManifestRef": {
+      "type": "object",
+      "properties": {
+        "manifestId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "manifestSha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "manifestId",
+        "manifestSha256"
+      ],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "leadAgentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "leadAgentVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "configHash": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "gitSha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourcePolicyVersion": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      },
+      "required": [
+        "runId",
+        "leadAgentId",
+        "leadAgentVersion",
+        "configHash",
+        "gitSha",
+        "sourcePolicyVersion"
+      ],
+      "additionalProperties": false
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    },
+    "canonicalSha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "packetId",
+    "packetRevision",
+    "supersedesPacketId",
+    "candidateId",
+    "symbol",
+    "researchOutcome",
+    "researchMode",
+    "checks",
+    "catalystRecordIds",
+    "textFactorIds",
+    "sentimentReadingId",
+    "macroContextId",
+    "capitalStructureId",
+    "sourceAuditIds",
+    "conflictIds",
+    "unknownFields",
+    "includedSourceIds",
+    "dependencyManifestRef",
+    "provenance",
+    "createdAt",
+    "asOf",
+    "expiresAt",
+    "canonicalSha256"
+  ],
+  "additionalProperties": false
+}

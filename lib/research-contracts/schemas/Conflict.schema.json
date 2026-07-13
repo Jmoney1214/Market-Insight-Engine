@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "Conflict"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "conflictId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "fieldPath": {
+      "type": "string"
+    },
+    "values": {
+      "minItems": 2,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "sourceDocumentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          }
+        },
+        "required": [
+          "value",
+          "sourceDocumentId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "resolutionStatus": {
+      "type": "string",
+      "enum": [
+        "UNRESOLVED",
+        "RESOLVED_BY_AUTHORITY",
+        "RESOLVED_BY_RECENCY"
+      ]
+    },
+    "preferredValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "conflictId",
+    "fieldPath",
+    "values",
+    "resolutionStatus",
+    "preferredValue",
+    "createdAt"
+  ],
+  "additionalProperties": false
+}

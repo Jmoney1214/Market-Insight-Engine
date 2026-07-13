@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "TextFactor"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "factorId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Z0-9.\\-=^]{1,12}$"
+    },
+    "factorType": {
+      "type": "string"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "POSITIVE",
+        "NEGATIVE",
+        "NEUTRAL"
+      ]
+    },
+    "strength": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 600
+    },
+    "eventTime": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "evidenceIds": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "verificationStatus": {
+      "type": "string",
+      "enum": [
+        "CONFIRMED",
+        "PARTIALLY_CONFIRMED",
+        "CONFLICTED",
+        "STALE",
+        "UNSUPPORTED",
+        "UNKNOWN",
+        "NOT_MATERIAL",
+        "DUPLICATE",
+        "RETRACTED_OR_CORRECTED",
+        "PRIMARY_SOURCE_MISSING"
+      ]
+    },
+    "producedBy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "factorId",
+    "symbol",
+    "factorType",
+    "direction",
+    "strength",
+    "summary",
+    "eventTime",
+    "evidenceIds",
+    "verificationStatus",
+    "producedBy",
+    "asOf"
+  ],
+  "additionalProperties": false
+}
