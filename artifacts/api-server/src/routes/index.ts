@@ -6,6 +6,8 @@ import scanRouter from "./scan";
 import copilotRouter from "./copilot";
 import researchRouter from "./research";
 import memoryRouter from "./memory";
+import kronosRouter from "./kronos";
+import accuracyRouter from "./accuracy";
 
 const router: IRouter = Router();
 
@@ -15,6 +17,8 @@ router.use(watchlistRouter);
 router.use(scanRouter);
 router.use(researchRouter);
 router.use(memoryRouter);
+router.use(kronosRouter);
+router.use(accuracyRouter);
 router.use("/copilot", copilotRouter);
 
 export default router;

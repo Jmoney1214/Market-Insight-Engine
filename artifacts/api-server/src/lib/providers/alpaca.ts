@@ -249,3 +249,28 @@ export async function getMarketNews(limit = 50): Promise<MarketNewsItem[] | null
     createdAt: String(n["created_at"] ?? ""),
   }));
 }
+
+export type DatedClose = { date: string; close: number };
+
+/** Dated daily closes (split-adjusted) — feed for the event-study grader. */
+export async function getDailyClosesDated(symbol: string, days = 250): Promise<DatedClose[] | null> {
+  const start = new Date();
+  start.setDate(start.getDate() - days);
+  const url = new URL(`${DATA_BASE}/${encodeURIComponent(symbol)}/bars`);
+  url.searchParams.set("timeframe", "1Day");
+  url.searchParams.set("feed", alpacaFeed);
+  url.searchParams.set("adjustment", "split");
+  url.searchParams.set("start", start.toISOString().split("T")[0]!);
+  url.searchParams.set("limit", "1000");
+
+  const data = await alpacaGet<{ bars?: Array<Record<string, unknown>> }>(url);
+  const bars = data?.bars;
+  if (!bars || bars.length === 0) return null;
+  const out: DatedClose[] = [];
+  for (const b of bars) {
+    const t = String(b["t"] ?? "");
+    const c = Number(b["c"]);
+    if (t.length >= 10 && Number.isFinite(c)) out.push({ date: t.slice(0, 10), close: c });
+  }
+  return out.length > 0 ? out : null;
+}

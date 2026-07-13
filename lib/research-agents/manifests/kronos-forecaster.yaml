@@ -1,0 +1,22 @@
+id: kronos-forecaster
+version: 1.0.0
+description: Kronos fork on the Mac (MPS). Premarket batch over scan candidates - pulls Alpaca SIP bars, samples N independent paths, writes p_up, quantile paths, dispersion, and the exact input-bars hash into the waiting kronos_forecasts table via the ingest API. Produces gradable forecasts only; it can never bypass the calibration gate.
+category: forecast
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools:
+  - market.get_bars
+  - kronos.ingest_forecasts
+  - scan.get_premarket
+read_scopes: ["market_data:bars", "scan:premarket_picks"]
+write_scopes: ["kronos_forecasts:append"]
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 40
+  maximum_seconds: 1800
+  maximum_cost_usd: 0
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/research-agents/src/kronosCalibration.test.ts
+deterministic_guards: ["input_bars_hash_provenance", "independent_path_sampling", "idempotent_ingest", "one_bad_symbol_never_kills_batch"]
+memory_policy: current_run_only

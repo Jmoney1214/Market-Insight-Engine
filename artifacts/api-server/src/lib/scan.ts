@@ -148,6 +148,10 @@ export function startScanScheduler(): void {
     } catch (err) {
       logger.warn({ err: String(err) }, "Scorecard grading pass failed");
     }
+    // Wave 5 after-close graders, best-effort on the same hourly cadence:
+    // event studies over research catalysts, and Kronos forecast calibration.
+    void import("./eventStudyGrader.js").then(({ gradeEventStudies }) => gradeEventStudies()).catch(() => {});
+    void import("./kronosStore.js").then(({ gradeKronosForecasts }) => gradeKronosForecasts()).catch(() => {});
   };
   setInterval(tick, SCHEDULER_INTERVAL_MS).unref();
   void tick(); // warm immediately if we boot inside the window

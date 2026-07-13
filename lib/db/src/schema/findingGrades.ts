@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, real, jsonb, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, real, boolean, jsonb, timestamp, index } from "drizzle-orm/pg-core";
 
 /**
  * Unified grade ledger — ONE row per finding's grading lifecycle.
@@ -43,6 +43,12 @@ export const findingGradesTable = pgTable(
     followThrough: real("follow_through"),
     adverseMove: real("adverse_move"),
     gradedAt: timestamp("graded_at", { withTimezone: true }),
+    // --- event-study verdict (ai-hedge-fund CAR engine, Wave 5) ---
+    eventCar: real("event_car"),
+    eventTStat: real("event_t_stat"),
+    eventSignificant: boolean("event_significant"),
+    eventStudy: jsonb("event_study"),
+    eventGradedAt: timestamp("event_graded_at", { withTimezone: true }),
   },
   (t) => [
     index("finding_grades_ref_idx").on(t.findingType, t.findingRef),
