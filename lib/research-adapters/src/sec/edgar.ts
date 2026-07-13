@@ -34,6 +34,7 @@ export interface EdgarClientOptions {
 
 const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
 const ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data";
+const TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 
 export class EdgarClient {
   private readonly userAgent: string | undefined;
@@ -88,6 +89,24 @@ export class EdgarClient {
 
   static padCik(cik: string): string {
     return cik.replace(/^0+/, "").padStart(10, "0");
+  }
+
+  /** Symbol → padded CIK via the SEC ticker map (disk-cached); null when unknown. */
+  async lookupCik(symbol: string): Promise<string | null> {
+    const path = this.cachePath("meta", "company_tickers.json");
+    let body = this.cached(path);
+    if (body === null) {
+      body = await this.get(TICKERS_URL);
+      if (body !== null && path) writeFileSync(path, body);
+    }
+    if (body === null) return null;
+    try {
+      const rows = Object.values(JSON.parse(body) as Record<string, { cik_str: number; ticker: string }>);
+      const hit = rows.find((r) => r.ticker?.toUpperCase() === symbol.toUpperCase());
+      return hit ? EdgarClient.padCik(String(hit.cik_str)) : null;
+    } catch {
+      return null;
+    }
   }
 
   /** Recent filings for a CIK from the submissions API (cached per day is caller's choice). */

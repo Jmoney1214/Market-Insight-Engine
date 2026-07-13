@@ -190,6 +190,15 @@ importers:
       '@workspace/integrations-openai-ai-server':
         specifier: workspace:*
         version: link:../../lib/integrations-openai-ai-server
+      '@workspace/research-adapters':
+        specifier: workspace:*
+        version: link:../../lib/research-adapters
+      '@workspace/research-agents':
+        specifier: workspace:*
+        version: link:../../lib/research-agents
+      '@workspace/research-contracts':
+        specifier: workspace:*
+        version: link:../../lib/research-contracts
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7

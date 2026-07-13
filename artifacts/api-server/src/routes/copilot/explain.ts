@@ -18,6 +18,7 @@ import {
   ALPACA_SOURCE,
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
+import { getSentimentLensInput } from "../../lib/sentimentContext.js";
 
 const router: IRouter = Router();
 
@@ -60,13 +61,18 @@ router.get("/explain", async (req, res) => {
     return;
   }
   const liveSource = source === "alpaca_live" ? ALPACA_SOURCE : INTRADAY_SOURCE;
+
+  // Grounded news-only sentiment for the 11th lens — LIVE reads only (replay
+  // never gets current sentiment: that would be look-ahead contamination).
+  const sentiment = await getSentimentLensInput(symbolUpper).catch(() => null);
+
   try {
     const input =
       source === "alpaca_live"
         ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
         : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
     const core = await buildEventWithValidation(input);
-    const result = await runCommittee(core, provider);
+    const result = await runCommittee(core, provider, { sentiment });
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
   } catch (err) {
     if (err instanceof CopilotDataError) {
@@ -83,7 +89,7 @@ router.get("/explain", async (req, res) => {
         bars: [],
         quote: null,
       });
-      const result = await runCommittee(core, provider);
+      const result = await runCommittee(core, provider, { sentiment });
       res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
       return;
     }
