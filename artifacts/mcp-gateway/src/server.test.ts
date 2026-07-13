@@ -55,7 +55,10 @@ describe("mcp gateway", () => {
   });
 
   it("reports unreachable API as a tool error, not a crash", async () => {
-    process.env["MIE_API_BASE"] = "http://127.0.0.1:9"; // nothing listens here
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("unreachable test API")),
+    );
     const client = await connectedClient();
     const result = await client.callTool({ name: "get_watchlist", arguments: {} });
     expect(result.isError).toBe(true);
