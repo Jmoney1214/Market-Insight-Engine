@@ -78,9 +78,12 @@ export async function ingestForecast(input: KronosForecastIngest): Promise<boole
 }
 
 /**
- * Calibrator sweep: grades forecasts whose window has closed, using the
- * session close of the window-end date as the realized price. Flat/unknown
- * realizations stay ungraded (retried next sweep) — never guessed.
+ * Calibrator sweep: grades forecasts whose window has closed, using the last
+ * 5-minute bar AT OR BEFORE window end as the realized price — the forecast's
+ * actual horizon. (Grading against the 4pm session close scored a 10:30
+ * question with a 16:00 answer; every morning-pop-afternoon-fade day would
+ * mark a correct call wrong.) Flat/unknown realizations stay ungraded
+ * (retried next sweep) — never guessed.
  */
 export async function gradeKronosForecasts(limit = 50): Promise<number> {
   try {
@@ -93,18 +96,25 @@ export async function gradeKronosForecasts(limit = 50): Promise<number> {
 
     let graded = 0;
     for (const row of pending) {
-      const date = row.windowEndTs.toISOString().slice(0, 10);
-      const bar = await alpaca.getSessionBar(row.symbol, date);
-      if (!bar || !Number.isFinite(bar.close) || row.anchorPrice <= 0) continue;
+      const windowEndMs = row.windowEndTs.getTime();
+      // 90-minute lookback absorbs thin premarket tape; the LAST bar <= window
+      // end is the realized print for the forecast's own horizon.
+      const bars = await alpaca.getIntradayBars5m(
+        row.symbol,
+        new Date(windowEndMs - 90 * 60_000).toISOString(),
+        row.windowEndTs.toISOString(),
+      );
+      const last = bars?.filter((b) => b.t * 1000 <= windowEndMs).at(-1);
+      if (!last || !Number.isFinite(last.c) || row.anchorPrice <= 0) continue;
 
-      const realizedMovePct = ((bar.close - row.anchorPrice) / row.anchorPrice) * 100;
+      const realizedMovePct = ((last.c - row.anchorPrice) / row.anchorPrice) * 100;
       const grade = gradeForecast({ pUp: row.pUp, realizedMovePct });
       if (!grade) continue; // flat move — ungradable, stays pending
 
       await db
         .update(kronosForecastsTable)
         .set({
-          realizedPrice: bar.close,
+          realizedPrice: last.c,
           realizedMovePct,
           hit: grade.hit,
           brier: grade.brier,
