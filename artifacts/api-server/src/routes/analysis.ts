@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { db, reportsTable } from "@workspace/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, ne } from "drizzle-orm";
 import { AnalyzeTickerBody, GetReportParams, DeleteReportParams } from "@workspace/api-zod";
 import { buildReport, NoLiveDataError } from "../lib/buildReport.js";
+import {
+  serializePersistedReport,
+  serializeReportSummary,
+} from "../lib/reportProvenance.js";
 
 const router = Router();
 
@@ -48,6 +52,7 @@ router.post("/analyze", async (req, res) => {
 
   const fullReport = {
     ...(inserted.reportData as Record<string, unknown>),
+    source: inserted.source,
     id: inserted.id,
     generatedAt: inserted.generatedAt.toISOString(),
   };
@@ -67,14 +72,15 @@ router.get("/reports", async (req, res) => {
       generatedAt: reportsTable.generatedAt,
     })
     .from(reportsTable)
+    .where(ne(reportsTable.source, "mock"))
     .orderBy(desc(reportsTable.generatedAt))
     .limit(20);
 
   res.json(
-    reports.map((r) => ({
-      ...r,
-      generatedAt: r.generatedAt.toISOString(),
-    }))
+    reports.flatMap((report) => {
+      const summary = serializeReportSummary(report);
+      return summary ? [summary] : [];
+    }),
   );
 });
 
@@ -95,13 +101,21 @@ router.get("/reports/:id", async (req, res) => {
     return;
   }
 
-  const fullReport = {
-    ...(report.reportData as Record<string, unknown>),
+  const decision = serializePersistedReport({
     id: report.id,
-    generatedAt: report.generatedAt.toISOString(),
-  };
+    source: report.source,
+    generatedAt: report.generatedAt,
+    reportData: report.reportData as Record<string, unknown>,
+  });
+  if (!decision.ok) {
+    res.status(decision.status).json({
+      error: "This legacy report has untrusted mock provenance and cannot be published.",
+      code: decision.code,
+    });
+    return;
+  }
 
-  res.json(fullReport);
+  res.json(decision.value);
 });
 
 router.delete("/reports/:id", async (req, res) => {

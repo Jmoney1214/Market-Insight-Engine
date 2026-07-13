@@ -9,7 +9,7 @@ import {
   type TradeSample,
   type TriggerStack,
   type ValidationSnapshot,
-} from "@workspace/copilot-core";
+} from "@workspace/copilot-core/runtime";
 import { logger } from "./logger.js";
 
 // Memory-loop wiring: the measured, journal-derived edge for the fired trigger

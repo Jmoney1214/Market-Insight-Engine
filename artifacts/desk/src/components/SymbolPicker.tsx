@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-/** Symbols with bundled fixtures (the only ones REPLAY / FIXTURE support). */
+/** Temporary symbols with bundled historical cases; Task 4 replaces this registry. */
 export const FIXTURE_SYMBOLS = ["AAPL", "MSFT", "TSLA", "NODATA"] as const;
 
 /** Mirrors the api-server symbol validation (BRK-B, BTC-USD, ^GSPC, ES=F, 7203.T). */
@@ -27,14 +27,13 @@ const SUGGESTED_SYMBOLS = [
 interface SymbolPickerProps {
   symbol: string;
   onChange: (symbol: string) => void;
-  /** Restrict to fixture symbols (fixture source or replay mode). */
+  /** Restrict to the currently registered historical-case symbols. */
   restricted: boolean;
 }
 
 /**
- * Ticker selector. In fixture/replay contexts it stays a dropdown limited to
- * the bundled fixtures; on the live delayed feed it becomes a free-text input
- * so any Yahoo-supported ticker can be researched.
+ * Ticker selector. Historical contexts stay limited to registered cases; LIVE
+ * accepts any symbol supported by the read-only Alpaca SIP feed.
  */
 export function SymbolPicker({ symbol, onChange, restricted }: SymbolPickerProps) {
   const [draft, setDraft] = useState(symbol);
@@ -49,8 +48,8 @@ export function SymbolPicker({ symbol, onChange, restricted }: SymbolPickerProps
 
   const isFixture = (FIXTURE_SYMBOLS as readonly string[]).includes(symbol);
 
-  // If we land in a restricted context (fixture source / replay) holding a
-  // non-fixture symbol, COMMIT the fallback instead of merely displaying it,
+  // If we land in a historical context holding an unregistered symbol, commit
+  // the fallback instead of merely displaying it,
   // so the store and UI never diverge.
   useEffect(() => {
     if (restricted && !isFixture) onChange(FIXTURE_SYMBOLS[0]);
@@ -64,7 +63,7 @@ export function SymbolPicker({ symbol, onChange, restricted }: SymbolPickerProps
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label="Symbol"
-        title="Fixture symbols (switch source to DELAYED for any ticker)"
+        title="Registered historical-case symbols"
       >
         {FIXTURE_SYMBOLS.map((s) => (
           <option key={s} value={s}>

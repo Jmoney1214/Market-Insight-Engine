@@ -471,6 +471,7 @@ export const getListReportsUrl = () => {
 }
 
 /**
+ * Returns only reports with non-mock persisted provenance.
  * @summary List past analyses
  */
 export const listReports = async ( options?: RequestInit): Promise<ReportSummary[]> => {
@@ -548,6 +549,7 @@ export const getGetReportUrl = (id: number,) => {
 }
 
 /**
+ * Returns persisted source provenance and fails closed on legacy mock rows.
  * @summary Get a specific report
  */
 export const getReport = async (id: number, options?: RequestInit): Promise<Report> => {
@@ -998,7 +1000,7 @@ export const getGetCopilotEventUrl = (params: GetCopilotEventParams,) => {
 }
 
 /**
- * Computes one deterministic copilot event from bars/quote. Research and helper only: never returns order intent or any execution signal.
+ * Computes one deterministic read-only event from Alpaca SIP. Omitted source means alpaca_live. Fixture and historical modes are rejected until verified replay authorization and canonical case evidence exist.
  * @summary Build the canonical deterministic copilot event for a symbol
  */
 export const getCopilotEvent = async (params: GetCopilotEventParams, options?: RequestInit): Promise<CopilotEvent> => {
@@ -1083,7 +1085,7 @@ export const getExplainCopilotEventUrl = (params: ExplainCopilotEventParams,) =>
 }
 
 /**
- * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value.
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value. Omitted source means read-only Alpaca SIP; fixture and historical modes fail closed until verified replay authorization exists.
  * @summary Explain a deterministic copilot event with the read-only analyst committee
  */
 export const explainCopilotEvent = async (params: ExplainCopilotEventParams, options?: RequestInit): Promise<CommitteeRead> => {
@@ -1695,7 +1697,7 @@ export const getGetReplaySessionUrl = (params: GetReplaySessionParams,) => {
 }
 
 /**
- * Returns metadata for a fixture-backed replay session (total steps, bar interval, session bounds). Research/practice only: replay never executes, simulates, routes, or paper-trades. Real paid historical feeds are out of scope (adapter hooks only).
+ * Returns canonical historical-case metadata after verified brain authorization. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Replay never executes, simulates, routes, or paper-trades.
  * @summary Load replay session metadata for a symbol/date
  */
 export const getReplaySession = async (params: GetReplaySessionParams, options?: RequestInit): Promise<ReplaySession> => {
@@ -1720,7 +1722,7 @@ export const getGetReplaySessionQueryKey = (params?: GetReplaySessionParams,) =>
     }
 
 
-export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError | void>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1739,14 +1741,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReplaySessionQueryResult = NonNullable<Awaited<ReturnType<typeof getReplaySession>>>
-export type GetReplaySessionQueryError = ErrorType<ApiError>
+export type GetReplaySessionQueryError = ErrorType<ApiError | void>
 
 
 /**
  * @summary Load replay session metadata for a symbol/date
  */
 
-export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(
+export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError | void>>(
  params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1780,7 +1782,7 @@ export const getGetReplayEventUrl = (params: GetReplayEventParams,) => {
 }
 
 /**
- * Computes one deterministic copilot event for a single replay step by replaying bars[0..step] through the SAME pipeline used for live reads. Returns the canonical CopilotEvent shape with mode REPLAY. Never returns order intent or any execution signal.
+ * After verified brain authorization, computes one deterministic event from a canonical case revision and evidence hash. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Never returns order intent.
  * @summary Build the deterministic copilot event at a replay step
  */
 export const getReplayEvent = async (params: GetReplayEventParams, options?: RequestInit): Promise<CopilotEvent> => {
@@ -1805,7 +1807,7 @@ export const getGetReplayEventQueryKey = (params?: GetReplayEventParams,) => {
     }
 
 
-export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError | void>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1824,14 +1826,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof getReplayEvent>>>
-export type GetReplayEventQueryError = ErrorType<ApiError>
+export type GetReplayEventQueryError = ErrorType<ApiError | void>
 
 
 /**
  * @summary Build the deterministic copilot event at a replay step
  */
 
-export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(
+export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError | void>>(
  params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1865,7 +1867,7 @@ export const getExplainReplayEventUrl = (params: ExplainReplayEventParams,) => {
 }
 
 /**
- * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data.
+ * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read until verified brain authorization exists.
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 export const explainReplayEvent = async (params: ExplainReplayEventParams, options?: RequestInit): Promise<CommitteeRead> => {
@@ -1890,7 +1892,7 @@ export const getExplainReplayEventQueryKey = (params?: ExplainReplayEventParams,
     }
 
 
-export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError | void>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1909,14 +1911,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ExplainReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainReplayEvent>>>
-export type ExplainReplayEventQueryError = ErrorType<ApiError>
+export type ExplainReplayEventQueryError = ErrorType<ApiError | void>
 
 
 /**
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 
-export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(
+export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError | void>>(
  params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

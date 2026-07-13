@@ -31,12 +31,9 @@ import { ReplayBar } from "@/components/ReplayBar";
 import { MeasurementDrawer } from "@/components/MeasurementDrawer";
 
 const MODES = ["LIVE", "REPLAY", "RESEARCH"] as const;
-// LIVE is intentionally never built (permanent no-trading constraint). REPLAY
-// and RESEARCH are the two interactive, research-only modes.
-const AVAILABLE_MODES = new Set(["REPLAY", "RESEARCH"]);
 
 export default function Terminal() {
-  const { symbol, source, setSymbol, setSource } = useTerminalStore();
+  const { symbol, setSymbol, setSource } = useTerminalStore();
   const {
     mode: deskMode,
     date,
@@ -45,8 +42,7 @@ export default function Terminal() {
     totalSteps,
     playing,
     speed,
-    enterReplay,
-    exitReplay,
+    setMode,
     loadSession,
     setDate,
     clearSession,
@@ -54,6 +50,7 @@ export default function Terminal() {
   } = useReplayStore();
 
   const isReplay = deskMode === "REPLAY";
+  const isHistorical = deskMode === "REPLAY" || deskMode === "RESEARCH";
 
   // --- Replay session: load metadata for the active symbol when in REPLAY. ---
   const replaySessionParams = { symbol };
@@ -62,7 +59,7 @@ export default function Terminal() {
       query: {
         enabled: isReplay && !!symbol,
         queryKey: getGetReplaySessionQueryKey(replaySessionParams),
-        // Fixtures are immutable, so the session metadata never changes. Pin it
+        // Canonical case revisions are immutable, so metadata never changes. Pin it
         // as permanently fresh and skip focus refetches; otherwise a refetch
         // would hand back a new object identity and the effect below would
         // rewind an in-progress replay back to step 0.
@@ -86,15 +83,18 @@ export default function Terminal() {
 
   const replayReady = isReplay && totalSteps > 0 && !!date;
 
-  // --- Event + explain: switch between RESEARCH (live fixture) and REPLAY. ---
-  const researchParams = { symbol, source, mode: "RESEARCH" as const };
+  // LIVE is always read-only Alpaca SIP. Historical modes are fail-closed at
+  // the API until verified brain authorization and canonical cases ship.
+  const deskParams = deskMode === "LIVE"
+    ? { symbol, source: "alpaca_live" as const, mode: "LIVE" as const }
+    : { symbol, source: "fixture" as const, mode: "RESEARCH" as const };
   const replayParams = { symbol, date: date ?? "", step };
 
-  const researchEvent = useGetCopilotEvent(researchParams, {
+  const deskEvent = useGetCopilotEvent(deskParams, {
     query: {
       enabled: !isReplay && !!symbol,
-      queryKey: getGetCopilotEventQueryKey(researchParams),
-      refetchInterval: !isReplay ? 10000 : false,
+      queryKey: getGetCopilotEventQueryKey(deskParams),
+      refetchInterval: deskMode === "LIVE" ? 10000 : false,
     },
   });
   const replayEvent = useGetReplayEvent(replayParams, {
@@ -107,10 +107,10 @@ export default function Terminal() {
     },
   });
 
-  const researchExplain = useExplainCopilotEvent(researchParams, {
+  const deskExplain = useExplainCopilotEvent(deskParams, {
     query: {
       enabled: !isReplay && !!symbol,
-      queryKey: getExplainCopilotEventQueryKey(researchParams),
+      queryKey: getExplainCopilotEventQueryKey(deskParams),
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
     },
@@ -128,15 +128,15 @@ export default function Terminal() {
     },
   });
 
-  const event = isReplay ? replayEvent.data : researchEvent.data;
-  const eventLoading = isReplay ? replayEvent.isLoading : researchEvent.isLoading;
-  const eventError = isReplay ? replayEvent.error : researchEvent.error;
+  const event = isReplay ? replayEvent.data : deskEvent.data;
+  const eventLoading = isReplay ? replayEvent.isLoading : deskEvent.isLoading;
+  const eventError = isReplay ? replayEvent.error : deskEvent.error;
 
-  const explain = isReplay ? replayExplain.data : researchExplain.data;
+  const explain = isReplay ? replayExplain.data : deskExplain.data;
   const explainLoading = isReplay
     ? replayExplain.isLoading
-    : researchExplain.isLoading;
-  const explainError = isReplay ? replayExplain.error : researchExplain.error;
+    : deskExplain.isLoading;
+  const explainError = isReplay ? replayExplain.error : deskExplain.error;
 
   // --- Transport clock: advance one bar per tick while playing. ---
   const stepForwardRef = useRef(stepForward);
@@ -154,13 +154,13 @@ export default function Terminal() {
     query: { queryKey: getCopilotHealthCheckQueryKey(), refetchInterval: 30000 },
   });
 
-  const currentMode = event?.mode ?? (isReplay ? "REPLAY" : "RESEARCH");
+  const currentMode = event?.mode ?? deskMode;
   const replayUnavailable = isReplay && !!replaySessionError;
 
   // Live trigger banner. The stream key intentionally excludes the replay step
   // so stepping diffs against the prior bar; symbol/mode/date/source changes
   // reset the baseline.
-  const streamKey = `${symbol}:${currentMode}:${isReplay ? date ?? "" : source}`;
+  const streamKey = `${symbol}:${currentMode}:${isReplay ? date ?? "" : deskParams.source}`;
   useTriggerAlerts(event, streamKey);
 
   const headerDate = event?.timestamp ? new Date(event.timestamp) : null;
@@ -188,10 +188,16 @@ export default function Terminal() {
 
   const selectMode = (m: (typeof MODES)[number]) => {
     if (m === "REPLAY") {
-      // Replay only exists for bundled fixtures; fall back to the default.
+      // Task 4 replaces this temporary fixture-symbol list with canonical cases.
       if (!isFixtureSymbol) setSymbol(FIXTURE_SYMBOLS[0]);
-      enterReplay();
-    } else if (m === "RESEARCH") exitReplay();
+      setMode("REPLAY");
+    } else if (m === "RESEARCH") {
+      if (!isFixtureSymbol) setSymbol(FIXTURE_SYMBOLS[0]);
+      setMode("RESEARCH");
+    } else {
+      setSource("alpaca_live");
+      setMode("LIVE");
+    }
   };
 
   return (
@@ -203,31 +209,26 @@ export default function Terminal() {
             TRADING DESK COPILOT
           </div>
 
-          {/* Mode context: LIVE / REPLAY / RESEARCH. REPLAY + RESEARCH toggle. */}
+          {/* All modes are research-only; LIVE never exposes broker execution. */}
           <div className="flex items-center rounded border border-border overflow-hidden font-mono text-[10px]">
             {MODES.map((m, i) => {
               const active = m === currentMode;
-              const available = AVAILABLE_MODES.has(m);
-              const clickable = m === "REPLAY" || m === "RESEARCH";
               return (
                 <button
                   key={m}
                   type="button"
-                  disabled={!clickable}
-                  onClick={clickable ? () => selectMode(m) : undefined}
+                  onClick={() => selectMode(m)}
                   title={
-                    available
-                      ? `${m} mode`
-                      : `${m} mode — never built (no-trading constraint)`
+                    m === "LIVE"
+                      ? "LIVE read-only market research (Alpaca SIP)"
+                      : `${m} historical brain mode`
                   }
                   className={`px-2 py-0.5 ${
                     i < MODES.length - 1 ? "border-r border-border" : ""
                   } ${
                     active
                       ? "bg-primary/20 text-primary font-medium"
-                      : available
-                      ? "text-muted-foreground hover:bg-muted/40"
-                      : "text-muted-foreground/40 cursor-not-allowed"
+                      : "text-muted-foreground hover:bg-muted/40"
                   }`}
                 >
                   {m}
@@ -246,7 +247,7 @@ export default function Terminal() {
             <SymbolPicker
               symbol={symbol}
               onChange={setSymbol}
-              restricted={isReplay || source === "fixture"}
+              restricted={isHistorical}
             />
 
             {isReplay ? (
@@ -273,24 +274,12 @@ export default function Terminal() {
                 )}
               </select>
             ) : (
-              <select
-                className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-40"
-                value={source}
-                onChange={(e) => {
-                  const next = e.target.value as typeof source;
-                  // Fixtures only exist for the bundled symbols.
-                  if (next === "fixture" && !isFixtureSymbol) {
-                    setSymbol(FIXTURE_SYMBOLS[0]);
-                  }
-                  setSource(next);
-                }}
-                aria-label="Data source"
-                title="Data source"
+              <span
+                className="bg-card border border-border rounded px-2 py-1 text-xs font-mono text-muted-foreground"
+                title={isHistorical ? "Canonical historical brain source" : "Read-only Alpaca SIP market data"}
               >
-                <option value="fixture">FIXTURE</option>
-                <option value="yahoo_delayed">DELAYED</option>
-                <option value="alpaca_live">LIVE</option>
-              </select>
+                {isHistorical ? "HISTORICAL BRAIN" : "ALPACA SIP"}
+              </span>
             )}
           </div>
 
@@ -300,8 +289,13 @@ export default function Terminal() {
               {headerTime}
             </span>
             <span className="border border-border px-1.5 py-0.5 rounded bg-muted/20 text-muted-foreground uppercase">
-              SRC · {(event?.dataSource ?? (isReplay ? "fixture replay" : source)).toString().replace(/_/g, " ")}
+              SRC · {(event?.dataSource ?? (isHistorical ? "historical" : "alpaca_live")).toString().replace(/_/g, " ")}
             </span>
+            {isHistorical ? (
+              <span className="border border-primary/40 px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                HISTORICAL
+              </span>
+            ) : null}
           </div>
 
           {/* System + AI status */}

@@ -8,7 +8,7 @@
 // helper. Every AI-free `detail` string is still run through safeText as
 // defense-in-depth before it can reach the banner.
 
-import { newlyFiredTriggers } from "@workspace/copilot-core";
+import { newlyFiredTriggers } from "@workspace/copilot-core/runtime";
 import type { CopilotEvent, CopilotTrigger } from "@workspace/api-client-react";
 import { safeText } from "./safety";
 

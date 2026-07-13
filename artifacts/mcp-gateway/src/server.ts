@@ -18,6 +18,7 @@ const SYMBOL = z
   .string()
   .regex(/^[A-Za-z0-9.\-=^]{1,12}$/, "invalid symbol")
   .describe("Ticker symbol, e.g. AAPL or BRK-B");
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD");
 
 async function apiGet(path: string, params?: Record<string, string | undefined>) {
   const url = new URL(`/api${path}`, API_BASE);
@@ -104,11 +105,11 @@ export function createServer(): McpServer {
     {
       title: "Copilot event",
       description:
-        "Build the deterministic CopilotEvent for a symbol: alert level, gates, lenses, validation. source=fixture needs no API keys; alpaca_live uses live SIP data.",
+        "Build the deterministic read-only LIVE CopilotEvent for a symbol from Alpaca SIP data.",
       inputSchema: {
         symbol: SYMBOL,
-        source: z.enum(["fixture", "intraday", "alpaca_live"]).optional().describe("Data source (default: server's configured live source)"),
-        mode: z.string().optional().describe("Optional event mode override, e.g. LIVE or REPLAY"),
+        source: z.literal("alpaca_live").optional().describe("Live source; defaults to Alpaca SIP"),
+        mode: z.literal("LIVE").optional().describe("Read-only live research mode"),
       },
     },
     ({ symbol, source, mode }) => proxy("/copilot/event", { symbol, source, mode }),
@@ -122,7 +123,7 @@ export function createServer(): McpServer {
         "Run the analyst committee over a symbol's CopilotEvent and return the structured explanation. Uncached calls take ~12s and spend LLM budget.",
       inputSchema: {
         symbol: SYMBOL,
-        source: z.enum(["fixture", "intraday", "alpaca_live"]).optional(),
+        source: z.literal("alpaca_live").optional(),
       },
     },
     ({ symbol, source }) => proxy("/copilot/explain", { symbol, source }),
@@ -182,10 +183,10 @@ export function createServer(): McpServer {
     "get_replay_session",
     {
       title: "Replay session",
-      description: "Fixture-backed replay session metadata (works without API keys).",
-      inputSchema: { symbol: SYMBOL.optional() },
+      description: "Canonical historical replay session metadata (requires verified brain authorization).",
+      inputSchema: { symbol: SYMBOL, date: DATE },
     },
-    ({ symbol }) => proxy("/replay/session", { symbol }),
+    ({ symbol, date }) => proxy("/copilot/replay/session", { symbol, date }),
   );
 
   server.registerTool(
@@ -195,10 +196,11 @@ export function createServer(): McpServer {
       description: "A single replay step's CopilotEvent for a symbol.",
       inputSchema: {
         symbol: SYMBOL,
-        step: z.number().int().min(0).optional().describe("Replay step index"),
+        date: DATE,
+        step: z.number().int().min(0).describe("Replay step index"),
       },
     },
-    ({ symbol, step }) => proxy("/replay/event", { symbol, step: step === undefined ? undefined : String(step) }),
+    ({ symbol, date, step }) => proxy("/copilot/replay/event", { symbol, date, step: String(step) }),
   );
 
   server.registerTool(
@@ -206,7 +208,7 @@ export function createServer(): McpServer {
     {
       title: "List analyst reports",
       description:
-        "List persisted analyst reports (ticker, rating, generated time). NOTE: report generation may include placeholder fields until mock isolation ships — treat unmarked values with suspicion.",
+        "List persisted analyst reports (ticker, rating, generated time, and recorded source provenance).",
       inputSchema: {},
     },
     () => proxy("/reports"),
@@ -216,7 +218,7 @@ export function createServer(): McpServer {
     "get_report",
     {
       title: "Get analyst report",
-      description: "Fetch one persisted analyst report by id. Same placeholder caveat as list_reports.",
+      description: "Fetch one persisted analyst report by id.",
       inputSchema: { id: z.number().int().positive() },
     },
     ({ id }) => proxy(`/reports/${id}`),

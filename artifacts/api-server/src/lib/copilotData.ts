@@ -1,10 +1,9 @@
 import {
-  getFixture,
   type Bar,
   type BuildEventInput,
   type Mode,
   type Quote,
-} from "@workspace/copilot-core";
+} from "@workspace/copilot-core/runtime";
 
 /**
  * Error raised when a live (delayed) data source is unavailable. The route turns
@@ -27,20 +26,6 @@ export const BENCHMARK_SYMBOL = "SPY";
 
 const RESEARCH_USER_AGENT =
   "Mozilla/5.0 (Trading Desk Copilot research client)";
-
-/** Build a deterministic event input from the built-in fixtures (no network). */
-export function loadFixtureInput(symbol: string): BuildEventInput | null {
-  const fixture = getFixture(symbol);
-  if (!fixture) return null;
-  return {
-    symbol: fixture.symbol,
-    mode: fixture.mode,
-    dataSource: fixture.dataSource,
-    bars: fixture.bars,
-    quote: fixture.quote,
-    nowMs: fixture.nowMs,
-  };
-}
 
 type YahooIntradayResponse = {
   chart?: {

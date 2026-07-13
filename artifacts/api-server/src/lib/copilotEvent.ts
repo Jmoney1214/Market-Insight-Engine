@@ -1,4 +1,4 @@
-import type { CopilotEvent as CoreCopilotEvent } from "@workspace/copilot-core";
+import type { CopilotEvent as CoreCopilotEvent } from "@workspace/copilot-core/runtime";
 import type { CopilotEvent as ApiCopilotEvent } from "@workspace/api-zod";
 
 /**
@@ -6,7 +6,15 @@ import type { CopilotEvent as ApiCopilotEvent } from "@workspace/api-zod";
  * return as the generated {@link ApiCopilotEvent} makes the boundary explicit: if
  * the core output drifts from the OpenAPI contract, this fails to compile.
  */
-export function coreEventToApiEvent(event: CoreCopilotEvent): ApiCopilotEvent {
+type EventProvenance = Pick<
+  ApiCopilotEvent,
+  "provenanceMode" | "caseRevisionId" | "evidenceHash"
+>;
+
+export function coreEventToApiEvent(
+  event: CoreCopilotEvent,
+  provenance: EventProvenance,
+): ApiCopilotEvent {
   return {
     eventId: event.eventId,
     symbol: event.symbol,
@@ -50,5 +58,6 @@ export function coreEventToApiEvent(event: CoreCopilotEvent): ApiCopilotEvent {
       c: b.c,
       v: b.v,
     })),
+    ...provenance,
   };
 }

@@ -12,7 +12,6 @@ import {
 } from "@workspace/copilot-core";
 import {
   runCommittee,
-  createMockProvider,
   scanForbiddenDeep,
   validateAgentRead,
   validateDashboardRead,
@@ -21,6 +20,7 @@ import {
   BLOCKED_ALLOWED_RECOMMENDATIONS,
   FORBIDDEN_PHRASES,
 } from "./index";
+import { createMockProvider } from "./mockProvider";
 
 // Representative banned identifiers pulled from the canonical ban-list (vocab.ts)
 // so these tests never hardcode the literal forbidden identifiers — the ban-list

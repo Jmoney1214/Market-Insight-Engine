@@ -30,6 +30,7 @@ export interface HealthStatus {
 
 export interface ApiError {
   error: string;
+  code?: string;
 }
 
 export interface AnalyzeInput {
@@ -45,6 +46,8 @@ export interface ReportSummary {
   generatedAt: string;
   /** BUY | HOLD | SELL | WATCH */
   overallRating: string;
+  /** Persisted provider provenance; legacy mock rows are omitted. */
+  source: string;
 }
 
 export interface CompanySnapshot {
@@ -301,6 +304,8 @@ export interface Report {
   sector: string;
   industry: string;
   generatedAt: string;
+  /** Persisted provider provenance; never accepted from embedded reportData. */
+  source: string;
   /** BUY | HOLD | SELL | WATCH */
   overallRating: string;
   disclaimer: string;
@@ -476,6 +481,17 @@ export const CopilotEventMode = {
   LIVE: 'LIVE',
   REPLAY: 'REPLAY',
   RESEARCH: 'RESEARCH',
+} as const;
+
+/**
+ * Verified provenance class applied by the source-policy boundary.
+ */
+export type CopilotEventProvenanceMode = typeof CopilotEventProvenanceMode[keyof typeof CopilotEventProvenanceMode];
+
+
+export const CopilotEventProvenanceMode = {
+  LIVE_SIP: 'LIVE_SIP',
+  HISTORICAL_FIXTURE: 'HISTORICAL_FIXTURE',
 } as const;
 
 /**
@@ -696,8 +712,20 @@ export interface CopilotEvent {
   timestamp: string;
   /** LIVE | REPLAY | RESEARCH */
   mode: CopilotEventMode;
-  /** Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed) */
+  /** Origin of the underlying bars/quotes; LIVE is alpaca_live and historical truth is canonical-case-backed only. */
   dataSource: string;
+  /** Verified provenance class applied by the source-policy boundary. */
+  provenanceMode: CopilotEventProvenanceMode;
+  /**
+     * Canonical immutable case revision for historical reads; absent for LIVE_SIP.
+     * @nullable
+     */
+  caseRevisionId?: string | null;
+  /**
+     * Evidence hash bound to the canonical historical case; absent for LIVE_SIP.
+     * @nullable
+     */
+  evidenceHash?: string | null;
   /**
      * Deterministic alert ladder level L1..L5, or null
      * @nullable
@@ -881,6 +909,17 @@ export const CommitteeReadAlertLevel = {
 } as const;
 
 /**
+ * Verified provenance class inherited from the explained event.
+ */
+export type CommitteeReadProvenanceMode = typeof CommitteeReadProvenanceMode[keyof typeof CommitteeReadProvenanceMode];
+
+
+export const CommitteeReadProvenanceMode = {
+  LIVE_SIP: 'LIVE_SIP',
+  HISTORICAL_FIXTURE: 'HISTORICAL_FIXTURE',
+} as const;
+
+/**
  * Full read-only analyst committee response for one deterministic event.
  */
 export interface CommitteeRead {
@@ -896,6 +935,18 @@ export interface CommitteeRead {
   agents: AgentRead[];
   dashboardRead: DashboardRead;
   warnings: string[];
+  /** Verified provenance class inherited from the explained event. */
+  provenanceMode: CommitteeReadProvenanceMode;
+  /**
+     * Canonical immutable case revision for historical reads; absent for LIVE_SIP.
+     * @nullable
+     */
+  caseRevisionId?: string | null;
+  /**
+     * Evidence hash bound to the canonical historical case; absent for LIVE_SIP.
+     * @nullable
+     */
+  evidenceHash?: string | null;
 }
 
 /**
@@ -1130,7 +1181,7 @@ date: string;
 export type GetCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.
+ * Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE.
  */
 source?: GetCopilotEventSource;
 mode?: GetCopilotEventMode;
@@ -1157,7 +1208,7 @@ export const GetCopilotEventMode = {
 export type ExplainCopilotEventParams = {
 symbol: string;
 /**
- * Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.
+ * Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE.
  */
 source?: ExplainCopilotEventSource;
 mode?: ExplainCopilotEventMode;

@@ -7,6 +7,7 @@
  */
 import type { AgentRead } from './agentRead';
 import type { CommitteeReadAlertLevel } from './committeeReadAlertLevel';
+import type { CommitteeReadProvenanceMode } from './committeeReadProvenanceMode';
 import type { CommitteeReadSource } from './committeeReadSource';
 import type { CommitteeReadStatus } from './committeeReadStatus';
 import type { DashboardRead } from './dashboardRead';
@@ -27,4 +28,16 @@ export interface CommitteeRead {
   agents: AgentRead[];
   dashboardRead: DashboardRead;
   warnings: string[];
+  /** Verified provenance class inherited from the explained event. */
+  provenanceMode: CommitteeReadProvenanceMode;
+  /**
+     * Canonical immutable case revision for historical reads; absent for LIVE_SIP.
+     * @nullable
+     */
+  caseRevisionId?: string | null;
+  /**
+     * Evidence hash bound to the canonical historical case; absent for LIVE_SIP.
+     * @nullable
+     */
+  evidenceHash?: string | null;
 }

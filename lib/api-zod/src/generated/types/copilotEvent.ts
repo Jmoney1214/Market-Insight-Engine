@@ -8,6 +8,7 @@
 import type { CopilotBar } from './copilotBar';
 import type { CopilotEventAlertLevel } from './copilotEventAlertLevel';
 import type { CopilotEventMode } from './copilotEventMode';
+import type { CopilotEventProvenanceMode } from './copilotEventProvenanceMode';
 import type { CopilotTrigger } from './copilotTrigger';
 import type { FeedQuality } from './feedQuality';
 import type { GateVerdicts } from './gateVerdicts';
@@ -27,8 +28,20 @@ export interface CopilotEvent {
   timestamp: string;
   /** LIVE | REPLAY | RESEARCH */
   mode: CopilotEventMode;
-  /** Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed) */
+  /** Origin of the underlying bars/quotes; LIVE is alpaca_live and historical truth is canonical-case-backed only. */
   dataSource: string;
+  /** Verified provenance class applied by the source-policy boundary. */
+  provenanceMode: CopilotEventProvenanceMode;
+  /**
+     * Canonical immutable case revision for historical reads; absent for LIVE_SIP.
+     * @nullable
+     */
+  caseRevisionId?: string | null;
+  /**
+     * Evidence hash bound to the canonical historical case; absent for LIVE_SIP.
+     * @nullable
+     */
+  evidenceHash?: string | null;
   /**
      * Deterministic alert ladder level L1..L5, or null
      * @nullable

@@ -7,7 +7,15 @@ import type { CommitteeRead as ApiCommitteeRead } from "@workspace/api-zod";
  * committee output drifts from the OpenAPI contract, this fails to compile.
  * Arrays are copied so the wire payload never aliases internal state.
  */
-export function committeeResultToApiRead(result: CommitteeResult): ApiCommitteeRead {
+type CommitteeProvenance = Pick<
+  ApiCommitteeRead,
+  "provenanceMode" | "caseRevisionId" | "evidenceHash"
+>;
+
+export function committeeResultToApiRead(
+  result: CommitteeResult,
+  provenance: CommitteeProvenance,
+): ApiCommitteeRead {
   return {
     status: result.status,
     source: result.source,
@@ -40,5 +48,6 @@ export function committeeResultToApiRead(result: CommitteeResult): ApiCommitteeR
       riskNotes: [...result.dashboardRead.riskNotes],
     },
     warnings: [...result.warnings],
+    ...provenance,
   };
 }

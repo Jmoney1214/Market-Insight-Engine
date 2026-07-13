@@ -3,20 +3,16 @@ import {
   GetCopilotEventQueryParams,
   GetCopilotEventResponse,
 } from "@workspace/api-zod";
-import { buildCopilotEvent } from "@workspace/copilot-core";
+import { buildCopilotEvent } from "@workspace/copilot-core/runtime";
 import { buildEventWithValidation } from "../../lib/validationResolver.js";
 import { coreEventToApiEvent } from "../../lib/copilotEvent.js";
 import { recordHistory } from "../../lib/history.js";
-import {
-  CopilotDataError,
-  INTRADAY_SOURCE,
-  fetchIntradayInput,
-  loadFixtureInput,
-} from "../../lib/copilotData.js";
+import { CopilotDataError } from "../../lib/copilotData.js";
 import {
   ALPACA_SOURCE,
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
+import { resolveSourcePolicy } from "../../lib/sourcePolicy.js";
 
 const router: IRouter = Router();
 
@@ -27,7 +23,9 @@ router.get("/event", async (req, res) => {
     return;
   }
 
-  const { symbol, source, mode } = parsed.data;
+  const { symbol, mode } = parsed.data;
+  const source = typeof req.query.source === "string" ? parsed.data.source : undefined;
+  const requestedMode = mode ?? "LIVE";
   const symbolUpper = symbol.toUpperCase().trim();
   // Permissive enough for real Yahoo symbols: BRK-B, BTC-USD, ^GSPC, ES=F, 7203.T
   if (!symbolUpper || !/^[A-Z0-9.\-=^]{1,12}$/.test(symbolUpper)) {
@@ -35,35 +33,30 @@ router.get("/event", async (req, res) => {
     return;
   }
 
-  if (source === "fixture") {
-    const input = loadFixtureInput(symbolUpper);
-    if (!input) {
-      res.status(404).json({ error: `No fixture found for "${symbolUpper}".` });
-      return;
-    }
-    const core = await buildEventWithValidation(mode ? { ...input, mode } : input);
-    const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core));
-    await recordHistory(apiEvent, req.log);
-    res.json(apiEvent);
-    return;
-  }
-
-  // Data-plane contract: paid feeds only (Alpaca SIP). Yahoo delayed bars are
-  // disabled unless explicitly re-enabled for offline experiments.
-  if (source === "yahoo_delayed" && process.env["ALLOW_DELAYED_YAHOO"] !== "true") {
-    res.status(400).json({
-      error: "yahoo_delayed is disabled by the data-plane contract — use source=alpaca_live",
+  if (requestedMode !== "LIVE" || source === "fixture") {
+    res.status(503).json({
+      error: "Historical brain access is unavailable until verified replay authorization is installed.",
+      code: "BRAIN_AUTH_NOT_READY",
     });
     return;
   }
-  const liveSource = source === "alpaca_live" ? ALPACA_SOURCE : INTRADAY_SOURCE;
+
+  const policy = resolveSourcePolicy({
+    mode: "LIVE",
+    source,
+    canReplay: false,
+  });
+  if (!policy.ok) {
+    res.status(policy.status).json({ error: policy.code, code: policy.code });
+    return;
+  }
+
   try {
-    const input =
-      source === "alpaca_live"
-        ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
-        : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
+    const input = await fetchAlpacaIntradayInput(symbolUpper, "LIVE");
     const core = await buildEventWithValidation(input);
-    const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core));
+    const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core, {
+      provenanceMode: policy.provenanceMode,
+    }));
     await recordHistory(apiEvent, req.log);
     res.json(apiEvent);
   } catch (err) {
@@ -76,12 +69,14 @@ router.get("/event", async (req, res) => {
       );
       const core = buildCopilotEvent({
         symbol: symbolUpper,
-        mode: mode ?? "LIVE",
-        dataSource: liveSource,
+        mode: "LIVE",
+        dataSource: ALPACA_SOURCE,
         bars: [],
         quote: null,
       });
-      const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core));
+      const apiEvent = GetCopilotEventResponse.parse(coreEventToApiEvent(core, {
+        provenanceMode: policy.provenanceMode,
+      }));
       await recordHistory(apiEvent, req.log);
       res.json(apiEvent);
       return;

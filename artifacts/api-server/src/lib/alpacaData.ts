@@ -3,7 +3,7 @@ import type {
   BuildEventInput,
   Mode,
   Quote,
-} from "@workspace/copilot-core";
+} from "@workspace/copilot-core/runtime";
 import {
   BENCHMARK_SYMBOL,
   CopilotDataError,
@@ -37,9 +37,8 @@ function alpacaHeaders(): Record<string, string> {
   };
 }
 
-// Feed tier (ALPACA_FEED, default "sip") comes from the shared provider
-// config so FinDesk and the copilot always read the same feed — the two
-// surfaces must never disagree on the same bars.
+// The shared provider config hard-locks this to consolidated SIP so FinDesk
+// and the copilot cannot disagree on the bar feed.
 
 async function alpacaGet(path: string, symbol: string): Promise<unknown> {
   const headers = alpacaHeaders();

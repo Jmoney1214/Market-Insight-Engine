@@ -157,6 +157,7 @@ paths:
       operationId: listReports
       tags: [analysis]
       summary: List past analyses
+      description: Returns only reports with non-mock persisted provenance.
       responses:
         "200":
           description: List of reports
@@ -172,6 +173,7 @@ paths:
       operationId: getReport
       tags: [analysis]
       summary: Get a specific report
+      description: Returns persisted source provenance and fails closed on legacy mock rows.
       parameters:
         - name: id
           in: path
@@ -187,6 +189,12 @@ paths:
                 $ref: "#/components/schemas/Report"
         "404":
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "410":
+          description: Legacy report has untrusted mock provenance
           content:
             application/json:
               schema:
@@ -272,8 +280,9 @@ paths:
       tags: [copilot]
       summary: Build the canonical deterministic copilot event for a symbol
       description: >-
-        Computes one deterministic copilot event from bars/quote. Research and
-        helper only: never returns order intent or any execution signal.
+        Computes one deterministic read-only event from Alpaca SIP. Omitted
+        source means alpaca_live. Fixture and historical modes are rejected
+        until verified replay authorization and canonical case evidence exist.
       parameters:
         - name: symbol
           in: query
@@ -286,8 +295,8 @@ paths:
           schema:
             type: string
             enum: [fixture, yahoo_delayed, alpaca_live]
-            default: fixture
-          description: "Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true."
+            default: alpaca_live
+          description: "Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE."
         - name: mode
           in: query
           required: false
@@ -301,8 +310,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CopilotEvent"
-        "404":
-          description: Unknown fixture symbol
+        "400":
+          description: LIVE source policy rejected the requested source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Historical brain authorization is not ready
           content:
             application/json:
               schema:
@@ -318,7 +333,9 @@ paths:
         event for a symbol. The committee only explains, critiques, and
         summarizes the deterministic read: it never creates signals, approves
         trades, overrides hard blocks, or invents data. When the event is
-        hard-blocked the recommendation can only be a defensive value.
+        hard-blocked the recommendation can only be a defensive value. Omitted
+        source means read-only Alpaca SIP; fixture and historical modes fail
+        closed until verified replay authorization exists.
       parameters:
         - name: symbol
           in: query
@@ -331,8 +348,8 @@ paths:
           schema:
             type: string
             enum: [fixture, yahoo_delayed, alpaca_live]
-            default: fixture
-          description: "Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true."
+            default: alpaca_live
+          description: "Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE."
         - name: mode
           in: query
           required: false
@@ -346,8 +363,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CommitteeRead"
-        "404":
-          description: Unknown fixture symbol
+        "400":
+          description: LIVE source policy rejected the requested source
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Historical brain authorization is not ready
           content:
             application/json:
               schema:
@@ -475,10 +498,9 @@ paths:
       tags: [copilot]
       summary: Load replay session metadata for a symbol/date
       description: >-
-        Returns metadata for a fixture-backed replay session (total steps, bar
-        interval, session bounds). Research/practice only: replay never executes,
-        simulates, routes, or paper-trades. Real paid historical feeds are out of
-        scope (adapter hooks only).
+        Returns canonical historical-case metadata after verified brain
+        authorization. Temporarily returns BRAIN_AUTH_NOT_READY before any
+        fixture read. Replay never executes, simulates, routes, or paper-trades.
       parameters:
         - name: symbol
           in: query
@@ -504,6 +526,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Historical brain authorization is not ready
 
   /copilot/replay/event:
     get:
@@ -511,10 +535,9 @@ paths:
       tags: [copilot]
       summary: Build the deterministic copilot event at a replay step
       description: >-
-        Computes one deterministic copilot event for a single replay step by
-        replaying bars[0..step] through the SAME pipeline used for live reads.
-        Returns the canonical CopilotEvent shape with mode REPLAY. Never returns
-        order intent or any execution signal.
+        After verified brain authorization, computes one deterministic event
+        from a canonical case revision and evidence hash. Temporarily returns
+        BRAIN_AUTH_NOT_READY before any fixture read. Never returns order intent.
       parameters:
         - name: symbol
           in: query
@@ -547,6 +570,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Historical brain authorization is not ready
 
   /copilot/replay/explain:
     get:
@@ -557,7 +582,8 @@ paths:
         Runs the same multi-agent analyst committee over the deterministic
         replay-step event. The committee only explains, critiques, and
         summarizes: it never creates signals, approves trades, overrides hard
-        blocks, or invents data.
+        blocks, or invents data. Temporarily returns BRAIN_AUTH_NOT_READY before
+        any fixture read until verified brain authorization exists.
       parameters:
         - name: symbol
           in: query
@@ -588,6 +614,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "503":
+          description: Historical brain authorization is not ready
 
 components:
   schemas:
@@ -640,6 +668,8 @@ components:
       properties:
         error:
           type: string
+        code:
+          type: string
       required:
         - error
 
@@ -653,7 +683,7 @@ components:
 
     ReportSummary:
       type: object
-      required: [id, ticker, companyName, sector, generatedAt, overallRating]
+      required: [id, ticker, companyName, sector, generatedAt, overallRating, source]
       properties:
         id:
           type: integer
@@ -668,10 +698,13 @@ components:
         overallRating:
           type: string
           description: "BUY | HOLD | SELL | WATCH"
+        source:
+          type: string
+          description: Persisted provider provenance; legacy mock rows are omitted.
 
     Report:
       type: object
-      required: [id, ticker, companyName, sector, industry, generatedAt, snapshot, catalysts, news, filings, financials, valuation, technical, risks, thesis, actionPlan, overallRating, disclaimer]
+      required: [id, ticker, companyName, sector, industry, generatedAt, source, snapshot, catalysts, news, filings, financials, valuation, technical, risks, thesis, actionPlan, overallRating, disclaimer]
       properties:
         id:
           type: integer
@@ -685,6 +718,9 @@ components:
           type: string
         generatedAt:
           type: string
+        source:
+          type: string
+          description: Persisted provider provenance; never accepted from embedded reportData.
         overallRating:
           type: string
           description: "BUY | HOLD | SELL | WATCH"
@@ -1278,6 +1314,7 @@ components:
         - timestamp
         - mode
         - dataSource
+        - provenanceMode
         - alertLevel
         - l5Blocked
         - snapshot
@@ -1305,7 +1342,17 @@ components:
           description: "LIVE | REPLAY | RESEARCH"
         dataSource:
           type: string
-          description: "Origin of the underlying bars/quotes (e.g. fixture, yahoo_delayed)"
+          description: "Origin of the underlying bars/quotes; LIVE is alpaca_live and historical truth is canonical-case-backed only."
+        provenanceMode:
+          type: string
+          enum: [LIVE_SIP, HISTORICAL_FIXTURE]
+          description: "Verified provenance class applied by the source-policy boundary."
+        caseRevisionId:
+          type: ["string", "null"]
+          description: "Canonical immutable case revision for historical reads; absent for LIVE_SIP."
+        evidenceHash:
+          type: ["string", "null"]
+          description: "Evidence hash bound to the canonical historical case; absent for LIVE_SIP."
         alertLevel:
           type: ["string", "null"]
           enum: ["L1", "L2", "L3", "L4", "L5", null]
@@ -1488,6 +1535,7 @@ components:
         - agents
         - dashboardRead
         - warnings
+        - provenanceMode
       properties:
         status:
           type: string
@@ -1518,6 +1566,16 @@ components:
           type: array
           items:
             type: string
+        provenanceMode:
+          type: string
+          enum: [LIVE_SIP, HISTORICAL_FIXTURE]
+          description: "Verified provenance class inherited from the explained event."
+        caseRevisionId:
+          type: ["string", "null"]
+          description: "Canonical immutable case revision for historical reads; absent for LIVE_SIP."
+        evidenceHash:
+          type: ["string", "null"]
+          description: "Evidence hash bound to the canonical historical case; absent for LIVE_SIP."
 
     MarketSnapshot:
       type: object

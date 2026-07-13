@@ -14,8 +14,8 @@ describe("replay transport store", () => {
     reset();
   });
 
-  it("starts in RESEARCH with no session loaded", () => {
-    expect(get().mode).toBe("RESEARCH");
+  it("starts in LIVE with no session loaded", () => {
+    expect(get().mode).toBe("LIVE");
     expect(get().totalSteps).toBe(0);
     expect(get().step).toBe(0);
     expect(get().playing).toBe(false);
@@ -25,8 +25,17 @@ describe("replay transport store", () => {
     get().enterReplay();
     expect(get().mode).toBe("REPLAY");
     get().exitReplay();
-    expect(get().mode).toBe("RESEARCH");
+    expect(get().mode).toBe("LIVE");
     expect(get().playing).toBe(false);
+  });
+
+  it("selects each read-only desk mode explicitly", () => {
+    get().setMode("RESEARCH");
+    expect(get().mode).toBe("RESEARCH");
+    get().setMode("REPLAY");
+    expect(get().mode).toBe("REPLAY");
+    get().setMode("LIVE");
+    expect(get().mode).toBe("LIVE");
   });
 
   it("loads a session at step 0, paused", () => {

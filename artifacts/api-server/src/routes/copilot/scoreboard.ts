@@ -5,7 +5,7 @@ import {
   computeScoreboard,
   journalOutcomeToSample,
   type TradeSample,
-} from "@workspace/copilot-core";
+} from "@workspace/copilot-core/runtime";
 import { GetScoreboardResponse, ListValidationStatesResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();

@@ -140,6 +140,7 @@ export const AnalyzeTickerBody = zod.object({
 
 
 /**
+ * Returns only reports with non-mock persisted provenance.
  * @summary List past analyses
  */
 export const ListReportsResponseItem = zod.object({
@@ -148,12 +149,14 @@ export const ListReportsResponseItem = zod.object({
   "companyName": zod.string(),
   "sector": zod.string(),
   "generatedAt": zod.string(),
-  "overallRating": zod.string().describe('BUY | HOLD | SELL | WATCH')
+  "overallRating": zod.string().describe('BUY | HOLD | SELL | WATCH'),
+  "source": zod.string().describe('Persisted provider provenance; legacy mock rows are omitted.')
 })
 export const ListReportsResponse = zod.array(ListReportsResponseItem)
 
 
 /**
+ * Returns persisted source provenance and fails closed on legacy mock rows.
  * @summary Get a specific report
  */
 export const GetReportParams = zod.object({
@@ -167,6 +170,7 @@ export const GetReportResponse = zod.object({
   "sector": zod.string(),
   "industry": zod.string(),
   "generatedAt": zod.string(),
+  "source": zod.string().describe('Persisted provider provenance; never accepted from embedded reportData.'),
   "overallRating": zod.string().describe('BUY | HOLD | SELL | WATCH'),
   "disclaimer": zod.string(),
   "snapshot": zod.object({
@@ -375,14 +379,14 @@ export const CopilotHealthCheckResponse = zod.object({
 
 
 /**
- * Computes one deterministic copilot event from bars/quote. Research and helper only: never returns order intent or any execution signal.
+ * Computes one deterministic read-only event from Alpaca SIP. Omitted source means alpaca_live. Fixture and historical modes are rejected until verified replay authorization and canonical case evidence exist.
  * @summary Build the canonical deterministic copilot event for a symbol
  */
-export const getCopilotEventQuerySourceDefault = `fixture`;
+export const getCopilotEventQuerySourceDefault = `alpaca_live`;
 
 export const GetCopilotEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
-  "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(getCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.'),
+  "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(getCopilotEventQuerySourceDefault).describe('Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE.'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
 })
 
@@ -391,7 +395,10 @@ export const GetCopilotEventResponse = zod.object({
   "symbol": zod.string(),
   "timestamp": zod.string().describe('ISO 8601 event timestamp'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
-  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes (e.g. fixture, yahoo_delayed)'),
+  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes; LIVE is alpaca_live and historical truth is canonical-case-backed only.'),
+  "provenanceMode": zod.enum(['LIVE_SIP', 'HISTORICAL_FIXTURE']).describe('Verified provenance class applied by the source-policy boundary.'),
+  "caseRevisionId": zod.string().nullish().describe('Canonical immutable case revision for historical reads; absent for LIVE_SIP.'),
+  "evidenceHash": zod.string().nullish().describe('Evidence hash bound to the canonical historical case; absent for LIVE_SIP.'),
   "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullable().describe('Deterministic alert ladder level L1..L5, or null'),
   "l5Blocked": zod.boolean().describe('True when a hard L5 safety block is active'),
   "snapshot": zod.object({
@@ -490,14 +497,14 @@ export const GetCopilotEventResponse = zod.object({
 
 
 /**
- * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value.
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value. Omitted source means read-only Alpaca SIP; fixture and historical modes fail closed until verified replay authorization exists.
  * @summary Explain a deterministic copilot event with the read-only analyst committee
  */
-export const explainCopilotEventQuerySourceDefault = `fixture`;
+export const explainCopilotEventQuerySourceDefault = `alpaca_live`;
 
 export const ExplainCopilotEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
-  "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(explainCopilotEventQuerySourceDefault).describe('Data source; fixtures require no API keys; alpaca_live requires Alpaca API keys. yahoo_delayed is disabled by the data-plane contract (400) unless ALLOW_DELAYED_YAHOO=true.'),
+  "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(explainCopilotEventQuerySourceDefault).describe('Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE.'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
 })
 
@@ -532,7 +539,10 @@ export const ExplainCopilotEventResponse = zod.object({
   "positionGuidance": zod.array(zod.string()),
   "riskNotes": zod.array(zod.string())
 }).describe('The single synthesized, dashboard-safe read. Research\/helper output only.'),
-  "warnings": zod.array(zod.string())
+  "warnings": zod.array(zod.string()),
+  "provenanceMode": zod.enum(['LIVE_SIP', 'HISTORICAL_FIXTURE']).describe('Verified provenance class inherited from the explained event.'),
+  "caseRevisionId": zod.string().nullish().describe('Canonical immutable case revision for historical reads; absent for LIVE_SIP.'),
+  "evidenceHash": zod.string().nullish().describe('Evidence hash bound to the canonical historical case; absent for LIVE_SIP.')
 }).describe('Full read-only analyst committee response for one deterministic event.')
 
 
@@ -658,7 +668,10 @@ export const ListHistoryEventsResponseItem = zod.object({
   "symbol": zod.string(),
   "timestamp": zod.string().describe('ISO 8601 event timestamp'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
-  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes (e.g. fixture, yahoo_delayed)'),
+  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes; LIVE is alpaca_live and historical truth is canonical-case-backed only.'),
+  "provenanceMode": zod.enum(['LIVE_SIP', 'HISTORICAL_FIXTURE']).describe('Verified provenance class applied by the source-policy boundary.'),
+  "caseRevisionId": zod.string().nullish().describe('Canonical immutable case revision for historical reads; absent for LIVE_SIP.'),
+  "evidenceHash": zod.string().nullish().describe('Evidence hash bound to the canonical historical case; absent for LIVE_SIP.'),
   "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullable().describe('Deterministic alert ladder level L1..L5, or null'),
   "l5Blocked": zod.boolean().describe('True when a hard L5 safety block is active'),
   "snapshot": zod.object({
@@ -760,7 +773,7 @@ export const ListHistoryEventsResponse = zod.array(ListHistoryEventsResponseItem
 
 
 /**
- * Returns metadata for a fixture-backed replay session (total steps, bar interval, session bounds). Research/practice only: replay never executes, simulates, routes, or paper-trades. Real paid historical feeds are out of scope (adapter hooks only).
+ * Returns canonical historical-case metadata after verified brain authorization. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Replay never executes, simulates, routes, or paper-trades.
  * @summary Load replay session metadata for a symbol/date
  */
 export const GetReplaySessionQueryParams = zod.object({
@@ -781,7 +794,7 @@ export const GetReplaySessionResponse = zod.object({
 
 
 /**
- * Computes one deterministic copilot event for a single replay step by replaying bars[0..step] through the SAME pipeline used for live reads. Returns the canonical CopilotEvent shape with mode REPLAY. Never returns order intent or any execution signal.
+ * After verified brain authorization, computes one deterministic event from a canonical case revision and evidence hash. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Never returns order intent.
  * @summary Build the deterministic copilot event at a replay step
  */
 export const getReplayEventQueryStepMin = 0;
@@ -799,7 +812,10 @@ export const GetReplayEventResponse = zod.object({
   "symbol": zod.string(),
   "timestamp": zod.string().describe('ISO 8601 event timestamp'),
   "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).describe('LIVE | REPLAY | RESEARCH'),
-  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes (e.g. fixture, yahoo_delayed)'),
+  "dataSource": zod.string().describe('Origin of the underlying bars\/quotes; LIVE is alpaca_live and historical truth is canonical-case-backed only.'),
+  "provenanceMode": zod.enum(['LIVE_SIP', 'HISTORICAL_FIXTURE']).describe('Verified provenance class applied by the source-policy boundary.'),
+  "caseRevisionId": zod.string().nullish().describe('Canonical immutable case revision for historical reads; absent for LIVE_SIP.'),
+  "evidenceHash": zod.string().nullish().describe('Evidence hash bound to the canonical historical case; absent for LIVE_SIP.'),
   "alertLevel": zod.union([zod.literal('L1'),zod.literal('L2'),zod.literal('L3'),zod.literal('L4'),zod.literal('L5'),zod.literal(null)]).nullable().describe('Deterministic alert ladder level L1..L5, or null'),
   "l5Blocked": zod.boolean().describe('True when a hard L5 safety block is active'),
   "snapshot": zod.object({
@@ -898,7 +914,7 @@ export const GetReplayEventResponse = zod.object({
 
 
 /**
- * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data.
+ * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read until verified brain authorization exists.
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 export const explainReplayEventQueryStepMin = 0;
@@ -942,7 +958,10 @@ export const ExplainReplayEventResponse = zod.object({
   "positionGuidance": zod.array(zod.string()),
   "riskNotes": zod.array(zod.string())
 }).describe('The single synthesized, dashboard-safe read. Research\/helper output only.'),
-  "warnings": zod.array(zod.string())
+  "warnings": zod.array(zod.string()),
+  "provenanceMode": zod.enum(['LIVE_SIP', 'HISTORICAL_FIXTURE']).describe('Verified provenance class inherited from the explained event.'),
+  "caseRevisionId": zod.string().nullish().describe('Canonical immutable case revision for historical reads; absent for LIVE_SIP.'),
+  "evidenceHash": zod.string().nullish().describe('Evidence hash bound to the canonical historical case; absent for LIVE_SIP.')
 }).describe('Full read-only analyst committee response for one deterministic event.')
 
 

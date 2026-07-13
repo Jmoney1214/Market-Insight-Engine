@@ -5,7 +5,7 @@ import { create } from "zustand";
 // fetched per step from the stateless replay API. This is a research/practice
 // tool — it never executes, simulates, routes, or paper-trades anything.
 
-export type DeskMode = "RESEARCH" | "REPLAY";
+export type DeskMode = "LIVE" | "RESEARCH" | "REPLAY";
 
 /** Playback speeds in bars per second. */
 export const REPLAY_SPEEDS = [1, 5, 10, 30] as const;
@@ -24,6 +24,7 @@ export interface ReplayState {
   playing: boolean;
   speed: ReplaySpeed;
 
+  setMode: (mode: DeskMode) => void;
   enterReplay: () => void;
   exitReplay: () => void;
   loadSession: (session: {
@@ -45,7 +46,7 @@ export interface ReplayState {
 }
 
 export const replayInitialState = {
-  mode: "RESEARCH" as DeskMode,
+  mode: "LIVE" as DeskMode,
   date: null as string | null,
   availableDates: [] as string[],
   step: 0,
@@ -57,9 +58,15 @@ export const replayInitialState = {
 export const useReplayStore = create<ReplayState>()((set) => ({
   ...replayInitialState,
 
+  setMode: (mode) =>
+    set((state) => ({
+      mode,
+      playing: mode === "REPLAY" ? state.playing : false,
+    })),
+
   enterReplay: () => set({ mode: "REPLAY" }),
 
-  exitReplay: () => set({ mode: "RESEARCH", playing: false }),
+  exitReplay: () => set({ mode: "LIVE", playing: false }),
 
   loadSession: ({ date, totalSteps, availableDates }) =>
     set((s) => ({

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createServer } from "./server.js";
@@ -31,6 +31,10 @@ async function connectedClient() {
 }
 
 describe("mcp gateway", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("registers exactly the read-only tool surface", async () => {
     const client = await connectedClient();
     const { tools } = await client.listTools();
@@ -55,5 +59,61 @@ describe("mcp gateway", () => {
     const client = await connectedClient();
     const result = await client.callTool({ name: "get_watchlist", arguments: {} });
     expect(result.isError).toBe(true);
+  });
+
+  it("does not accept fixture source or historical mode on ordinary live tools", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const client = await connectedClient();
+
+    const fixture = await client.callTool({
+      name: "get_copilot_event",
+      arguments: { symbol: "AAPL", source: "fixture" },
+    });
+    const replayMode = await client.callTool({
+      name: "get_copilot_event",
+      arguments: { symbol: "AAPL", mode: "REPLAY" },
+    });
+
+    expect(fixture.isError).toBe(true);
+    expect(replayMode.isError).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("calls the mounted copilot replay routes with required date and step", async () => {
+    const urls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      urls.push(String(input));
+      return new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
+    }));
+    const client = await connectedClient();
+
+    await client.callTool({
+      name: "get_replay_session",
+      arguments: { symbol: "AAPL", date: "2024-06-03" },
+    });
+    await client.callTool({
+      name: "get_replay_event",
+      arguments: { symbol: "AAPL", date: "2024-06-03", step: 4 },
+    });
+
+    expect(urls).toEqual([
+      "http://127.0.0.1:8080/api/copilot/replay/session?symbol=AAPL&date=2024-06-03",
+      "http://127.0.0.1:8080/api/copilot/replay/event?symbol=AAPL&date=2024-06-03&step=4",
+    ]);
+  });
+
+  it("rejects a replay request with no date before making an API call", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    const client = await connectedClient();
+
+    const result = await client.callTool({
+      name: "get_replay_event",
+      arguments: { symbol: "AAPL", step: 1 },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

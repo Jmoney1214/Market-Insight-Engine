@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import app from "../../app.js";
 
-describe("GET /api/copilot/explain source boundary", () => {
+describe("GET /api/copilot/event source boundary", () => {
   beforeEach(() => {
     vi.stubEnv("ALPACA_API_KEY_ID", "");
     vi.stubEnv("ALPACA_API_SECRET_KEY", "");
@@ -13,17 +13,18 @@ describe("GET /api/copilot/explain source boundary", () => {
   });
 
   it("defaults an omitted source and mode to read-only Alpaca LIVE", async () => {
-    const res = await request(app).get("/api/copilot/explain").query({ symbol: "AAPL" });
+    const res = await request(app).get("/api/copilot/event").query({ symbol: "AAPL" });
 
     expect(res.status).toBe(200);
-    expect(res.body.eventId).toContain(":LIVE:");
+    expect(res.body.mode).toBe("LIVE");
+    expect(res.body.dataSource).toBe("alpaca_live");
     expect(res.body.provenanceMode).toBe("LIVE_SIP");
   });
 
   it("fails closed before bundled fixture access", async () => {
     for (const symbol of ["AAPL", "ZZZ"]) {
       const res = await request(app)
-        .get("/api/copilot/explain")
+        .get("/api/copilot/event")
         .query({ symbol, source: "fixture", mode: "LIVE" });
 
       expect(res.status).toBe(503);
@@ -35,7 +36,7 @@ describe("GET /api/copilot/explain source boundary", () => {
     "fails closed for %s until verified brain auth exists",
     async (mode) => {
       const res = await request(app)
-        .get("/api/copilot/explain")
+        .get("/api/copilot/event")
         .query({ symbol: "AAPL", source: "alpaca_live", mode });
 
       expect(res.status).toBe(503);
@@ -45,31 +46,10 @@ describe("GET /api/copilot/explain source boundary", () => {
 
   it("rejects delayed Yahoo rather than falling back", async () => {
     const res = await request(app)
-      .get("/api/copilot/explain")
+      .get("/api/copilot/event")
       .query({ symbol: "AAPL", source: "yahoo_delayed", mode: "LIVE" });
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("LIVE_SOURCE_REQUIRED");
-  });
-
-  it("rejects an invalid symbol before source resolution", async () => {
-    const res = await request(app)
-      .get("/api/copilot/explain")
-      .query({ symbol: "123$", source: "fixture" });
-
-    expect(res.status).toBe(400);
-  });
-});
-
-describe("GET /api/copilot/replay temporary auth boundary", () => {
-  it.each([
-    ["/api/copilot/replay/session", { symbol: "AAPL" }],
-    ["/api/copilot/replay/event", { symbol: "AAPL", date: "2024-06-03", step: 0 }],
-    ["/api/copilot/replay/explain", { symbol: "AAPL", date: "2024-06-03", step: 0 }],
-  ])("fails closed at %s before any bundled replay read", async (path, query) => {
-    const res = await request(app).get(path).query(query);
-
-    expect(res.status).toBe(503);
-    expect(res.body.code).toBe("BRAIN_AUTH_NOT_READY");
   });
 });

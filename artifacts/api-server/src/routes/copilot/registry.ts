@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { STRATEGY_REGISTRY } from "@workspace/copilot-core";
+import { STRATEGY_REGISTRY } from "@workspace/copilot-core/runtime";
 import { ListStrategiesResponse } from "@workspace/api-zod";
 
 const router: IRouter = Router();

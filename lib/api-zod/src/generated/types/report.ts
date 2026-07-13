@@ -25,6 +25,8 @@ export interface Report {
   sector: string;
   industry: string;
   generatedAt: string;
+  /** Persisted provider provenance; never accepted from embedded reportData. */
+  source: string;
   /** BUY | HOLD | SELL | WATCH */
   overallRating: string;
   disclaimer: string;

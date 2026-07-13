@@ -6,10 +6,8 @@
  *   - FMP_API_KEY            Financial Modeling Prep (fundamentals, financials, news)
  *   - ALPACA_API_KEY_ID      Alpaca market-data key id
  *   - ALPACA_API_SECRET_KEY  Alpaca market-data secret
- *   - ALPACA_FEED            optional, "sip" (default) or "iex"
  *
- * When a provider's keys are absent the report assembler degrades gracefully
- * to mock data for that provider's sections, so the app still runs.
+ * Missing required provider data fails closed; no mock provider is substituted.
  */
 
 export const fmpApiKey = process.env["FMP_API_KEY"]?.trim() ?? "";
@@ -17,8 +15,8 @@ export const fmpApiKey = process.env["FMP_API_KEY"]?.trim() ?? "";
 export const alpacaKeyId = process.env["ALPACA_API_KEY_ID"]?.trim() ?? "";
 export const alpacaSecretKey = process.env["ALPACA_API_SECRET_KEY"]?.trim() ?? "";
 
-/** Alpaca data feed: "sip" (consolidated, paid) or "iex" (free). Defaults to sip. */
-export const alpacaFeed = (process.env["ALPACA_FEED"]?.trim() || "sip").toLowerCase();
+/** Consolidated SIP is the only permitted Alpaca market-data feed. */
+export const alpacaFeed = "sip" as const;
 
 export const hasFmp = fmpApiKey.length > 0;
 export const hasAlpaca = alpacaKeyId.length > 0 && alpacaSecretKey.length > 0;

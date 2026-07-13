@@ -14,4 +14,6 @@ export interface ReportSummary {
   generatedAt: string;
   /** BUY | HOLD | SELL | WATCH */
   overallRating: string;
+  /** Persisted provider provenance; legacy mock rows are omitted. */
+  source: string;
 }

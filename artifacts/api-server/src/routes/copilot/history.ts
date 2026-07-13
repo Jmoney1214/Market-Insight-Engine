@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, historyLogTable } from "@workspace/db";
 import { desc } from "drizzle-orm";
+import { hasTrustedEventProvenance } from "../../lib/sourcePolicy.js";
 
 const router: IRouter = Router();
 
@@ -12,15 +13,18 @@ router.get("/history", async (_req, res) => {
     .limit(100);
 
   res.json(
-    rows.map((r) => ({
-      id: r.id,
-      eventId: r.eventId ?? null,
-      symbol: r.symbol ?? null,
-      mode: r.mode,
-      alertLevel: r.alertLevel ?? null,
-      eventSnapshot: r.eventSnapshot,
-      createdAt: r.createdAt.toISOString(),
-    }))
+    rows.flatMap((row) => {
+      if (!hasTrustedEventProvenance(row.eventSnapshot)) return [];
+      return [{
+        id: row.id,
+        eventId: row.eventId ?? null,
+        symbol: row.symbol ?? null,
+        mode: row.mode,
+        alertLevel: row.alertLevel ?? null,
+        eventSnapshot: row.eventSnapshot,
+        createdAt: row.createdAt.toISOString(),
+      }];
+    }),
   );
 });
 

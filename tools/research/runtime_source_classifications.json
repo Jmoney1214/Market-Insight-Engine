@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "path": "lib/copilot-core/src/fixtures/index.ts",
+      "classification": "REPLAY_ONLY",
+      "rationale": "Synthetic historical bars are permitted only behind verified canonical replay cases.",
+      "owner": "copilot-core historical cases"
+    },
+    {
+      "path": "lib/copilot-core/src/replay.ts",
+      "classification": "REPLAY_ONLY",
+      "rationale": "Fixture replay construction is historical-only and must never enter a LIVE graph.",
+      "owner": "copilot-core replay"
+    },
+    {
+      "path": "lib/copilot-committee/src/mockProvider.ts",
+      "classification": "TEST_ONLY",
+      "rationale": "Deterministic provider double exists only for committee unit tests.",
+      "owner": "copilot-committee tests"
+    },
+    {
+      "path": "tools/research/test/fixtures/tv_trades_hims_rider.json",
+      "classification": "TEST_ONLY",
+      "rationale": "Captured TradingView adapter payload is consumed only by node:test fixtures.",
+      "owner": "research parity tests"
+    },
+    {
+      "path": "artifacts/mockup-sandbox",
+      "classification": "UI_DONOR",
+      "rationale": "Design sandbox components and generated previews are visual donors, not runtime truth.",
+      "owner": "desk UI design"
+    },
+    {
+      "path": "attached_assets",
+      "classification": "UI_DONOR",
+      "rationale": "Screenshots and pasted build prompts are design references, never market evidence.",
+      "owner": "desk UI design"
+    }
+  ]
+}

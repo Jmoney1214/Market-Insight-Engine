@@ -33,4 +33,3 @@ export { runAgents, readsToArray } from "./agents";
 export { synthesize } from "./synthesize";
 export { runCommittee } from "./orchestrator";
 export { safetyNetRead } from "./fallback";
-export { createMockProvider } from "./mockProvider";
