@@ -1,0 +1,19 @@
+id: transaction-cost-model
+version: 1.0.0
+description: Deterministic expected-cost decomposition (spread, impact, fees) per candidate/order from quote data.
+category: grading
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools: []
+read_scopes: ["market_snapshot:current"]
+write_scopes: ["cost_annotation:append"]
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 0
+  maximum_seconds: 5
+  maximum_cost_usd: 0
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/copilot-core/src/costModel.test.ts
+deterministic_guards: ["pure_function_no_io", "annotation_only_never_gates"]
+memory_policy: current_run_only

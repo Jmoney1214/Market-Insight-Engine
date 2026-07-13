@@ -1,0 +1,20 @@
+id: capital-flow-scanner
+version: 1.0.0
+description: Computes deterministic sector/flow context scores from market performance data and annotates scan candidates.
+category: scanner
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools:
+  - fmp.get_sector_performance
+read_scopes: ["universe:current"]
+write_scopes: ["flow_context:annotate"]
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 5
+  maximum_seconds: 30
+  maximum_cost_usd: 0
+failure_mode: RETURN_NOT_REQUIRED
+eval_suite: artifacts/api-server/src/lib/flowContext.test.ts
+deterministic_guards: ["annotation_only_never_gates"]
+memory_policy: current_run_only

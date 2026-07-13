@@ -223,3 +223,29 @@ export async function getDailyBars(symbol: string, days = 500): Promise<DailyBar
     volumes: bars.map((b) => Number(b["v"])),
   };
 }
+
+export type MarketNewsItem = {
+  id: string;
+  headline: string;
+  symbols: string[];
+  source: string;
+  url: string | null;
+  createdAt: string;
+};
+
+/** Market-wide news (no symbol filter) — feed for the news-event scanner. */
+export async function getMarketNews(limit = 50): Promise<MarketNewsItem[] | null> {
+  const url = new URL("https://data.alpaca.markets/v1beta1/news");
+  url.searchParams.set("limit", String(Math.min(limit, 50)));
+  url.searchParams.set("sort", "desc");
+  const data = await alpacaGet<{ news?: Array<Record<string, any>> }>(url);
+  if (!data?.news || data.news.length === 0) return null;
+  return data.news.map((n) => ({
+    id: String(n["id"] ?? ""),
+    headline: decodeEntities(String(n["headline"] ?? "")),
+    symbols: Array.isArray(n["symbols"]) ? n["symbols"].map(String) : [],
+    source: String(n["source"] ?? "Alpaca"),
+    url: n["url"] ? String(n["url"]) : null,
+    createdAt: String(n["created_at"] ?? ""),
+  }));
+}

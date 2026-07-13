@@ -1,0 +1,21 @@
+id: news-event-scanner
+version: 1.0.0
+description: Polls market-wide news, clusters headlines, preserves first-seen times, flags republications as stale.
+category: scanner
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools:
+  - news.get_market_news
+  - news_events.append
+read_scopes: ["news_events:recent"]
+write_scopes: ["news_events:append"]
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 10
+  maximum_seconds: 60
+  maximum_cost_usd: 0
+failure_mode: RETURN_UNKNOWN
+eval_suite: artifacts/api-server/src/lib/newsEvents.test.ts
+deterministic_guards: ["point_in_time_first_seen", "stale_on_republication", "never_blocks_scan"]
+memory_policy: current_run_only

@@ -317,3 +317,19 @@ export async function getEstimates(symbol: string): Promise<FmpEstimate | null> 
     epsAvg: Number(r["epsAvg"] ?? r["estimatedEpsAvg"] ?? 0),
   };
 }
+
+export type FmpSectorPerformance = { sector: string; changesPct: number };
+
+/** Day sector performance snapshot — feed for the capital-flow scanner. */
+export async function getSectorPerformance(): Promise<FmpSectorPerformance[] | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("sector-performance-snapshot");
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const out: FmpSectorPerformance[] = [];
+  for (const r of rows) {
+    const sector = String(r["sector"] ?? "");
+    const rawPct = r["changesPercentage"] ?? r["averageChange"] ?? r["changePercentage"];
+    const pct = typeof rawPct === "string" ? Number(rawPct.replace("%", "")) : Number(rawPct);
+    if (sector && Number.isFinite(pct)) out.push({ sector, changesPct: pct });
+  }
+  return out.length > 0 ? out : null;
+}

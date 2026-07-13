@@ -126,6 +126,9 @@ export function startScanScheduler(): void {
       } catch (err) {
         logger.warn({ err: String(err) }, "Scheduled scan failed");
       }
+      // News-event scanner: cluster market news, preserve first-seen times.
+      // Best-effort by rule — never blocks or fails the scan path.
+      void import("./newsEvents.js").then(({ recordNewsEvents }) => recordNewsEvents()).catch(() => {});
       return;
     }
 

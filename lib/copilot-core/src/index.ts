@@ -79,3 +79,4 @@ export type {
   EdgeThresholds,
   EdgeScore,
 } from "./edgeScoreboard";
+export * from "./costModel";
