@@ -22,6 +22,67 @@ interface CatalystPayload {
   publicationTime?: string | null;
 }
 
+/**
+ * Grades one specific finding immediately (backtest path — the event date is
+ * historical, so the window has already printed). Returns true when graded.
+ */
+export async function gradeEventStudyByRef(findingRef: string): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ id: findingGradesTable.id, symbol: findingGradesTable.symbol })
+      .from(findingGradesTable)
+      .where(and(eq(findingGradesTable.findingRef, findingRef), isNull(findingGradesTable.eventGradedAt)))
+      .limit(1);
+    const row = rows[0];
+    if (!row?.symbol) return false;
+
+    const objects = await db
+      .select({ payload: researchObjectsTable.payload })
+      .from(researchObjectsTable)
+      .where(
+        and(
+          eq(researchObjectsTable.objectType, "CatalystRecord"),
+          eq(researchObjectsTable.objectId, findingRef),
+        ),
+      )
+      .limit(1);
+    const payload = objects[0]?.payload as CatalystPayload | undefined;
+    const eventTime = payload?.firstKnownTime ?? payload?.publicationTime;
+    if (!eventTime || Date.now() - new Date(eventTime).getTime() < MIN_AGE_MS) return false;
+
+    const [market, stock] = await Promise.all([
+      alpaca.getDailyClosesDated("SPY"),
+      alpaca.getDailyClosesDated(row.symbol),
+    ]);
+    if (!market || !stock) return false;
+
+    const result = eventStudyFromCloses({ stock, market, eventDate: eventTime.slice(0, 10), eventDays: EVENT_WINDOW_DAYS });
+    if (!result) return false;
+
+    await db
+      .update(findingGradesTable)
+      .set({
+        eventCar: result.car,
+        eventTStat: result.tStat,
+        eventSignificant: result.significant,
+        eventStudy: {
+          alpha: result.alpha,
+          beta: result.beta,
+          estimationDays: result.estimationDays,
+          eventDays: result.eventDays,
+          abnormalReturns: result.abnormalReturns,
+          benchmark: "SPY",
+        },
+        eventGradedAt: new Date(),
+      })
+      .where(eq(findingGradesTable.id, rows[0]!.id));
+    return true;
+  } catch (err) {
+    logger.warn({ err: String(err), findingRef }, "Direct event-study grade failed (non-fatal)");
+    return false;
+  }
+}
+
 /** Grades up to `limit` pending catalyst rows; returns how many were graded. */
 export async function gradeEventStudies(limit = 20): Promise<number> {
   try {

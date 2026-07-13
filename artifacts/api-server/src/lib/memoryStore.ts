@@ -176,7 +176,14 @@ export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
         id: findingGradesTable.id,
       })
       .from(findingGradesTable)
-      .where(and(gte(findingGradesTable.gradedAt, since), sql`${findingGradesTable.findingRef} IS NOT NULL`))
+      .where(
+        and(
+          gte(findingGradesTable.gradedAt, since),
+          sql`${findingGradesTable.findingRef} IS NOT NULL`,
+          // Brain hygiene: backtest-generated grades never reinforce live memory.
+          sql`${findingGradesTable.runId} NOT LIKE 'backtest\_%'`,
+        ),
+      )
       .limit(200);
 
     let adjusted = 0;

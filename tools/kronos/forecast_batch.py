@@ -74,12 +74,18 @@ def scan_candidates() -> list[str]:
     return symbols[:12]
 
 
-def fetch_bars(symbol: str) -> pd.DataFrame | None:
-    start = (datetime.now(timezone.utc) - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+def fetch_bars(symbol: str, end: datetime | None = None) -> pd.DataFrame | None:
+    """Bars ending at `end` (backfill anchor) or now. Walk-forward safe: the
+    end bound guarantees a historical forecast never sees a future bar."""
+    end_dt = end or datetime.now(timezone.utc)
+    start = (end_dt - timedelta(days=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    params = {"timeframe": BAR_TIMEFRAME, "feed": "sip", "adjustment": "split",
+              "start": start, "limit": 10000}
+    if end is not None:
+        params["end"] = end_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     resp = requests.get(
         f"https://data.alpaca.markets/v2/stocks/{symbol}/bars",
-        params={"timeframe": BAR_TIMEFRAME, "feed": "sip", "adjustment": "split",
-                "start": start, "limit": 10000},
+        params=params,
         headers={"APCA-API-KEY-ID": ALPACA_KEY, "APCA-API-SECRET-KEY": ALPACA_SECRET},
         timeout=30,
     )
@@ -110,8 +116,9 @@ def bars_hash(df: pd.DataFrame) -> str:
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
-def forecast_symbol(predictor: KronosPredictor, symbol: str, run_id: str) -> dict | None:
-    df = fetch_bars(symbol)
+def forecast_symbol(predictor: KronosPredictor, symbol: str, run_id: str,
+                    end: datetime | None = None) -> dict | None:
+    df = fetch_bars(symbol, end)
     if df is None:
         print(f"  {symbol}: not enough bars, skipped")
         return None
@@ -161,17 +168,62 @@ def forecast_symbol(predictor: KronosPredictor, symbol: str, run_id: str) -> dic
     }
 
 
+def backfill_anchors() -> list[datetime]:
+    """KRONOS_BACKFILL='2026-06-01:2026-07-10' -> one 08:30 ET anchor per
+    weekday in the range. Walk-forward: each forecast sees only prior bars,
+    so backfilled calibration has zero look-ahead (Kronos sees bars, not news)."""
+    spec = os.environ.get("KRONOS_BACKFILL", "").strip()
+    if not spec or ":" not in spec:
+        return []
+    start_s, end_s = spec.split(":", 1)
+    day = datetime.fromisoformat(start_s).date()
+    end_day = datetime.fromisoformat(end_s).date()
+    anchors = []
+    while day <= end_day:
+        if day.weekday() < 5:  # Mon-Fri; holidays just yield thin bars and skip
+            anchors.append(datetime(day.year, day.month, day.day, 12, 30, tzinfo=timezone.utc))  # 08:30 ET
+        day += timedelta(days=1)
+    return anchors
+
+
+def post_forecasts(forecasts: list[dict]) -> None:
+    if not forecasts:
+        print("No forecasts produced.")
+        return
+    resp = requests.post(f"{MIE_API_URL}/api/kronos/forecasts", json=forecasts,
+                         headers=api_headers(), timeout=120)
+    print(f"Ingest: {resp.status_code} {resp.text[:300]}")
+
+
 def main() -> None:
     symbols = scan_candidates()
     if not symbols:
         print("No candidates to forecast.")
         return
-    print(f"Kronos premarket batch over {len(symbols)} symbols: {', '.join(symbols)}")
 
     tokenizer = KronosTokenizer.from_pretrained("NeoQuasar/Kronos-Tokenizer-base")
     model = Kronos.from_pretrained("NeoQuasar/Kronos-small")
     predictor = KronosPredictor(model, tokenizer, device="mps", max_context=512)
 
+    anchors = backfill_anchors()
+    if anchors:
+        # Walk-forward calibration backfill: run_ids carry the backtest_ label.
+        run_id = f"backtest_kronos_{uuid.uuid4().hex[:8]}"
+        print(f"Kronos BACKFILL over {len(anchors)} sessions x {len(symbols)} symbols")
+        forecasts = []
+        for anchor in anchors:
+            for symbol in symbols:
+                try:
+                    fc = forecast_symbol(predictor, symbol, run_id, end=anchor)
+                    if fc:
+                        forecasts.append(fc)
+                        print(f"  {anchor.date()} {symbol}: p_up={fc['p_up']:.2f}")
+                except Exception as err:
+                    print(f"  {anchor.date()} {symbol}: failed ({err})")
+        post_forecasts(forecasts)
+        return
+
+    print(f"Kronos premarket batch over {len(symbols)} symbols: {', '.join(symbols)}")
     run_id = f"kronos_{uuid.uuid4().hex[:8]}"
     forecasts = []
     for symbol in symbols:
@@ -182,13 +234,7 @@ def main() -> None:
                 print(f"  {symbol}: p_up={fc['p_up']:.2f} dispersion={fc['dispersion_pct']:.1f}%")
         except Exception as err:  # one bad symbol never kills the batch
             print(f"  {symbol}: failed ({err})")
-
-    if not forecasts:
-        print("No forecasts produced.")
-        return
-    resp = requests.post(f"{MIE_API_URL}/api/kronos/forecasts", json=forecasts,
-                         headers=api_headers(), timeout=60)
-    print(f"Ingest: {resp.status_code} {resp.text[:300]}")
+    post_forecasts(forecasts)
 
 
 if __name__ == "__main__":

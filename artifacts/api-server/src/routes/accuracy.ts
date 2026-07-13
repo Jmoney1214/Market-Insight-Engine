@@ -10,8 +10,17 @@ const router: IRouter = Router();
  * minimum sample count report ranked:false rather than an extrapolated score.
  */
 router.get("/research/accuracy", async (req, res) => {
+  const raw = String(req.query["source"] ?? "live");
+  const source = raw === "backtest" || raw === "all" ? raw : "live";
   try {
-    res.json({ windowDays: 30, agents: await computeAgentAccuracy() });
+    res.json({
+      windowDays: 30,
+      source,
+      // Backtest-sourced grades ran LLM judges over historical events the
+      // models may remember — treat those scores as contamination-prone.
+      contaminationWarning: source === "live" ? null : "backtest grades include LLM look-ahead risk",
+      agents: await computeAgentAccuracy({ source }),
+    });
   } catch (err) {
     req.log.error({ err }, "Accuracy ranking failed");
     res.status(500).json({ error: "Accuracy ranking failed." });
