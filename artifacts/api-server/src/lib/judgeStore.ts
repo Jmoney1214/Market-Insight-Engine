@@ -1,11 +1,11 @@
 /**
  * Judge-panel wiring: builds independent judges from the configured LLM
  * backbones, grades a research run's catalyst records, and lands scores in
- * judge_grades. Two providers configured → two different backbones judge;
+ * the unified finding_grades ledger. Two providers configured → two different backbones judge;
  * one provider → its quick AND deep tiers judge (still independent runs).
  * Best-effort: grading failure never affects the research response.
  */
-import { db, judgeGradesTable } from "@workspace/db";
+import { db, findingGradesTable } from "@workspace/db";
 import { gradeFinding, type FindingGrade, type JudgeProvider } from "@workspace/research-agents";
 import type { LeadRunResult } from "@workspace/research-agents";
 import {
@@ -74,16 +74,19 @@ export async function judgeLeadRun(result: LeadRunResult): Promise<FindingGrade[
     }
 
     if (grades.length > 0) {
-      await db.insert(judgeGradesTable).values(
+      // Unified ledger row: ex-ante judge columns now; the outcome grader
+      // fills grade/realized columns on this row after the window closes.
+      await db.insert(findingGradesTable).values(
         grades.map((g) => ({
           findingType: g.findingType,
-          findingId: g.findingId,
+          findingRef: g.findingId,
           symbol: g.symbol,
           runId: packet.provenance.runId,
           packetId: packet.packetId,
-          medianScore: g.medianScore,
+          judgeMedianScore: g.medianScore,
           judgeCount: g.judgeCount,
-          scores: g.scores,
+          judgeScores: g.scores,
+          judgedAt: new Date(),
         })),
       );
     }

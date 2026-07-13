@@ -8,7 +8,7 @@ model_policy:
 allowed_tools:
   - grades.read_rubric
 read_scopes: ["catalyst_record:current_run", "source_audit:current_run"]
-write_scopes: ["judge_grades:append"]
+write_scopes: ["finding_grades:append"]
 budgets:
   maximum_model_calls: 3
   maximum_tool_calls: 6
