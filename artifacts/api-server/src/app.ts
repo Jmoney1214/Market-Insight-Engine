@@ -27,7 +27,9 @@ app.use(
   }),
 );
 app.use(cors());
-app.use(express.json());
+// 5mb: a Kronos backfill batch (90 forecasts x full quantile paths) is ~1mb;
+// the express default of 100kb bounced it with a 413.
+app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: true }));
 
 // Per-agent identity + append-only audit (enforcement off by default — see agentAuth.ts).

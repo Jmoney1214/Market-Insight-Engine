@@ -207,13 +207,24 @@ def backfill_anchors() -> list[datetime]:
     return anchors
 
 
+INGEST_CHUNK = 20  # keep each POST comfortably under the API body limit
+
+
 def post_forecasts(forecasts: list[dict]) -> None:
     if not forecasts:
         print("No forecasts produced.")
         return
-    resp = requests.post(f"{MIE_API_URL}/api/kronos/forecasts", json=forecasts,
-                         headers=api_headers(), timeout=120)
-    print(f"Ingest: {resp.status_code} {resp.text[:300]}")
+    stored = 0
+    for i in range(0, len(forecasts), INGEST_CHUNK):
+        chunk = forecasts[i:i + INGEST_CHUNK]
+        resp = requests.post(f"{MIE_API_URL}/api/kronos/forecasts", json=chunk,
+                             headers=api_headers(), timeout=120)
+        if resp.ok:
+            stored += resp.json().get("stored", 0)
+            print(f"Ingest chunk {i // INGEST_CHUNK + 1}: {resp.status_code} stored={resp.json().get('stored')}")
+        else:
+            print(f"Ingest chunk {i // INGEST_CHUNK + 1} FAILED: {resp.status_code} {resp.text[:300]}")
+    print(f"Ingest complete: {stored}/{len(forecasts)} stored")
 
 
 def main() -> None:
