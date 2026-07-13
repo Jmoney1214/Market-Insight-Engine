@@ -1,8 +1,12 @@
+import "./loadEnv"; // MUST be first: lib/db throws at import time without DATABASE_URL
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScanScheduler } from "./lib/scan";
 
-const rawPort = process.env["PORT"];
+// Local dev runs on 8080 by default (the runbook's port); production still
+// requires an explicit PORT so a misconfigured deploy fails loudly.
+const rawPort =
+  process.env["PORT"] ?? (process.env["NODE_ENV"] === "development" ? "8080" : undefined);
 
 if (!rawPort) {
   throw new Error(
