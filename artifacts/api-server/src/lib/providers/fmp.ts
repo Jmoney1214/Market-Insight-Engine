@@ -333,3 +333,39 @@ export async function getSectorPerformance(): Promise<FmpSectorPerformance[] | n
   }
   return out.length > 0 ? out : null;
 }
+
+export type FmpEconomicEvent = {
+  event: string;
+  date: string;
+  country: string;
+  actual: number | null;
+  estimate: number | null;
+  impact: string | null;
+  unit: string | null;
+};
+
+/** Economic calendar window — feed for the macro trigger router. */
+export async function getEconomicCalendar(from: string, to: string): Promise<FmpEconomicEvent[] | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("economic-calendar", { from, to });
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+  const out: FmpEconomicEvent[] = [];
+  for (const r of rows) {
+    const event = String(r["event"] ?? "");
+    const date = String(r["date"] ?? "");
+    if (!event || !date) continue;
+    const num = (v: unknown): number | null => {
+      const n = typeof v === "string" ? Number(v.replace(/[%,]/g, "")) : Number(v);
+      return Number.isFinite(n) ? n : null;
+    };
+    out.push({
+      event,
+      date,
+      country: String(r["country"] ?? ""),
+      actual: num(r["actual"]),
+      estimate: num(r["estimate"] ?? r["consensus"]),
+      impact: r["impact"] != null ? String(r["impact"]) : null,
+      unit: r["unit"] != null ? String(r["unit"]) : null,
+    });
+  }
+  return out.length > 0 ? out : null;
+}

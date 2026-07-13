@@ -10,3 +10,4 @@ export * from "./breakoutCandidates";
 export * from "./agentAudit";
 export * from "./agentRuns";
 export * from "./newsEvents";
+export * from "./researchPackets";

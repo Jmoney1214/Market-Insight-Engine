@@ -43,6 +43,7 @@ import {
   getSentimentProvider,
 } from "./researchProviders.js";
 import { blocksFromNewsRows } from "./sentimentContext.js";
+import { mapEconomicCalendar } from "./macroCalendar.js";
 import * as fmp from "./providers/fmp.js";
 import { logger } from "./logger.js";
 
@@ -233,8 +234,18 @@ export async function runResearch(symbol: string, mode: ResearchMode): Promise<L
       } catch {
         indexMovePct = null;
       }
-      // No macro-calendar adapter yet — windows can only trigger via the tape.
-      const trigger = shouldRunMacro({ now, calendar: [], indexMovePct });
+      // FMP economic calendar: yesterday → +2 days covers the router's
+      // after/before windows; unavailable calendar degrades to tape-only.
+      let calendar: ReturnType<typeof mapEconomicCalendar> = [];
+      try {
+        const day = 86_400_000;
+        const dateOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+        const rows = await fmp.getEconomicCalendar(dateOf(Date.now() - day), dateOf(Date.now() + 2 * day));
+        calendar = rows ? mapEconomicCalendar(rows) : [];
+      } catch {
+        calendar = [];
+      }
+      const trigger = shouldRunMacro({ now, calendar, indexMovePct });
       return buildMacroContext({ macroContextId: `macro_${runId}`, trigger, now });
     },
 
