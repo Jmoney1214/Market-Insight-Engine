@@ -9,6 +9,7 @@
  */
 import type { MacroCalendarEvent } from "@workspace/research-agents";
 import type { FmpEconomicEvent } from "./providers/fmp.js";
+import { etOffset } from "./etTime.js";
 
 /** Release families the macro router cares about, by canonical event type. */
 const EVENT_FAMILIES: Array<{ eventType: string; pattern: RegExp }> = [
@@ -29,11 +30,14 @@ export function classifyEconomicEvent(eventName: string): string | null {
   return family ? family.eventType : null;
 }
 
-/** FMP dates are US/Eastern wall-clock ("YYYY-MM-DD HH:mm:ss"); tag them ET. */
+/**
+ * FMP dates are US/Eastern wall-clock ("YYYY-MM-DD HH:mm:ss"); tag them with
+ * the DST-correct offset for that date (EDT -04:00 / EST -05:00).
+ */
 export function fmpDateToIso(date: string): string | null {
   const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::\d{2})?$/.exec(date.trim());
   if (!m) return null;
-  return `${m[1]}T${m[2]}:00-04:00`;
+  return `${m[1]}T${m[2]}:00${etOffset(m[1]!)}`;
 }
 
 /** Pure: FMP rows → router calendar events (US, recognized families only). */

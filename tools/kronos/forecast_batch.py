@@ -30,6 +30,9 @@ import os
 import sys
 import uuid
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
 
 import numpy as np
 import pandas as pd
@@ -54,7 +57,8 @@ MODEL_VERSION = "kronos-small-fork-1"
 def api_headers() -> dict:
     headers = {"content-type": "application/json"}
     if MIE_API_TOKEN:
-        headers["x-agent-token"] = MIE_API_TOKEN
+        # agentAuth reads "Authorization: Bearer <token>" — nothing else.
+        headers["Authorization"] = f"Bearer {MIE_API_TOKEN}"
     return headers
 
 
@@ -65,12 +69,14 @@ def scan_candidates() -> list[str]:
     resp = requests.get(f"{MIE_API_URL}/api/scan/premarket", headers=api_headers(), timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    picks = data.get("picks") or data.get("candidates") or []
-    symbols = []
-    for p in picks:
-        sym = p.get("symbol") or p.get("ticker") if isinstance(p, dict) else None
-        if sym:
-            symbols.append(str(sym).upper())
+    # ScanResult shape: topIntraday / likelyJump / likelyFall, each a list of
+    # ScanCandidate objects carrying `symbol`.
+    symbols: list[str] = []
+    for key in ("topIntraday", "likelyJump", "likelyFall"):
+        for p in data.get(key) or []:
+            sym = p.get("symbol") if isinstance(p, dict) else None
+            if sym and str(sym).upper() not in symbols:
+                symbols.append(str(sym).upper())
     return symbols[:12]
 
 
@@ -105,6 +111,18 @@ def fetch_bars(symbol: str, end: datetime | None = None) -> pd.DataFrame | None:
         }
     )
     return df.tail(LOOKBACK_BARS).reset_index(drop=True)
+
+
+def session_label(ts: datetime) -> str:
+    """DST-correct session from the ET wall clock (a fixed UTC-hour cutoff is
+    wrong in both halves of the year)."""
+    et = ts.astimezone(ET)
+    minutes = et.hour * 60 + et.minute
+    if minutes < 9 * 60 + 30:
+        return "PRE"
+    if minutes < 16 * 60:
+        return "RTH"
+    return "POST"
 
 
 def bars_hash(df: pd.DataFrame) -> str:
@@ -152,7 +170,7 @@ def forecast_symbol(predictor: KronosPredictor, symbol: str, run_id: str,
         "symbol": symbol,
         "anchor_ts": anchor_ts.isoformat(),
         "anchor_price": anchor_price,
-        "session": "PRE" if anchor_ts.astimezone(timezone.utc).hour < 14 else "RTH",
+        "session": session_label(anchor_ts),
         "bar_timeframe": BAR_TIMEFRAME,
         "horizon_bars": HORIZON_BARS,
         "window_end_ts": window_end.isoformat(),
@@ -181,7 +199,10 @@ def backfill_anchors() -> list[datetime]:
     anchors = []
     while day <= end_day:
         if day.weekday() < 5:  # Mon-Fri; holidays just yield thin bars and skip
-            anchors.append(datetime(day.year, day.month, day.day, 12, 30, tzinfo=timezone.utc))  # 08:30 ET
+            # 08:30 ET WALL CLOCK for that date — DST-correct via zoneinfo,
+            # never a fixed UTC hour (12:30Z is 07:30 ET all winter).
+            et_anchor = datetime(day.year, day.month, day.day, 8, 30, tzinfo=ET)
+            anchors.append(et_anchor.astimezone(timezone.utc))
         day += timedelta(days=1)
     return anchors
 

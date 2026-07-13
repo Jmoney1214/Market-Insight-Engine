@@ -62,6 +62,10 @@ export function objectsFromLeadRun(result: LeadRunResult): StorableObject[] {
     ...result.catalystRecords.map((r) => ({
       objectType: "CatalystRecord", objectId: r.catalystId, objectVersion: r.version, payload: r as unknown as Record<string, unknown>,
     })),
+    // Secondary verifications persist too — accuracy ranking needs them.
+    ...result.secondaryCatalysts.map((r) => ({
+      objectType: "CatalystRecord", objectId: r.catalystId, objectVersion: r.version, payload: r as unknown as Record<string, unknown>,
+    })),
     ...result.claims.map((c) => ({
       objectType: "Claim", objectId: c.claimId, objectVersion: c.version, payload: c as unknown as Record<string, unknown>,
     })),
@@ -148,7 +152,17 @@ export async function persistLeadRun(result: LeadRunResult): Promise<boolean> {
       })
       .onConflictDoUpdate({
         target: agentRunsTable.runId,
-        set: { status: "completed", endedAt: new Date() },
+        // startAgentRun opens the row first, so this update path is the norm:
+        // land provenance (reproducibility invariant) and clear the mid-run
+        // resume checkpoint — a completed run must never offer stale state.
+        set: {
+          status: "completed",
+          endedAt: new Date(),
+          configHash: packet.provenance.configHash,
+          gitSha: packet.provenance.gitSha,
+          agentVersion: packet.provenance.leadAgentVersion,
+          checkpoint: null,
+        },
       });
 
     return true;

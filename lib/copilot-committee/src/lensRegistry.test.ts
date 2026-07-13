@@ -60,3 +60,20 @@ describe("runAgents with a lens selection", () => {
     expect(reads.memory.warnings).toEqual([]);
   });
 });
+
+describe("deselection semantics (not-selected ≠ feed-down)", () => {
+  it("deselected lenses are excluded from bull/bear/risk inputs entirely", () => {
+    // With everything deselected except technical, the risk critic must not
+    // emit missing-feed warnings for order_flow/catalyst — they were skipped
+    // by plan, not down.
+    const planned = runAgents(event(), { lensSelection: ["technical"] });
+    const all = runAgents(event());
+    const missingFeedWarnings = (reads: ReturnType<typeof runAgents>) =>
+      reads.riskCritic.warnings.filter((w) => /unconfirmed|missing/i.test(w));
+    // The planner-skipped run must not have MORE data-quality warnings than
+    // the full run (skipping lenses can only remove inputs, never add risk).
+    expect(missingFeedWarnings(planned).length).toBeLessThanOrEqual(missingFeedWarnings(all).length);
+    // And the placeholders still render for the API payload.
+    expect(planned.orderFlow.headline).toContain("Not selected");
+  });
+});

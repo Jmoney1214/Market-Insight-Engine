@@ -51,26 +51,41 @@ import { persistLeadRun } from "./researchStore.js";
 import { judgeLeadRun } from "./judgeStore.js";
 import { gradeEventStudyByRef } from "./eventStudyGrader.js";
 import { clusterKey } from "./newsEvents.js";
+import { etEpochMs, etIso } from "./etTime.js";
 import { mapEconomicCalendar } from "./macroCalendar.js";
 import * as alpaca from "./providers/alpaca.js";
 import type { MarketNewsItem } from "./providers/alpaca.js";
 import * as fmp from "./providers/fmp.js";
 import { logger } from "./logger.js";
 
-const CUTOFF_ET = "08:30:00-04:00";
 const NEWS_LOOKBACK_HOURS = 48;
+/** Event window (3d) + weekend slack must have printed before we grade. */
+const UNIVERSE_MIN_AGE_DAYS = 7;
 
-/** Pure: filings accepted strictly before the cutoff (PIT discipline). */
+/**
+ * Pure: filings accepted strictly before the cutoff (PIT discipline).
+ * Timestamps are compared as EPOCH MS, never as strings — sources arrive in
+ * mixed offsets (EDGAR ET-offset stamps, Alpaca Zulu) and lexicographic
+ * comparison across formats silently drops the premarket window.
+ */
 export function filingsAsOf(refs: EdgarFilingRef[], cutoffIso: string): EdgarFilingRef[] {
-  return refs.filter((r) => r.acceptanceDateTime != null && r.acceptanceDateTime <= cutoffIso);
+  const cutoffMs = Date.parse(cutoffIso);
+  return refs.filter((r) => {
+    if (r.acceptanceDateTime == null) return false; // unknown time → never assume
+    const t = Date.parse(r.acceptanceDateTime);
+    return Number.isFinite(t) && t <= cutoffMs;
+  });
 }
 
-/** Pure: historical news items → catalyst news-cluster evidence (deduped). */
+/** Pure: historical news items → catalyst news-cluster evidence (deduped, epoch-ms cutoff). */
 export function newsToClusters(items: MarketNewsItem[], cutoffIso: string): NewsClusterEvidence[] {
+  const cutoffMs = Date.parse(cutoffIso);
   const seen = new Set<string>();
   const out: NewsClusterEvidence[] = [];
   for (const item of items) {
-    if (!item.headline || !item.createdAt || item.createdAt > cutoffIso) continue;
+    if (!item.headline || !item.createdAt) continue;
+    const t = Date.parse(item.createdAt);
+    if (!Number.isFinite(t) || t > cutoffMs) continue;
     const key = clusterKey(item.headline);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -111,14 +126,20 @@ async function updateBatch(batchId: string, progress: BatchProgress): Promise<vo
     .update(agentRunsTable)
     .set({
       checkpoint: progress,
-      status: progress.status === "running" ? "running" : progress.status,
+      status: progress.status,
       ...(progress.status !== "running" ? { endedAt: new Date() } : {}),
     })
     .where(eq(agentRunsTable.runId, batchId));
 }
 
-/** Historical scan picks: top-K by score per recent graded session. */
+/**
+ * Historical scan picks: top-K by score per graded session, EXCLUDING the
+ * most recent week — the 3-day event-study window must already have printed
+ * or every candidate's deterministic grade would be skipped as too fresh.
+ */
 async function pickUniverse(days: number, symbolsPerDay: number): Promise<Array<{ date: string; symbol: string; hit: boolean | null; changePct: number | null }>> {
+  const maxDate = new Date(Date.now() - UNIVERSE_MIN_AGE_DAYS * 86_400_000)
+    .toLocaleDateString("en-CA", { timeZone: "America/New_York" });
   const rows = await db
     .select({
       scanDate: scanScorecardTable.scanDate,
@@ -128,7 +149,7 @@ async function pickUniverse(days: number, symbolsPerDay: number): Promise<Array<
       changePct: scanScorecardTable.changePct,
     })
     .from(scanScorecardTable)
-    .where(isNotNull(scanScorecardTable.gradedAt))
+    .where(and(isNotNull(scanScorecardTable.gradedAt), sql`${scanScorecardTable.scanDate} <= ${maxDate}`))
     .orderBy(desc(scanScorecardTable.scanDate), desc(scanScorecardTable.score))
     .limit(days * 40);
 
@@ -156,8 +177,8 @@ async function runCandidate(
   symbol: string,
   mode: ResearchMode,
 ): Promise<LeadRunResult> {
-  const cutoff = `${date}T${CUTOFF_ET}`;
-  const expiresAt = `${date}T16:00:00-04:00`;
+  const cutoff = etIso(date, "08:30:00"); // DST-correct, never a hardcoded offset
+  const expiresAt = etIso(date, "16:00:00");
   const runId = `${batchId}_${date.replace(/-/g, "")}_${symbol}`;
 
   // --- evidence strictly as-of the cutoff ---
@@ -251,9 +272,13 @@ async function runCandidate(
       } catch {
         calendar = [];
       }
-      // PIT honesty: hide prints that were not yet out at the cutoff.
+      // PIT honesty: hide prints that were not yet out at the cutoff
+      // (epoch-ms comparison — offsets vary across sources and DST).
+      const cutoffMs = Date.parse(cutoff);
       calendar = calendar.map((e) =>
-        e.scheduledTime != null && e.scheduledTime > cutoff ? { ...e, reportedValue: null, revisionStatus: "UNKNOWN" as const } : e,
+        e.scheduledTime != null && Date.parse(e.scheduledTime) > cutoffMs
+          ? { ...e, reportedValue: null, revisionStatus: "UNKNOWN" as const }
+          : e,
       );
       const trigger = shouldRunMacro({ now: cutoff, calendar, indexMovePct: null });
       return buildMacroContext({ macroContextId: `macro_${runId}`, trigger, now: cutoff });
@@ -267,8 +292,8 @@ async function runCandidate(
 /** Deterministic committee read at the cutoff — NO provider, zero leakage. */
 async function committeeReadAt(date: string, symbol: string): Promise<string | null> {
   try {
-    const cutoffMs = new Date(`${date}T${CUTOFF_ET}`).getTime();
-    const dayStart = new Date(`${date}T04:00:00-04:00`).toISOString();
+    const cutoffMs = etEpochMs(date, "08:30:00");
+    const dayStart = new Date(etEpochMs(date, "04:00:00")).toISOString();
     const bars = await alpaca.getIntradayBars5m(symbol, dayStart, new Date(cutoffMs).toISOString());
     if (!bars || bars.length === 0) return null;
     const last = bars[bars.length - 1]!;
@@ -317,6 +342,8 @@ export async function startResearchBacktest(opts: StartBacktestOptions): Promise
   // Fire-and-forget: progress is pollable at GET /api/research/backtest/:id.
   void (async () => {
     try {
+      // One SPY series serves every event-study grade in the batch.
+      const market = await alpaca.getDailyClosesDated("SPY").catch(() => null);
       for (const candidate of universe) {
         progress.current = `${candidate.date} ${candidate.symbol}`;
         await updateBatch(batchId, progress);
@@ -325,7 +352,14 @@ export async function startResearchBacktest(opts: StartBacktestOptions): Promise
         await persistLeadRun(result); // labeled by the backtest_ run id
         const grades = await judgeLeadRun(result);
         const primaryCatalyst = result.catalystRecords[0] ?? null;
-        const eventStudied = primaryCatalyst ? await gradeEventStudyByRef(primaryCatalyst.catalystId) : false;
+        const eventStudied = primaryCatalyst
+          ? await gradeEventStudyByRef(primaryCatalyst.catalystId, {
+              symbol: candidate.symbol,
+              runId: result.packet.provenance.runId,
+              packetId: result.packet.packetId,
+              market,
+            })
+          : false;
         const committeeRecommendation = await committeeReadAt(candidate.date, candidate.symbol);
 
         progress.results.push({

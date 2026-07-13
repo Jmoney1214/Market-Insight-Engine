@@ -19,6 +19,7 @@ import {
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
 import { getSentimentLensInput } from "../../lib/sentimentContext.js";
+import { getDecisionMemory } from "../../lib/memoryStore.js";
 import { planLenses } from "../../lib/committeePlanner.js";
 
 const router: IRouter = Router();
@@ -63,12 +64,17 @@ router.get("/explain", async (req, res) => {
   }
   const liveSource = source === "alpaca_live" ? ALPACA_SOURCE : INTRADAY_SOURCE;
 
-  // Grounded news-only sentiment for the 11th lens — LIVE reads only (replay
-  // never gets current sentiment: that would be look-ahead contamination).
-  const sentiment = await getSentimentLensInput(symbolUpper).catch(() => null);
-  // Decision memory (DeepFund): last research verdicts on this ticker.
-  const { getDecisionMemory } = await import("../../lib/memoryStore.js");
-  const decisionMemory = await getDecisionMemory(symbolUpper).catch(() => []);
+  // Grounded news-only sentiment + decision memory for the committee — LIVE
+  // reads ONLY, enforced here: a REPLAY/RESEARCH read of historical bars must
+  // never receive present-day context (look-ahead contamination). Fetched in
+  // parallel; both are independent of the market-data fetch below.
+  const isLiveRead = (mode ?? "LIVE") === "LIVE";
+  const [sentiment, decisionMemory] = isLiveRead
+    ? await Promise.all([
+        getSentimentLensInput(symbolUpper).catch(() => null),
+        getDecisionMemory(symbolUpper).catch(() => [] as string[]),
+      ])
+    : [null, [] as string[]];
 
   try {
     const input =

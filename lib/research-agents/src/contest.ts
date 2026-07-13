@@ -24,6 +24,12 @@ export interface ContestResult {
   agreed: boolean;
   /** Primary record when agreed; primary marked CONFLICTED (+conflictIds) when not. */
   record: CatalystRecord;
+  /**
+   * The independent second verification, returned so it is persisted and
+   * judged in its own right — without it, second-verifier accuracy can never
+   * be measured (the merged record always keeps the primary's identity).
+   */
+  secondary: CatalystRecord;
   conflicts: Conflict[];
   disagreeingFields: ContestedField[];
 }
@@ -48,7 +54,7 @@ export function resolveContest(input: {
   );
 
   if (disagreeingFields.length === 0) {
-    return { agreed: true, record: primary, conflicts: [], disagreeingFields: [] };
+    return { agreed: true, record: primary, secondary, conflicts: [], disagreeingFields: [] };
   }
 
   const conflicts: Conflict[] = disagreeingFields.map((field, i) => ({
@@ -71,5 +77,5 @@ export function resolveContest(input: {
     conflictIds: [...primary.conflictIds, ...conflicts.map((c) => c.conflictId)],
   };
 
-  return { agreed: false, record, conflicts, disagreeingFields: [...disagreeingFields] };
+  return { agreed: false, record, secondary, conflicts, disagreeingFields: [...disagreeingFields] };
 }

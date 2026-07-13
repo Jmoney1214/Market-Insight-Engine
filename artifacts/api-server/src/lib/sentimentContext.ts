@@ -9,7 +9,7 @@
  * renders UNAVAILABLE. Never fabricated, never blocking.
  */
 import { db, newsEventsTable } from "@workspace/db";
-import { gte, desc } from "drizzle-orm";
+import { and, gte, desc, sql } from "drizzle-orm";
 import { readSentiment, type GroundedBlock } from "@workspace/research-agents";
 import type { SentimentReading } from "@workspace/research-contracts";
 import type { SentimentLensInput } from "@workspace/copilot-committee";
@@ -68,6 +68,9 @@ export async function getSentimentLensInput(symbol: string): Promise<SentimentLe
   let value: SentimentLensInput | null = null;
   try {
     const since = new Date(Date.now() - NEWS_WINDOW_HOURS * 3_600_000);
+    // Symbol filter in SQL (jsonb containment): a newest-500 JS filter both
+    // over-fetched and could starve a symbol whose news fell below the cutoff
+    // on a busy day.
     const rows = await db
       .select({
         clusterKey: newsEventsTable.clusterKey,
@@ -76,9 +79,9 @@ export async function getSentimentLensInput(symbol: string): Promise<SentimentLe
         firstSeen: newsEventsTable.firstSeen,
       })
       .from(newsEventsTable)
-      .where(gte(newsEventsTable.firstSeen, since))
+      .where(and(gte(newsEventsTable.firstSeen, since), sql`${newsEventsTable.symbols} @> ${JSON.stringify([symbol])}::jsonb`))
       .orderBy(desc(newsEventsTable.firstSeen))
-      .limit(500);
+      .limit(50);
 
     const blocks = blocksFromNewsRows(rows, symbol);
     const reading = await readSentiment({

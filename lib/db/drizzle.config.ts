@@ -16,5 +16,5 @@ export default defineConfig({
   // (unified judge + outcome grade ledger) but stays excluded from push OWNERSHIP alongside the
   // others: schema changes to them go through explicit Supabase migrations only, so a
   // `drizzle-kit push --force` can never drop or reshape live data it doesn't own.
-  tablesFilter: ["!agent_findings", "!finding_grades", "!research_runs"],
+  tablesFilter: ["!agent_findings", "!finding_grades", "!research_runs", "!kronos_forecasts"],
 });

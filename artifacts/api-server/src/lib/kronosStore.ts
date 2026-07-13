@@ -6,7 +6,7 @@
  * Desk — the gate is code, not a preference.
  */
 import { z } from "zod/v4";
-import { and, desc, eq, gte, isNull, isNotNull, lt } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, isNotNull, lt, notLike } from "drizzle-orm";
 import { db, kronosForecastsTable } from "@workspace/db";
 import {
   calibrationReport,
@@ -117,9 +117,20 @@ export async function gradeKronosForecasts(limit = 50): Promise<number> {
 }
 
 const CALIBRATION_WINDOW_DAYS = 90;
+const CALIBRATION_CACHE_TTL_MS = 60_000;
+const calibrationCache = new Map<string, { at: number; report: CalibrationReport }>();
 
-/** Rolling calibration over graded forecasts (per model version). */
+/**
+ * Rolling calibration over graded forecasts (per model version). Cached for
+ * 60s — grading only happens on the hourly after-close sweep, and the Desk
+ * polls this on every forecast request. Walk-forward BACKFILL rows count
+ * here by design: bars-only forecasts have no look-ahead, and earning the
+ * gate from history is the backfill's whole purpose.
+ */
 export async function getCalibration(modelVersion?: string): Promise<CalibrationReport> {
+  const cacheKey = modelVersion ?? "*";
+  const hit = calibrationCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < CALIBRATION_CACHE_TTL_MS) return hit.report;
   const since = new Date(Date.now() - CALIBRATION_WINDOW_DAYS * 86_400_000);
   const conditions = [isNotNull(kronosForecastsTable.gradedAt), gte(kronosForecastsTable.createdAt, since)];
   if (modelVersion) conditions.push(eq(kronosForecastsTable.modelVersion, modelVersion));
@@ -129,7 +140,7 @@ export async function getCalibration(modelVersion?: string): Promise<Calibration
     .where(and(...conditions))
     .limit(2000);
 
-  return calibrationReport(
+  const report = calibrationReport(
     rows
       .filter((r) => r.hit != null && r.brier != null && r.realizedMovePct != null)
       .map((r) => ({
@@ -137,6 +148,8 @@ export async function getCalibration(modelVersion?: string): Promise<Calibration
         grade: { hit: r.hit!, brier: r.brier!, realizedUp: r.realizedMovePct! > 0 },
       })),
   );
+  calibrationCache.set(cacheKey, { at: Date.now(), report });
+  return report;
 }
 
 export interface GatedForecastResponse {
@@ -156,7 +169,14 @@ export async function getGatedForecast(symbol: string): Promise<GatedForecastRes
   const rows = await db
     .select()
     .from(kronosForecastsTable)
-    .where(eq(kronosForecastsTable.symbol, symbol))
+    .where(
+      and(
+        eq(kronosForecastsTable.symbol, symbol),
+        // Backfill rows calibrate the gate but are weeks-old anchors — the
+        // Desk's "latest forecast" must always be a live-run forecast.
+        notLike(kronosForecastsTable.runId, "backtest\\_%"),
+      ),
+    )
     .orderBy(desc(kronosForecastsTable.createdAt))
     .limit(1);
   const latest = rows[0];

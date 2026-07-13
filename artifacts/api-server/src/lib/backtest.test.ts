@@ -60,3 +60,38 @@ describe("newsToClusters (evidence cutoff + dedupe)", () => {
     expect(newsToClusters([], CUTOFF)).toEqual([]);
   });
 });
+
+describe("mixed-timezone-format cutoffs (the lexicographic-comparison regression)", () => {
+  const refZ = (acceptanceDateTime: string): EdgarFilingRef => ({
+    cik: "0000000000",
+    accessionNumber: "0000000000-26-000009",
+    form: "8-K",
+    filingDate: "2026-06-10",
+    acceptanceDateTime,
+    primaryDocument: "doc.htm",
+    primaryDocDescription: null,
+  });
+
+  it("a Zulu-stamped filing from the premarket window is KEPT", () => {
+    // 11:00Z = 07:00 ET, before the 08:30 ET cutoff — but "11:..." > "08:..."
+    // lexicographically. Epoch comparison must keep it.
+    expect(filingsAsOf([refZ("2026-06-10T11:00:00.000Z")], CUTOFF)).toHaveLength(1);
+  });
+
+  it("a Zulu-stamped filing after the cutoff is dropped", () => {
+    // 13:00Z = 09:00 ET, after the cutoff.
+    expect(filingsAsOf([refZ("2026-06-10T13:00:00.000Z")], CUTOFF)).toHaveLength(0);
+  });
+
+  it("Zulu premarket news survives the cutoff filter", () => {
+    const zuluNews = {
+      id: "z1",
+      headline: "RGTI premarket headline",
+      symbols: ["RGTI"],
+      source: "benzinga",
+      url: null,
+      createdAt: "2026-06-10T11:15:00Z", // 07:15 ET — inside the window
+    };
+    expect(newsToClusters([zuluNews], CUTOFF)).toHaveLength(1);
+  });
+});

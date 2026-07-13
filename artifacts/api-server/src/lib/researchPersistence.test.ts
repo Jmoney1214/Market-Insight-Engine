@@ -20,6 +20,7 @@ const leadResult = (): LeadRunResult => ({
   plan: { planId: "p", candidateId: "cand_01", researchMode: "STANDARD", steps: [] },
   planIssues: [],
   catalystRecords: [catalystFixture()],
+  secondaryCatalysts: [],
   conflicts: [],
   claims: [claimFixture()],
   audits: [auditFixture()],
@@ -95,5 +96,12 @@ describe("macro calendar mapping (FMP)", () => {
       sourceDocumentId: null,
     });
     expect(mapped[1]!.revisionStatus).toBe("PRELIMINARY"); // first print, never FINAL
+  });
+});
+
+describe("fmpDateToIso is DST-correct (the -04:00 hardcode regression)", () => {
+  it("summer prints tag EDT, winter prints tag EST", () => {
+    expect(fmpDateToIso("2026-07-14 08:30:00")).toBe("2026-07-14T08:30:00-04:00");
+    expect(fmpDateToIso("2026-01-13 08:30:00")).toBe("2026-01-13T08:30:00-05:00");
   });
 });

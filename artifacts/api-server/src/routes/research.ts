@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { runResearch } from "../lib/researchRunner.js";
 import { persistLeadRun } from "../lib/researchStore.js";
+import { judgeLeadRun } from "../lib/judgeStore.js";
+import { recordResearchEpisode } from "../lib/memoryStore.js";
 
 const router: IRouter = Router();
 
@@ -31,10 +33,8 @@ router.get("/research/:symbol", async (req, res) => {
   try {
     const result = await runResearch(symbol, modeRaw as "FAST" | "STANDARD" | "DEEP", resumeRunId);
     const persisted = await persistLeadRun(result);
-    const { judgeLeadRun } = await import("../lib/judgeStore.js");
     const grades = await judgeLeadRun(result);
     // Episodic memory: the desk's research diary (best-effort, never blocks).
-    const { recordResearchEpisode } = await import("../lib/memoryStore.js");
     await recordResearchEpisode(result).catch(() => {});
     res.json({ persisted, grades, ...result });
   } catch (err) {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { selectBackbones } from "./researchProviders.js";
 import { blocksFromNewsRows, readingToLensInput } from "./sentimentContext.js";
+import { reinforcementDelta } from "./memoryStore.js";
 import { claimFromCatalyst } from "./researchRunner.js";
 import { catalystFixture, sentimentFixture } from "@workspace/research-contracts";
 
@@ -72,5 +73,21 @@ describe("claimFromCatalyst", () => {
   it("returns null when the catalyst has no sources — nothing to audit", () => {
     const bare = { ...catalystFixture(), primarySourceIds: [], secondarySourceIds: [] };
     expect(claimFromCatalyst(bare, "2026-07-13T13:00:00Z")).toBeNull();
+  });
+});
+
+describe("reinforcementDelta (the dead-loop regression: event grades must count)", () => {
+  it("outcome scores center on 0.5", () => {
+    expect(reinforcementDelta({ score: 0.7, eventSignificant: null })).toBe(4);
+    expect(reinforcementDelta({ score: 0.2, eventSignificant: null })).toBe(-6);
+  });
+
+  it("event-study verdicts reinforce when no outcome score exists", () => {
+    expect(reinforcementDelta({ score: null, eventSignificant: true })).toBe(10);
+    expect(reinforcementDelta({ score: null, eventSignificant: false })).toBe(-8);
+  });
+
+  it("no grade signal at all → null, never a guessed delta", () => {
+    expect(reinforcementDelta({ score: null, eventSignificant: null })).toBeNull();
   });
 });

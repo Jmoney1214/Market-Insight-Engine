@@ -98,6 +98,9 @@ export interface LeadRunResult {
   plan: ResearchPlan;
   planIssues: string[];
   catalystRecords: CatalystRecord[];
+  /** Independent second verifications — persisted and judged for accuracy
+   * ranking, but never referenced by the packet (the merged record is). */
+  secondaryCatalysts: CatalystRecord[];
   conflicts: Conflict[];
   claims: Claim[];
   audits: SourceAudit[];
@@ -194,6 +197,7 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
   // 2) Execute validated steps in dependency order, collecting typed outputs.
   const outcomes: StepOutcome[] = [];
   const catalystRecords: CatalystRecord[] = [];
+  const secondaryCatalysts: CatalystRecord[] = [];
   const conflicts: Conflict[] = [];
   let claims: Claim[] = [];
   let auditedClaims: AuditedClaim[] = [];
@@ -204,6 +208,7 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
 
   const applyContest = (contest: ContestResult) => {
     conflicts.push(...contest.conflicts);
+    secondaryCatalysts.push(contest.secondary);
     if (primaryCatalyst) {
       // The contested record supersedes the primary in the packet.
       catalystRecords[catalystRecords.indexOf(primaryCatalyst)] = contest.record;
@@ -419,6 +424,7 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
     plan,
     planIssues,
     catalystRecords,
+    secondaryCatalysts,
     conflicts,
     claims: admittedClaimList,
     audits,

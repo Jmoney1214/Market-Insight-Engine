@@ -9,7 +9,7 @@
  * other write path into that layer; every failure here is non-fatal.
  */
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, notLike, or, sql } from "drizzle-orm";
 import { db, findingGradesTable, memoryItemsTable, researchPacketsTable } from "@workspace/db";
 import {
   canPromote,
@@ -160,9 +160,23 @@ export async function retrieveMemories(input: {
 }
 
 /**
- * Outcome Reinforcer sweep: recent outcome grades adjust the importance of
- * memories derived from those findings — bounded per event, log appended.
- * Promotion into SEMANTIC happens here and ONLY here, via canPromote.
+ * Deterministic importance delta from whichever grade signal a row carries.
+ * Two signals exist on the unified ledger: the ex-post outcome grader's score
+ * (0..1) and the event-study verdict — the reinforcer accepts BOTH (keying
+ * only on the outcome grader's columns left the loop dead for research rows,
+ * which are graded via event_graded_at, never graded_at).
+ */
+export function reinforcementDelta(grade: { score: number | null; eventSignificant: boolean | null }): number | null {
+  if (grade.score != null) return (grade.score * 100 - 50) / 5; // 0..1 scale, centered
+  if (grade.eventSignificant != null) return grade.eventSignificant ? 10 : -8;
+  return null;
+}
+
+/**
+ * Outcome Reinforcer sweep: recent grades (outcome OR event-study) adjust the
+ * importance of memories derived from those findings — bounded per event,
+ * idempotent per grade ref, batched (one memory query per sweep, not per
+ * grade). Promotion into SEMANTIC happens here and ONLY here, via canPromote.
  */
 export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
   try {
@@ -172,56 +186,61 @@ export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
         findingRef: findingGradesTable.findingRef,
         score: findingGradesTable.score,
         grade: findingGradesTable.grade,
-        gradedAt: findingGradesTable.gradedAt,
+        eventSignificant: findingGradesTable.eventSignificant,
         id: findingGradesTable.id,
       })
       .from(findingGradesTable)
       .where(
         and(
-          gte(findingGradesTable.gradedAt, since),
-          sql`${findingGradesTable.findingRef} IS NOT NULL`,
+          or(gte(findingGradesTable.gradedAt, since), gte(findingGradesTable.eventGradedAt, since)),
+          isNotNull(findingGradesTable.findingRef),
           // Brain hygiene: backtest-generated grades never reinforce live memory.
-          sql`${findingGradesTable.runId} NOT LIKE 'backtest\_%'`,
+          notLike(findingGradesTable.runId, "backtest\\_%"),
         ),
       )
       .limit(200);
+    if (graded.length === 0) return 0;
+
+    const byRef = new Map(graded.filter((g) => g.findingRef).map((g) => [g.findingRef!, g]));
+    const rows = await db
+      .select()
+      .from(memoryItemsTable)
+      .where(inArray(memoryItemsTable.sourceRef, [...byRef.keys()]))
+      .limit(500);
 
     let adjusted = 0;
-    for (const g of graded) {
-      if (!g.findingRef || g.score == null) continue;
-      const rows = await db
-        .select()
-        .from(memoryItemsTable)
-        .where(eq(memoryItemsTable.sourceRef, g.findingRef))
-        .limit(20);
-      for (const row of rows) {
-        const log = (row.reinforcements as Array<{ gradeRef: string }>) ?? [];
-        const gradeRef = `finding_grades:${g.id}`;
-        if (log.some((entry) => entry.gradeRef === gradeRef)) continue; // idempotent
-        // Centered on 50: strong outcomes raise weight, weak ones lower it.
-        const requestedDelta = (g.score - 50) / 5;
-        const importance = reinforceImportance(row.importance, requestedDelta);
+    for (const row of rows) {
+      const g = row.sourceRef ? byRef.get(row.sourceRef) : undefined;
+      if (!g) continue;
+      const requestedDelta = reinforcementDelta(g);
+      if (requestedDelta == null) continue;
 
-        const promotion = canPromote(
-          { ...rowToItem(row), independentGradeRef: gradeRef },
-          "SEMANTIC",
-        );
-        await db
-          .update(memoryItemsTable)
-          .set({
-            importance,
-            independentGradeRef: gradeRef,
-            reinforcements: [
-              ...log,
-              { at: new Date().toISOString(), delta: importance - row.importance, reason: `outcome grade ${g.grade ?? g.score}`, gradeRef },
-            ],
-            ...(promotion.allowed && row.layer === "EPISODIC"
-              ? { layer: "SEMANTIC" as const, promotedFrom: row.layer, promotedAt: new Date(), expiresAt: null }
-              : {}),
-          })
-          .where(eq(memoryItemsTable.id, row.id));
-        adjusted += 1;
-      }
+      const log = (row.reinforcements as Array<{ gradeRef: string }>) ?? [];
+      const gradeRef = `finding_grades:${g.id}`;
+      if (log.some((entry) => entry.gradeRef === gradeRef)) continue; // idempotent
+      const importance = reinforceImportance(row.importance, requestedDelta);
+
+      const promotion = canPromote({ ...rowToItem(row), independentGradeRef: gradeRef }, "SEMANTIC");
+      await db
+        .update(memoryItemsTable)
+        .set({
+          importance,
+          independentGradeRef: gradeRef,
+          reinforcements: [
+            ...log,
+            {
+              at: new Date().toISOString(),
+              delta: importance - row.importance,
+              reason: g.score != null ? `outcome grade ${g.grade ?? g.score}` : `event study ${g.eventSignificant ? "significant" : "insignificant"}`,
+              gradeRef,
+            },
+          ],
+          ...(promotion.allowed && row.layer === "EPISODIC"
+            ? { layer: "SEMANTIC" as const, promotedFrom: row.layer, promotedAt: new Date(), expiresAt: null }
+            : {}),
+        })
+        .where(eq(memoryItemsTable.id, row.id));
+      adjusted += 1;
     }
     if (adjusted > 0) logger.info({ adjusted }, "Memory reinforcement applied");
     return adjusted;
@@ -266,7 +285,14 @@ export async function getDecisionMemory(symbol: string, limit = 5): Promise<stri
         createdAt: researchPacketsTable.createdAt,
       })
       .from(researchPacketsTable)
-      .where(eq(researchPacketsTable.symbol, symbol))
+      .where(
+        and(
+          eq(researchPacketsTable.symbol, symbol),
+          // Brain hygiene: backtest packets are hindsight-contaminated and
+          // must never surface as the desk's live decision history.
+          notLike(researchPacketsTable.runId, "backtest\\_%"),
+        ),
+      )
       .orderBy(desc(researchPacketsTable.createdAt))
       .limit(limit);
     if (packets.length === 0) return [];

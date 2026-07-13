@@ -5,6 +5,7 @@
  * one provider → its quick AND deep tiers judge (still independent runs).
  * Best-effort: grading failure never affects the research response.
  */
+import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { db, findingGradesTable } from "@workspace/db";
 import { gradeFinding, type FindingGrade, type JudgeProvider } from "@workspace/research-agents";
 import type { LeadRunResult } from "@workspace/research-agents";
@@ -50,7 +51,25 @@ export async function judgeLeadRun(result: LeadRunResult): Promise<FindingGrade[
 
   const grades: FindingGrade[] = [];
   try {
-    for (const record of result.catalystRecords) {
+    // Secondary verifications are judged alongside the merged records — the
+    // accuracy ranker attributes them via the _b id suffix.
+    const records = [...result.catalystRecords, ...result.secondaryCatalysts];
+
+    // One row per finding lifecycle: a resumed run reuses its runId and
+    // therefore its catalyst ids — never judge the same finding twice.
+    const existing = await db
+      .select({ findingRef: findingGradesTable.findingRef })
+      .from(findingGradesTable)
+      .where(
+        and(
+          eq(findingGradesTable.findingType, "CatalystRecord"),
+          isNotNull(findingGradesTable.judgedAt),
+          inArray(findingGradesTable.findingRef, records.map((r) => r.catalystId)),
+        ),
+      );
+    const alreadyJudged = new Set(existing.map((e) => e.findingRef));
+
+    for (const record of records.filter((r) => !alreadyJudged.has(r.catalystId))) {
       const grade = await gradeFinding({
         findingType: "CatalystRecord",
         findingId: record.catalystId,

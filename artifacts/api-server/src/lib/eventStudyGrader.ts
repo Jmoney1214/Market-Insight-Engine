@@ -22,20 +22,20 @@ interface CatalystPayload {
   publicationTime?: string | null;
 }
 
+type DatedCloses = Array<{ date: string; close: number }>;
+
 /**
  * Grades one specific finding immediately (backtest path — the event date is
- * historical, so the window has already printed). Returns true when graded.
+ * historical, so the window has already printed). The grade row is UPSERTED:
+ * a deterministic-only deployment has no judge row to update, and the event
+ * study must never depend on an LLM judge having run first. Pass a shared
+ * `market` (SPY) series when grading in a batch — one fetch serves all.
  */
-export async function gradeEventStudyByRef(findingRef: string): Promise<boolean> {
+export async function gradeEventStudyByRef(
+  findingRef: string,
+  opts: { symbol: string; runId: string; packetId: string | null; market?: DatedCloses | null },
+): Promise<boolean> {
   try {
-    const rows = await db
-      .select({ id: findingGradesTable.id, symbol: findingGradesTable.symbol })
-      .from(findingGradesTable)
-      .where(and(eq(findingGradesTable.findingRef, findingRef), isNull(findingGradesTable.eventGradedAt)))
-      .limit(1);
-    const row = rows[0];
-    if (!row?.symbol) return false;
-
     const objects = await db
       .select({ payload: researchObjectsTable.payload })
       .from(researchObjectsTable)
@@ -50,32 +50,45 @@ export async function gradeEventStudyByRef(findingRef: string): Promise<boolean>
     const eventTime = payload?.firstKnownTime ?? payload?.publicationTime;
     if (!eventTime || Date.now() - new Date(eventTime).getTime() < MIN_AGE_MS) return false;
 
-    const [market, stock] = await Promise.all([
-      alpaca.getDailyClosesDated("SPY"),
-      alpaca.getDailyClosesDated(row.symbol),
-    ]);
+    const market = opts.market ?? (await alpaca.getDailyClosesDated("SPY"));
+    const stock = await alpaca.getDailyClosesDated(opts.symbol);
     if (!market || !stock) return false;
 
     const result = eventStudyFromCloses({ stock, market, eventDate: eventTime.slice(0, 10), eventDays: EVENT_WINDOW_DAYS });
     if (!result) return false;
 
-    await db
-      .update(findingGradesTable)
-      .set({
-        eventCar: result.car,
-        eventTStat: result.tStat,
-        eventSignificant: result.significant,
-        eventStudy: {
-          alpha: result.alpha,
-          beta: result.beta,
-          estimationDays: result.estimationDays,
-          eventDays: result.eventDays,
-          abnormalReturns: result.abnormalReturns,
-          benchmark: "SPY",
-        },
-        eventGradedAt: new Date(),
-      })
-      .where(eq(findingGradesTable.id, rows[0]!.id));
+    const eventColumns = {
+      eventCar: result.car,
+      eventTStat: result.tStat,
+      eventSignificant: result.significant,
+      eventStudy: {
+        alpha: result.alpha,
+        beta: result.beta,
+        estimationDays: result.estimationDays,
+        eventDays: result.eventDays,
+        abnormalReturns: result.abnormalReturns,
+        benchmark: "SPY",
+      },
+      eventGradedAt: new Date(),
+    };
+
+    const rows = await db
+      .select({ id: findingGradesTable.id })
+      .from(findingGradesTable)
+      .where(and(eq(findingGradesTable.findingRef, findingRef), isNull(findingGradesTable.eventGradedAt)))
+      .limit(1);
+    if (rows[0]) {
+      await db.update(findingGradesTable).set(eventColumns).where(eq(findingGradesTable.id, rows[0].id));
+    } else {
+      await db.insert(findingGradesTable).values({
+        findingType: "CatalystRecord",
+        findingRef,
+        symbol: opts.symbol,
+        runId: opts.runId,
+        packetId: opts.packetId,
+        ...eventColumns,
+      });
+    }
     return true;
   } catch (err) {
     logger.warn({ err: String(err), findingRef }, "Direct event-study grade failed (non-fatal)");

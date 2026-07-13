@@ -48,22 +48,28 @@ function notSelectedRead(agent: AgentRead["agent"]): AgentRead {
  */
 export function runAgents(event: CopilotEvent, extras?: CommitteeExtras): CommitteeReads {
   const selection = extras?.lensSelection ?? null;
-  const wants = (lens: string) => selection === null || selection.includes(lens);
+  const deselected = new Set<string>();
+  const lens = (name: string, run: () => AgentRead): AgentRead => {
+    if (selection === null || selection.includes(name)) return run();
+    deselected.add(name);
+    return notSelectedRead(name as AgentRead["agent"]);
+  };
 
-  const technical = wants("technical") ? technicalAgent(event) : notSelectedRead("technical");
-  const pattern = wants("pattern") ? patternAgent(event) : notSelectedRead("pattern");
-  const regime = wants("regime") ? regimeAgent(event) : notSelectedRead("regime");
-  const orderFlow = wants("order_flow") ? orderFlowAgent(event) : notSelectedRead("order_flow");
-  const catalyst = wants("catalyst") ? catalystAgent(event) : notSelectedRead("catalyst");
-  const position = wants("position") ? positionAgent(event) : notSelectedRead("position");
-  const memory = wants("memory")
-    ? memoryAgent(event, extras?.decisionMemory)
-    : notSelectedRead("memory");
-  const sentiment = wants("sentiment")
-    ? sentimentAgent(event, extras?.sentiment)
-    : notSelectedRead("sentiment");
+  const technical = lens("technical", () => technicalAgent(event));
+  const pattern = lens("pattern", () => patternAgent(event));
+  const regime = lens("regime", () => regimeAgent(event));
+  const orderFlow = lens("order_flow", () => orderFlowAgent(event));
+  const catalyst = lens("catalyst", () => catalystAgent(event));
+  const position = lens("position", () => positionAgent(event));
+  const memory = lens("memory", () => memoryAgent(event, extras?.decisionMemory));
+  const sentiment = lens("sentiment", () => sentimentAgent(event, extras?.sentiment));
 
-  const sub = [technical, pattern, regime, orderFlow, catalyst, position, memory, sentiment];
+  // Deselected lenses are excluded from synthesis inputs entirely: their
+  // UNAVAILABLE placeholder is a display artifact, not a data-quality signal,
+  // and must not trigger the risk critic's "feed missing" warnings.
+  const sub = [technical, pattern, regime, orderFlow, catalyst, position, memory, sentiment].filter(
+    (r) => !deselected.has(r.agent),
+  );
   const bullCase = bullCaseAgent(event, sub);
   const bearCase = bearCaseAgent(event, sub);
   const riskCritic = riskCriticAgent(event, [...sub, bullCase, bearCase]);
