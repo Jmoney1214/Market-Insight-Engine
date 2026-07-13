@@ -33,6 +33,9 @@ router.get("/research/:symbol", async (req, res) => {
     const persisted = await persistLeadRun(result);
     const { judgeLeadRun } = await import("../lib/judgeStore.js");
     const grades = await judgeLeadRun(result);
+    // Episodic memory: the desk's research diary (best-effort, never blocks).
+    const { recordResearchEpisode } = await import("../lib/memoryStore.js");
+    await recordResearchEpisode(result).catch(() => {});
     res.json({ persisted, grades, ...result });
   } catch (err) {
     req.log.error({ err, symbol }, "Research run failed");

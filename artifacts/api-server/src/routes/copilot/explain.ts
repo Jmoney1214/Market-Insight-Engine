@@ -66,6 +66,9 @@ router.get("/explain", async (req, res) => {
   // Grounded news-only sentiment for the 11th lens — LIVE reads only (replay
   // never gets current sentiment: that would be look-ahead contamination).
   const sentiment = await getSentimentLensInput(symbolUpper).catch(() => null);
+  // Decision memory (DeepFund): last research verdicts on this ticker.
+  const { getDecisionMemory } = await import("../../lib/memoryStore.js");
+  const decisionMemory = await getDecisionMemory(symbolUpper).catch(() => []);
 
   try {
     const input =
@@ -75,7 +78,7 @@ router.get("/explain", async (req, res) => {
     const core = await buildEventWithValidation(input);
     // Opt-in planner (COMMITTEE_PLANNER=on): null → all lenses (the default).
     const lensSelection = await planLenses(core);
-    const result = await runCommittee(core, provider, { sentiment, lensSelection });
+    const result = await runCommittee(core, provider, { sentiment, lensSelection, decisionMemory });
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
   } catch (err) {
     if (err instanceof CopilotDataError) {
@@ -92,7 +95,7 @@ router.get("/explain", async (req, res) => {
         bars: [],
         quote: null,
       });
-      const result = await runCommittee(core, provider, { sentiment });
+      const result = await runCommittee(core, provider, { sentiment, decisionMemory });
       res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
       return;
     }

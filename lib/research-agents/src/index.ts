@@ -72,6 +72,24 @@ export {
   type StepSnapshot,
 } from "./lead";
 export {
+  LAYER_POLICIES,
+  MAX_REINFORCEMENT_DELTA,
+  canPromote,
+  compoundScore,
+  cosineSimilarity,
+  estimateTokens,
+  expiryFor,
+  rankMemories,
+  reinforceImportance,
+  renderDecisionMemory,
+  type DecisionMemoryEntry,
+  type LayerPolicy,
+  type MemoryItem,
+  type MemoryLayer,
+  type PromotionDecision,
+  type RankedMemory,
+} from "./memory";
+export {
   DEDUCTION_RUBRIC,
   JudgeVerdict,
   gradeFinding,

@@ -56,7 +56,9 @@ export function runAgents(event: CopilotEvent, extras?: CommitteeExtras): Commit
   const orderFlow = wants("order_flow") ? orderFlowAgent(event) : notSelectedRead("order_flow");
   const catalyst = wants("catalyst") ? catalystAgent(event) : notSelectedRead("catalyst");
   const position = wants("position") ? positionAgent(event) : notSelectedRead("position");
-  const memory = wants("memory") ? memoryAgent(event) : notSelectedRead("memory");
+  const memory = wants("memory")
+    ? memoryAgent(event, extras?.decisionMemory)
+    : notSelectedRead("memory");
   const sentiment = wants("sentiment")
     ? sentimentAgent(event, extras?.sentiment)
     : notSelectedRead("sentiment");

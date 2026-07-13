@@ -111,6 +111,7 @@ export function startScanScheduler(): void {
     return;
   }
   let lastGradeAttempt = 0;
+  let lastReinforceAttempt = 0;
   const tick = async () => {
     const { minutes, isWeekday } = nyClock();
     if (!isWeekday) return;
@@ -129,6 +130,12 @@ export function startScanScheduler(): void {
       // News-event scanner: cluster market news, preserve first-seen times.
       // Best-effort by rule — never blocks or fails the scan path.
       void import("./newsEvents.js").then(({ recordNewsEvents }) => recordNewsEvents()).catch(() => {});
+      // Outcome Reinforcer sweep (FinMem): recent grades adjust memory
+      // importance, bounded and idempotent. Throttled to every 6 hours.
+      if (Date.now() - lastReinforceAttempt >= 6 * 60 * 60 * 1000) {
+        lastReinforceAttempt = Date.now();
+        void import("./memoryStore.js").then(({ reinforceFromGrades }) => reinforceFromGrades()).catch(() => {});
+      }
       return;
     }
 

@@ -66,3 +66,20 @@ describe("sentiment lens (11th agent)", () => {
     expect(reads.sentiment.status).toBe("UNAVAILABLE");
   });
 });
+
+describe("decision memory on the memory lens", () => {
+  it("attaches rendered verdict lines as factors without changing status", () => {
+    const lines = [
+      "2026-07-12 research DEEP: PARTIAL → outcome pending",
+      "2026-07-10 research STANDARD: COMPLETE → judges 90",
+    ];
+    const reads = runAgents(event(), { decisionMemory: lines });
+    expect(reads.memory.status).toBe("UNAVAILABLE"); // no validation sample in fixture
+    expect(reads.memory.supportingFactors).toEqual(lines.map((l) => `Decision memory: ${l}`));
+  });
+
+  it("no decision memory → memory lens unchanged", () => {
+    const reads = runAgents(event());
+    expect(reads.memory.supportingFactors).toEqual([]);
+  });
+});

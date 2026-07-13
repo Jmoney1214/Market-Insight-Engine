@@ -1,0 +1,21 @@
+id: memory-retrieval-ranker
+version: 1.0.0
+description: FinMem compound retrieval - recency decay per layer half-life plus importance plus embedding similarity (pgvector), top-k under per-layer token budgets. Without embeddings configured, similarity is absent from the score, never faked. The single model call is the query embedding.
+category: memory
+model_policy:
+  tier: quick
+  structured_output: true
+allowed_tools:
+  - memory.read
+  - embeddings.create
+read_scopes: ["memory_items:all"]
+write_scopes: ["memory_items:touch_last_accessed"]
+budgets:
+  maximum_model_calls: 1
+  maximum_tool_calls: 5
+  maximum_seconds: 30
+  maximum_cost_usd: 0.01
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/research-agents/src/memory.test.ts
+deterministic_guards: ["ranking_math_is_code", "similarity_never_fabricated", "per_layer_token_budgets", "expired_items_never_rank"]
+memory_policy: gated_cross_run

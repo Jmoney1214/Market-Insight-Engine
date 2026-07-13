@@ -41,6 +41,11 @@ export interface CommitteeExtras {
    * a deterministic "not selected" read; bull/bear/risk always run.
    */
   lensSelection?: string[] | null;
+  /**
+   * Decision memory (DeepFund): pre-rendered lines describing the last N
+   * research verdicts on this ticker, attached to the memory lens as factors.
+   */
+  decisionMemory?: string[] | null;
 }
 
 /** A single specialist agent's read. */

@@ -11,10 +11,15 @@ import { fmtNum } from "../format";
  * never raise confidence; and a measured non-positive edge must CAUTION, never
  * encourage. Bias stays NEUTRAL — memory measures edge quality, not direction.
  */
-export function memoryAgent(event: CopilotEvent): AgentRead {
+export function memoryAgent(event: CopilotEvent, decisionMemory?: string[] | null): AgentRead {
   const v = event.validation;
   const gateReason = event.gates.validation?.reason;
   const bias: Bias = "NEUTRAL";
+
+  // Decision memory (DeepFund): the last N research verdicts on this ticker,
+  // rendered deterministically upstream. Attached as factors in every branch —
+  // it informs, it never changes the measured-edge status logic below.
+  const decisionFactors = (decisionMemory ?? []).map((line) => `Decision memory: ${line}`);
 
   // No MEASURED (countable) sample yet → stay honestly unavailable. "unproven"
   // is assigned only when there are zero countable samples, even if sampleCount
@@ -35,7 +40,7 @@ export function memoryAgent(event: CopilotEvent): AgentRead {
       bias: "UNKNOWN",
       confidence: 0,
       headline: "No measured historical edge available.",
-      supportingFactors: [],
+      supportingFactors: decisionFactors,
       warnings,
       riskVerdict: null,
       maxRecommendation: null,
@@ -47,6 +52,7 @@ export function memoryAgent(event: CopilotEvent): AgentRead {
     `Measured over ${v.sampleCount} sample${v.sampleCount === 1 ? "" : "s"}: ${v.status}` +
       (exp != null ? `, expectancy ${fmtNum(exp)}R` : "") +
       ".",
+    ...decisionFactors,
   ];
   const warnings: string[] = [];
 
