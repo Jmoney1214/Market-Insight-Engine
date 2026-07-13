@@ -39,10 +39,14 @@ export const KronosForecastIngest = z.strictObject({
 });
 export type KronosForecastIngest = z.infer<typeof KronosForecastIngest>;
 
-/** Idempotent insert (dedupe on run/symbol/anchor/horizon); true when stored. */
+/**
+ * Idempotent insert (dedupe on run/symbol/anchor/horizon); true ONLY when a
+ * row was actually written — a conflict-skipped duplicate returns false so
+ * the ingest response never claims to have stored what it silently dropped.
+ */
 export async function ingestForecast(input: KronosForecastIngest): Promise<boolean> {
   try {
-    await db
+    const inserted = await db
       .insert(kronosForecastsTable)
       .values({
         runId: input.run_id,
@@ -64,8 +68,9 @@ export async function ingestForecast(input: KronosForecastIngest): Promise<boole
         inputEndTs: new Date(input.input_end_ts),
         inputBarsHash: input.input_bars_hash,
       })
-      .onConflictDoNothing();
-    return true;
+      .onConflictDoNothing()
+      .returning({ id: kronosForecastsTable.id });
+    return inserted.length > 0;
   } catch (err) {
     logger.warn({ err: String(err), symbol: input.symbol }, "Kronos ingest failed");
     return false;
