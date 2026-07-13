@@ -3,6 +3,7 @@ import {
   KronosForecastIngest,
   getCalibration,
   getGatedForecast,
+  gradeKronosForecasts,
   ingestForecast,
 } from "../lib/kronosStore.js";
 
@@ -26,6 +27,24 @@ router.post("/kronos/forecasts", async (req, res) => {
   }
   const stored = results.filter((r) => r.ok).length;
   res.status(stored > 0 ? 200 : 400).json({ stored, rejected: results.length - stored, results });
+});
+
+/**
+ * Manual grading sweep — grades every ingested forecast whose window has
+ * closed (the hourly after-close sweep does this too; this endpoint exists so
+ * a walk-forward backfill can be graded immediately instead of waiting).
+ * Body: { limit?: 1-1000 }. Returns the fresh calibration report.
+ */
+router.post("/kronos/grade", async (req, res) => {
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const limit = Math.min(Math.max(Number(body["limit"]) || 500, 1), 1000);
+  try {
+    const graded = await gradeKronosForecasts(limit);
+    res.json({ graded, calibration: await getCalibration() });
+  } catch (err) {
+    req.log.error({ err }, "Kronos manual grading failed");
+    res.status(500).json({ error: "Grading sweep failed." });
+  }
 });
 
 /** Rolling calibration report — always visible (the gate's own dashboard). */

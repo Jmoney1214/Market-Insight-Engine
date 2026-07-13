@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { filingsAsOf, newsToClusters } from "./backtestStore.js";
+import { filingsAsOf, newsToClusters, weekdaysEndingAt } from "./backtestStore.js";
 import type { EdgarFilingRef } from "@workspace/research-adapters";
 import type { MarketNewsItem } from "./providers/alpaca.js";
 
@@ -93,5 +93,27 @@ describe("mixed-timezone-format cutoffs (the lexicographic-comparison regression
       createdAt: "2026-06-10T11:15:00Z", // 07:15 ET — inside the window
     };
     expect(newsToClusters([zuluNews], CUTOFF)).toHaveLength(1);
+  });
+});
+
+describe("weekdaysEndingAt (explicit-symbols universe)", () => {
+  it("walks back from maxDate skipping weekends, newest first", () => {
+    // 2026-06-10 is a Wednesday.
+    expect(weekdaysEndingAt("2026-06-10", 5)).toEqual([
+      "2026-06-10", // Wed
+      "2026-06-09", // Tue
+      "2026-06-08", // Mon
+      "2026-06-05", // Fri (Sat/Sun skipped)
+      "2026-06-04", // Thu
+    ]);
+  });
+
+  it("starts on the previous Friday when maxDate is a weekend day", () => {
+    // 2026-06-07 is a Sunday.
+    expect(weekdaysEndingAt("2026-06-07", 2)).toEqual(["2026-06-05", "2026-06-04"]);
+  });
+
+  it("returns exactly the requested count", () => {
+    expect(weekdaysEndingAt("2026-06-10", 30)).toHaveLength(30);
   });
 });

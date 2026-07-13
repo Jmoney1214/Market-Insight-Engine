@@ -108,7 +108,10 @@ export async function gradeKronosForecasts(limit = 50): Promise<number> {
         .where(eq(kronosForecastsTable.id, row.id));
       graded += 1;
     }
-    if (graded > 0) logger.info({ graded }, "Kronos forecasts graded");
+    if (graded > 0) {
+      calibrationCache.clear(); // the report must reflect fresh grades immediately
+      logger.info({ graded }, "Kronos forecasts graded");
+    }
     return graded;
   } catch (err) {
     logger.warn({ err: String(err) }, "Kronos grading sweep failed (non-fatal)");

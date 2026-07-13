@@ -46,7 +46,7 @@ import {
   getSecondNarrator,
   getSentimentProvider,
 } from "./researchProviders.js";
-import { claimFromCatalyst } from "./researchRunner.js";
+import { claimFromCatalyst, MATERIAL_FORMS } from "./researchRunner.js";
 import { persistLeadRun } from "./researchStore.js";
 import { judgeLeadRun } from "./judgeStore.js";
 import { gradeEventStudyByRef } from "./eventStudyGrader.js";
@@ -133,6 +133,22 @@ async function updateBatch(batchId: string, progress: BatchProgress): Promise<vo
 }
 
 /**
+ * Pure: the last `days` weekdays ending at `maxDate` (newest first). Market
+ * holidays are not filtered — a holiday candidate simply finds no bars/news
+ * at the cutoff and degrades honestly.
+ */
+export function weekdaysEndingAt(maxDate: string, days: number): string[] {
+  const out: string[] = [];
+  const d = new Date(`${maxDate}T12:00:00Z`);
+  while (out.length < days) {
+    const dow = d.getUTCDay();
+    if (dow !== 0 && dow !== 6) out.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return out;
+}
+
+/**
  * Historical scan picks: top-K by score per graded session, EXCLUDING the
  * most recent week — the 3-day event-study window must already have printed
  * or every candidate's deterministic grade would be skipped as too fresh.
@@ -192,7 +208,10 @@ async function runCandidate(
       cik = await edgar.lookupCik(symbol);
       if (cik) {
         filingRefs = filingsAsOf((await edgar.getSubmissions(cik)) ?? [], cutoff);
-        const latest = filingRefs.find((f) => f.primaryDocument);
+        // Same rule as the live runner: a Form 144 can't substantiate a catalyst.
+        const latest =
+          filingRefs.find((f) => f.primaryDocument && MATERIAL_FORMS.has(f.form)) ??
+          filingRefs.find((f) => f.primaryDocument);
         if (latest) {
           const filing = await edgar.getFiling(latest, { symbols: [symbol], now: cutoff });
           if (filing) {
@@ -316,6 +335,13 @@ export interface StartBacktestOptions {
   days?: number;
   symbolsPerDay?: number;
   mode?: ResearchMode;
+  /**
+   * Explicit universe override: replay THESE symbols over the last `days`
+   * trading days instead of the recorded scan history. This is the only way
+   * to backtest before the scorecard has graded rows; scanHit/scanChangePct
+   * are null (there was no scan pick to compare against).
+   */
+  symbols?: string[];
 }
 
 /** Launches a background backtest batch; returns its batch id immediately. */
@@ -325,7 +351,16 @@ export async function startResearchBacktest(opts: StartBacktestOptions): Promise
   const mode = opts.mode ?? "STANDARD";
   const batchId = `backtest_${randomUUID().slice(0, 8)}`;
 
-  const universe = await pickUniverse(days, symbolsPerDay);
+  let universe: Array<{ date: string; symbol: string; hit: boolean | null; changePct: number | null }>;
+  if (opts.symbols && opts.symbols.length > 0) {
+    const maxDate = new Date(Date.now() - UNIVERSE_MIN_AGE_DAYS * 86_400_000)
+      .toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    universe = weekdaysEndingAt(maxDate, days).flatMap((date) =>
+      opts.symbols!.map((symbol) => ({ date, symbol, hit: null, changePct: null })),
+    );
+  } else {
+    universe = await pickUniverse(days, symbolsPerDay);
+  }
   await db.insert(agentRunsTable).values({ runId: batchId, agentId: "research-backtest", agentVersion: "1.0.0", status: "running" }).onConflictDoNothing();
 
   const progress: BatchProgress = {

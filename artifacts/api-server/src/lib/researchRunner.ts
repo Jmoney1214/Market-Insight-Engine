@@ -53,7 +53,7 @@ const PACKET_TTL_HOURS = 8;
 const FILING_TEXT_CAP = 8000;
 
 /** Filing forms that can actually substantiate a catalyst / dilution claim. */
-const MATERIAL_FORMS = new Set([
+export const MATERIAL_FORMS = new Set([
   "8-K", "8-K/A", "6-K", "10-Q", "10-K", "20-F",
   "424B1", "424B2", "424B3", "424B4", "424B5",
   "S-1", "S-1/A", "S-3", "S-3/A", "F-1", "F-3",
