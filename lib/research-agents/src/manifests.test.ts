@@ -8,10 +8,12 @@ const dir = join(import.meta.dirname, "..", "manifests");
 describe("wave-2 agent manifests", () => {
   const files = readdirSync(dir).filter((f) => f.endsWith(".yaml"));
 
-  it("covers all seven research agents", () => {
+  it("covers the seven research agents plus the two wave-3 committee agents", () => {
     expect(files.sort()).toEqual([
       "catalyst-verifier.yaml",
+      "committee-planner.yaml",
       "ipo-dilution-analyst.yaml",
+      "judge-panel.yaml",
       "macro-context-analyst.yaml",
       "market-research-lead.yaml",
       "second-verifier.yaml",
@@ -24,7 +26,7 @@ describe("wave-2 agent manifests", () => {
     it(`${file} validates with a stable manifest hash`, () => {
       const { manifest, manifestHash } = loadAgentManifest(readFileSync(join(dir, file), "utf8"));
       expect(manifest.id).toBe(file.replace(".yaml", ""));
-      expect(manifest.category).toBe("research");
+      expect(["research", "committee"]).toContain(manifest.category);
       expect(manifestHash).toMatch(/^sha256:[0-9a-f]{64}$/);
       // Deterministic components declare zero model calls; LLM agents ≥ 1.
       if (manifest.model_policy.tier === "none") {

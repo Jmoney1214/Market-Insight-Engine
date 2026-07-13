@@ -44,6 +44,7 @@ import {
 } from "./researchProviders.js";
 import { blocksFromNewsRows } from "./sentimentContext.js";
 import { mapEconomicCalendar } from "./macroCalendar.js";
+import { checkpointAgentRun, loadCheckpoint, startAgentRun } from "./researchStore.js";
 import * as fmp from "./providers/fmp.js";
 import { logger } from "./logger.js";
 
@@ -148,10 +149,19 @@ async function gatherEvidence(symbol: string, now: string): Promise<GatheredEvid
   };
 }
 
-export async function runResearch(symbol: string, mode: ResearchMode): Promise<LeadRunResult> {
+export async function runResearch(
+  symbol: string,
+  mode: ResearchMode,
+  resumeRunId?: string | null,
+): Promise<LeadRunResult> {
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + PACKET_TTL_HOURS * 3_600_000).toISOString();
-  const runId = `research_${randomUUID().slice(0, 8)}`;
+
+  // Resume reuses the crashed run's id so its checkpoint and ledger row match;
+  // a shape-hash mismatch inside runLead silently discards stale snapshots.
+  const runId = resumeRunId?.trim() || `research_${randomUUID().slice(0, 8)}`;
+  const checkpoint = resumeRunId ? await loadCheckpoint(runId) : null;
+  await startAgentRun(runId, "market-research-lead", "1.0.0");
 
   const gathered = await gatherEvidence(symbol, now);
 
@@ -267,5 +277,14 @@ export async function runResearch(symbol: string, mode: ResearchMode): Promise<L
     },
   };
 
-  return runLead({ seed, researchMode: mode, specialists, runId, now, expiresAt });
+  return runLead({
+    seed,
+    researchMode: mode,
+    specialists,
+    runId,
+    now,
+    expiresAt,
+    checkpoint,
+    onCheckpoint: (cp) => checkpointAgentRun(runId, cp),
+  });
 }

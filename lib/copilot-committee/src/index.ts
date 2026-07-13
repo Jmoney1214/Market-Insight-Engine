@@ -30,6 +30,13 @@ export {
 } from "./guardrails";
 
 export { runAgents, readsToArray } from "./agents";
+export {
+  SELECTABLE_LENSES,
+  ALWAYS_RUN,
+  validateLensSelection,
+  type SelectableLens,
+  type LensSelectionValidation,
+} from "./lensRegistry";
 export { synthesize } from "./synthesize";
 export { runCommittee } from "./orchestrator";
 export { safetyNetRead } from "./fallback";

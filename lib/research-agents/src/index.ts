@@ -63,8 +63,23 @@ export {
 } from "./dilution";
 export {
   runLead,
+  planShapeHash,
+  type LeadCheckpoint,
   type LeadRunResult,
   type PlannerProvider,
   type RunLeadInput,
   type SpecialistRegistry,
+  type StepSnapshot,
 } from "./lead";
+export {
+  DEDUCTION_RUBRIC,
+  JudgeVerdict,
+  gradeFinding,
+  median,
+  scoreFromVerdict,
+  type DeductionCode,
+  type FindingGrade,
+  type JudgeInput,
+  type JudgeProvider,
+  type JudgeScore,
+} from "./judgePanel";

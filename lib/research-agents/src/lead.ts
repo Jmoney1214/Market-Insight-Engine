@@ -56,6 +56,42 @@ export interface SpecialistRegistry {
 
 export type CheckState = "NOT_REQUIRED" | "COMPLETED" | "FAILED" | "UNKNOWN";
 
+/**
+ * Checkpoint Resume (TradingAgents pattern) — graph-shape-aware.
+ *
+ * After every successfully completed step the Lead emits a checkpoint carrying
+ * the plan's SHAPE HASH and per-step output snapshots. A resume replays only
+ * snapshots whose shape hash matches the current plan+code version — a code or
+ * plan change invalidates the checkpoint wholesale (never a partial mix of old
+ * and new graph). Abstained (UNKNOWN) and FAILED steps are never snapshotted:
+ * a resume re-runs them.
+ */
+export interface StepSnapshot {
+  state: CheckState;
+  catalyst?: CatalystRecord | null;
+  contest?: ContestResult | null;
+  audit?: { claims: Claim[]; audits: AuditedClaim[] } | null;
+  sentiment?: SentimentReading | null;
+  macro?: MacroContext | null;
+  capital?: CapitalStructure | null;
+}
+
+export interface LeadCheckpoint {
+  shapeHash: string;
+  completed: Record<string, StepSnapshot>;
+}
+
+/** Hash of the executable graph shape: step ids, tools, deps, lead version. */
+export function planShapeHash(plan: ResearchPlan, leadVersion: string): string {
+  return canonicalSha256(
+    {
+      leadVersion,
+      steps: plan.steps.map((s) => ({ stepId: s.stepId, tool: s.tool, dependsOn: [...s.dependsOn].sort() })),
+    },
+    "__none__",
+  );
+}
+
 export interface LeadRunResult {
   packet: CandidatePacket;
   dependencyManifest: PacketDependencyManifest;
@@ -84,6 +120,10 @@ export interface RunLeadInput {
   gitSha?: string | null;
   packetRevision?: number;
   supersedesPacketId?: string | null;
+  /** Prior checkpoint to resume from; ignored when the shape hash differs. */
+  checkpoint?: LeadCheckpoint | null;
+  /** Called after each completed step with the updated checkpoint (best-effort). */
+  onCheckpoint?: (checkpoint: LeadCheckpoint) => Promise<void>;
 }
 
 interface StepOutcome {
@@ -135,6 +175,22 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
   }
   const ordered = topoOrder(plan) ?? defaultPlan(seed.candidateId, mode).steps;
 
+  // Checkpoint plumbing: snapshots replay ONLY when the graph shape matches.
+  const shapeHash = planShapeHash(plan, input.leadVersion ?? "1.0.0");
+  const resumable =
+    input.checkpoint && input.checkpoint.shapeHash === shapeHash
+      ? input.checkpoint.completed
+      : {};
+  const completed: Record<string, StepSnapshot> = {};
+  const emitCheckpoint = async () => {
+    if (!input.onCheckpoint) return;
+    try {
+      await input.onCheckpoint({ shapeHash, completed: { ...completed } });
+    } catch {
+      // Checkpointing is best-effort; the run itself must never fail on it.
+    }
+  };
+
   // 2) Execute validated steps in dependency order, collecting typed outputs.
   const outcomes: StepOutcome[] = [];
   const catalystRecords: CatalystRecord[] = [];
@@ -146,13 +202,59 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
   let capitalStructure: CapitalStructure | null = null;
   let primaryCatalyst: CatalystRecord | null = null;
 
+  const applyContest = (contest: ContestResult) => {
+    conflicts.push(...contest.conflicts);
+    if (primaryCatalyst) {
+      // The contested record supersedes the primary in the packet.
+      catalystRecords[catalystRecords.indexOf(primaryCatalyst)] = contest.record;
+    }
+    primaryCatalyst = contest.record;
+  };
+
   for (const step of ordered) {
+    // Resume path: replay the snapshot instead of re-invoking the specialist.
+    const snapshot = resumable[step.stepId];
+    if (snapshot && (snapshot.state === "COMPLETED" || snapshot.state === "NOT_REQUIRED")) {
+      switch (step.tool) {
+        case "catalyst.verify":
+          primaryCatalyst = snapshot.catalyst ?? null;
+          if (primaryCatalyst) catalystRecords.push(primaryCatalyst);
+          break;
+        case "catalyst.second_verify":
+          if (snapshot.contest) applyContest(snapshot.contest);
+          break;
+        case "source.audit":
+          if (snapshot.audit) {
+            claims = snapshot.audit.claims;
+            auditedClaims = snapshot.audit.audits;
+          }
+          break;
+        case "sentiment.read":
+          sentiment = snapshot.sentiment ?? null;
+          break;
+        case "macro.context":
+          macro = snapshot.macro ?? null;
+          break;
+        case "capital.structure":
+          capitalStructure = snapshot.capital ?? null;
+          break;
+      }
+      outcomes.push({ tool: step.tool, state: snapshot.state });
+      completed[step.stepId] = snapshot;
+      continue;
+    }
+
     try {
       switch (step.tool) {
         case "catalyst.verify": {
           primaryCatalyst = await specialists["catalyst.verify"]();
           if (primaryCatalyst) catalystRecords.push(primaryCatalyst);
-          outcomes.push({ tool: step.tool, state: primaryCatalyst ? "COMPLETED" : "UNKNOWN" });
+          const state: CheckState = primaryCatalyst ? "COMPLETED" : "UNKNOWN";
+          outcomes.push({ tool: step.tool, state });
+          if (state === "COMPLETED") {
+            completed[step.stepId] = { state, catalyst: primaryCatalyst };
+            await emitCheckpoint();
+          }
           break;
         }
         case "catalyst.second_verify": {
@@ -161,13 +263,13 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
             break;
           }
           const contest = await specialists["catalyst.second_verify"](primaryCatalyst);
-          if (contest) {
-            conflicts.push(...contest.conflicts);
-            // The contested record supersedes the primary in the packet.
-            catalystRecords[catalystRecords.indexOf(primaryCatalyst)] = contest.record;
-            primaryCatalyst = contest.record;
+          if (contest) applyContest(contest);
+          const state: CheckState = contest ? "COMPLETED" : "UNKNOWN";
+          outcomes.push({ tool: step.tool, state });
+          if (state === "COMPLETED") {
+            completed[step.stepId] = { state, contest };
+            await emitCheckpoint();
           }
-          outcomes.push({ tool: step.tool, state: contest ? "COMPLETED" : "UNKNOWN" });
           break;
         }
         case "source.audit": {
@@ -176,25 +278,42 @@ export async function runLead(input: RunLeadInput): Promise<LeadRunResult> {
             claims = result.claims;
             auditedClaims = result.audits;
           }
-          outcomes.push({ tool: step.tool, state: result ? "COMPLETED" : "UNKNOWN" });
+          const state: CheckState = result ? "COMPLETED" : "UNKNOWN";
+          outcomes.push({ tool: step.tool, state });
+          if (state === "COMPLETED") {
+            completed[step.stepId] = { state, audit: result };
+            await emitCheckpoint();
+          }
           break;
         }
         case "sentiment.read": {
           sentiment = await specialists["sentiment.read"]();
-          outcomes.push({ tool: step.tool, state: sentiment ? "COMPLETED" : "UNKNOWN" });
+          const state: CheckState = sentiment ? "COMPLETED" : "UNKNOWN";
+          outcomes.push({ tool: step.tool, state });
+          if (state === "COMPLETED") {
+            completed[step.stepId] = { state, sentiment };
+            await emitCheckpoint();
+          }
           break;
         }
         case "macro.context": {
           macro = await specialists["macro.context"]();
-          outcomes.push({
-            tool: step.tool,
-            state: macro ? (macro.required ? "COMPLETED" : "NOT_REQUIRED") : "UNKNOWN",
-          });
+          const state: CheckState = macro ? (macro.required ? "COMPLETED" : "NOT_REQUIRED") : "UNKNOWN";
+          outcomes.push({ tool: step.tool, state });
+          if (state !== "UNKNOWN") {
+            completed[step.stepId] = { state, macro };
+            await emitCheckpoint();
+          }
           break;
         }
         case "capital.structure": {
           capitalStructure = await specialists["capital.structure"]();
-          outcomes.push({ tool: step.tool, state: capitalStructure ? "COMPLETED" : "UNKNOWN" });
+          const state: CheckState = capitalStructure ? "COMPLETED" : "UNKNOWN";
+          outcomes.push({ tool: step.tool, state });
+          if (state === "COMPLETED") {
+            completed[step.stepId] = { state, capital: capitalStructure };
+            await emitCheckpoint();
+          }
           break;
         }
       }

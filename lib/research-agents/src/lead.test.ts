@@ -165,3 +165,73 @@ describe("runLead", () => {
     expect(claimEntries.map((e) => e.objectId)).toEqual(["claim_01"]);
   });
 });
+
+describe("checkpoint resume (graph-shape-aware)", () => {
+  it("emits a checkpoint after each completed step", async () => {
+    const checkpoints: import("./lead").LeadCheckpoint[] = [];
+    await runLead(base({ onCheckpoint: async (cp) => void checkpoints.push(cp) }));
+    // STANDARD default plan: verify, audit, sentiment → 3 checkpoints.
+    expect(checkpoints).toHaveLength(3);
+    const last = checkpoints.at(-1)!;
+    expect(Object.keys(last.completed).sort()).toEqual(["audit", "sentiment", "verify"]);
+    expect(last.shapeHash).toMatch(/^sha256:/);
+  });
+
+  it("resume replays snapshots without re-invoking completed specialists", async () => {
+    let checkpoint: import("./lead").LeadCheckpoint | null = null;
+    await runLead(base({ onCheckpoint: async (cp) => void (checkpoint = cp) }));
+
+    const calls: string[] = [];
+    const specialists = happySpecialists();
+    const wrap = <K extends keyof typeof specialists>(key: K) => {
+      const original = specialists[key];
+      specialists[key] = (async (...args: unknown[]) => {
+        calls.push(key);
+        return (original as (...a: unknown[]) => unknown)(...args);
+      }) as (typeof specialists)[K];
+    };
+    (Object.keys(specialists) as Array<keyof typeof specialists>).forEach(wrap);
+
+    const result = await runLead(base({ specialists, checkpoint }));
+    expect(calls).toEqual([]); // everything replayed from snapshots
+    expect(result.packet.researchOutcome).toBe("COMPLETE");
+    expect(result.packet.checks.catalyst).toBe("COMPLETED");
+  });
+
+  it("a stale shape hash discards the checkpoint wholesale — no old/new mix", async () => {
+    let checkpoint: import("./lead").LeadCheckpoint | null = null;
+    await runLead(base({ onCheckpoint: async (cp) => void (checkpoint = cp) }));
+
+    const calls: string[] = [];
+    const specialists = happySpecialists();
+    specialists["catalyst.verify"] = async () => {
+      calls.push("catalyst.verify");
+      return catalystFixture();
+    };
+    const result = await runLead(
+      base({ specialists, checkpoint: { ...checkpoint!, shapeHash: "sha256:" + "0".repeat(64) } }),
+    );
+    expect(calls).toEqual(["catalyst.verify"]); // re-ran despite checkpoint
+    expect(result.packet.researchOutcome).toBe("COMPLETE");
+  });
+
+  it("abstained (UNKNOWN) steps are not snapshotted — a resume retries them", async () => {
+    const specialists = happySpecialists();
+    specialists["sentiment.read"] = async () => null;
+    let checkpoint: import("./lead").LeadCheckpoint | null = null;
+    await runLead(base({ specialists, onCheckpoint: async (cp) => void (checkpoint = cp) }));
+    expect(Object.keys(checkpoint!.completed)).not.toContain("sentiment");
+
+    // On resume, sentiment runs again (now succeeding) while others replay.
+    const resumed = await runLead(base({ checkpoint }));
+    expect(resumed.packet.checks.sentiment).toBe("COMPLETED");
+    expect(resumed.packet.researchOutcome).toBe("COMPLETE");
+  });
+
+  it("a crashing onCheckpoint never fails the run", async () => {
+    const result = await runLead(
+      base({ onCheckpoint: async () => { throw new Error("db down"); } }),
+    );
+    expect(result.packet.researchOutcome).toBe("COMPLETE");
+  });
+});

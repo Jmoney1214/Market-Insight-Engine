@@ -11,9 +11,43 @@ import {
   researchObjectsTable,
   researchPacketsTable,
 } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { canonicalSha256 } from "@workspace/research-contracts";
-import type { LeadRunResult } from "@workspace/research-agents";
+import type { LeadCheckpoint, LeadRunResult } from "@workspace/research-agents";
 import { logger } from "./logger.js";
+
+/** Opens the run in the ledger (status running). Safe to re-call on resume. */
+export async function startAgentRun(runId: string, agentId: string, agentVersion: string): Promise<void> {
+  try {
+    await db
+      .insert(agentRunsTable)
+      .values({ runId, agentId, agentVersion, status: "running" })
+      .onConflictDoNothing();
+  } catch (err) {
+    logger.warn({ err: String(err), runId }, "Run-ledger open failed (non-fatal)");
+  }
+}
+
+/** Persists a step checkpoint onto the run row (crash-resume state). */
+export async function checkpointAgentRun(runId: string, checkpoint: LeadCheckpoint): Promise<void> {
+  await db.update(agentRunsTable).set({ checkpoint }).where(eq(agentRunsTable.runId, runId));
+}
+
+/** Loads a prior run's checkpoint for resume; null when absent. */
+export async function loadCheckpoint(runId: string): Promise<LeadCheckpoint | null> {
+  try {
+    const rows = await db
+      .select({ checkpoint: agentRunsTable.checkpoint })
+      .from(agentRunsTable)
+      .where(eq(agentRunsTable.runId, runId))
+      .limit(1);
+    const cp = rows[0]?.checkpoint as LeadCheckpoint | null | undefined;
+    return cp && typeof cp === "object" && "shapeHash" in cp ? cp : null;
+  } catch (err) {
+    logger.warn({ err: String(err), runId }, "Checkpoint load failed; starting fresh");
+    return null;
+  }
+}
 
 interface StorableObject {
   objectType: string;
@@ -110,10 +144,12 @@ export async function persistLeadRun(result: LeadRunResult): Promise<boolean> {
         configHash: packet.provenance.configHash,
         gitSha: packet.provenance.gitSha,
         status: "completed",
-        checkpoint: { researchOutcome: packet.researchOutcome, checks: packet.checks },
         endedAt: new Date(),
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: agentRunsTable.runId,
+        set: { status: "completed", endedAt: new Date() },
+      });
 
     return true;
   } catch (err) {

@@ -24,10 +24,16 @@ router.get("/research/:symbol", async (req, res) => {
     return;
   }
 
+  // ?resume=<runId> replays a crashed run's completed steps (shape-hash-guarded).
+  const resumeRaw = String(req.query["resume"] ?? "").trim();
+  const resumeRunId = /^[A-Za-z0-9_-]{1,64}$/.test(resumeRaw) ? resumeRaw : null;
+
   try {
-    const result = await runResearch(symbol, modeRaw as "FAST" | "STANDARD" | "DEEP");
+    const result = await runResearch(symbol, modeRaw as "FAST" | "STANDARD" | "DEEP", resumeRunId);
     const persisted = await persistLeadRun(result);
-    res.json({ persisted, ...result });
+    const { judgeLeadRun } = await import("../lib/judgeStore.js");
+    const grades = await judgeLeadRun(result);
+    res.json({ persisted, grades, ...result });
   } catch (err) {
     req.log.error({ err, symbol }, "Research run failed");
     res.status(500).json({ error: "Research run failed." });

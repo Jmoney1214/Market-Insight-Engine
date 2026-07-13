@@ -35,6 +35,12 @@ export interface SentimentLensInput {
 /** Optional pre-fetched context for lenses that need data beyond the event. */
 export interface CommitteeExtras {
   sentiment?: SentimentLensInput | null;
+  /**
+   * Validated planner selection (from validateLensSelection). Omitted/null =
+   * run every lens (parallel mode, the default). Lenses not selected render
+   * a deterministic "not selected" read; bull/bear/risk always run.
+   */
+  lensSelection?: string[] | null;
 }
 
 /** A single specialist agent's read. */

@@ -19,6 +19,7 @@ import {
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
 import { getSentimentLensInput } from "../../lib/sentimentContext.js";
+import { planLenses } from "../../lib/committeePlanner.js";
 
 const router: IRouter = Router();
 
@@ -72,7 +73,9 @@ router.get("/explain", async (req, res) => {
         ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
         : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
     const core = await buildEventWithValidation(input);
-    const result = await runCommittee(core, provider, { sentiment });
+    // Opt-in planner (COMMITTEE_PLANNER=on): null → all lenses (the default).
+    const lensSelection = await planLenses(core);
+    const result = await runCommittee(core, provider, { sentiment, lensSelection });
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
   } catch (err) {
     if (err instanceof CopilotDataError) {

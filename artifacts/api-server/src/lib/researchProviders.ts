@@ -17,7 +17,7 @@ import type {
   SentimentProvider,
 } from "@workspace/research-agents";
 
-type ModelTier = "quick" | "deep";
+export type ModelTier = "quick" | "deep";
 
 /** Per-provider quick (routine) and deep (escalation) model names. */
 const MODELS: Record<LlmProviderId, Record<ModelTier, string>> = {
@@ -105,6 +105,26 @@ async function completeJson(
   );
 }
 
+/** Generic quick-tier JSON completion for planner/judge callers. */
+export function getPlannerCompletion(id: LlmProviderId, system: string, prompt: string): Promise<unknown> {
+  return completeJson(id, "quick", system, prompt);
+}
+
+/** Raw JSON completion on an explicit backbone — used by the judge panel. */
+export function completeOnBackbone(
+  id: LlmProviderId,
+  tier: ModelTier,
+  system: string,
+  prompt: string,
+): Promise<unknown> {
+  return completeJson(id, tier, system, prompt);
+}
+
+/** Model label for a backbone (provenance stamping). */
+export function backboneLabel(id: LlmProviderId, tier: ModelTier): string {
+  return `${id}:${MODELS[id][tier]}`;
+}
+
 function isConfigured(prefix: "OPENAI" | "GEMINI" | "ANTHROPIC"): boolean {
   return (
     !!process.env[`AI_INTEGRATIONS_${prefix}_BASE_URL`] &&
@@ -112,7 +132,7 @@ function isConfigured(prefix: "OPENAI" | "GEMINI" | "ANTHROPIC"): boolean {
   );
 }
 
-function configuredProviders(): LlmProviderId[] {
+export function configuredProviders(): LlmProviderId[] {
   const flags = {
     openai: isConfigured("OPENAI"),
     gemini: isConfigured("GEMINI"),
