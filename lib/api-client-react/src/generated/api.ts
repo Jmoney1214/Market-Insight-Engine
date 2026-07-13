@@ -1722,7 +1722,7 @@ export const getGetReplaySessionQueryKey = (params?: GetReplaySessionParams,) =>
     }
 
 
-export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError | void>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1741,14 +1741,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReplaySessionQueryResult = NonNullable<Awaited<ReturnType<typeof getReplaySession>>>
-export type GetReplaySessionQueryError = ErrorType<ApiError | void>
+export type GetReplaySessionQueryError = ErrorType<ApiError>
 
 
 /**
  * @summary Load replay session metadata for a symbol/date
  */
 
-export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError | void>>(
+export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(
  params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1807,7 +1807,7 @@ export const getGetReplayEventQueryKey = (params?: GetReplayEventParams,) => {
     }
 
 
-export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError | void>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1826,14 +1826,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof getReplayEvent>>>
-export type GetReplayEventQueryError = ErrorType<ApiError | void>
+export type GetReplayEventQueryError = ErrorType<ApiError>
 
 
 /**
  * @summary Build the deterministic copilot event at a replay step
  */
 
-export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError | void>>(
+export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(
  params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1892,7 +1892,7 @@ export const getExplainReplayEventQueryKey = (params?: ExplainReplayEventParams,
     }
 
 
-export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError | void>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1911,14 +1911,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ExplainReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainReplayEvent>>>
-export type ExplainReplayEventQueryError = ErrorType<ApiError | void>
+export type ExplainReplayEventQueryError = ErrorType<ApiError>
 
 
 /**
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 
-export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError | void>>(
+export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(
  params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

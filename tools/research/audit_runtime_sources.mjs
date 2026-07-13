@@ -20,13 +20,6 @@ const DEFAULT_LIVE_ENTRYPOINTS = [
   "artifacts/mcp-gateway/src/index.ts",
 ];
 const DEFAULT_REPLAY_ENTRYPOINTS = ["artifacts/api-server/src/routes/copilot/replay.ts"];
-const WORKSPACE_ALIASES = new Map([
-  ["@workspace/copilot-core", "lib/copilot-core/src/index.ts"],
-  ["@workspace/copilot-core/runtime", "lib/copilot-core/src/runtime.ts"],
-  ["@workspace/copilot-committee", "lib/copilot-committee/src/index.ts"],
-  ["@workspace/api-zod", "lib/api-zod/src/index.ts"],
-  ["@workspace/api-client-react", "lib/api-client-react/src/index.ts"],
-]);
 
 async function exists(file) {
   try {
@@ -97,18 +90,118 @@ function importSpecifiers(source) {
   return [...specifiers];
 }
 
-async function resolveImport(root, importer, specifier) {
+function workspaceSpecifierParts(specifier) {
+  if (!specifier.startsWith("@workspace/")) return null;
+  const parts = specifier.split("/");
+  return {
+    packageName: parts.slice(0, 2).join("/"),
+    subpath: parts.slice(2).join("/"),
+  };
+}
+
+function conditionalExportTargets(value) {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(conditionalExportTargets);
+  if (!value || typeof value !== "object") return [];
+
+  const priority = [
+    "source",
+    "development",
+    "import",
+    "default",
+    "types",
+    "require",
+  ];
+  const keys = Object.keys(value);
+  const orderedKeys = [
+    ...priority.filter((key) => keys.includes(key)),
+    ...keys.filter((key) => !priority.includes(key)),
+  ];
+  return orderedKeys.flatMap((key) => conditionalExportTargets(value[key]));
+}
+
+function workspaceExportTargets(manifest, subpath) {
+  const exportsField = manifest.exports;
+  const key = subpath ? `./${subpath}` : ".";
+
+  if (typeof exportsField === "string" || Array.isArray(exportsField)) {
+    return subpath ? [] : conditionalExportTargets(exportsField);
+  }
+
+  if (exportsField && typeof exportsField === "object") {
+    const keys = Object.keys(exportsField);
+    const subpathMap = keys.some((exportKey) => exportKey.startsWith("."));
+    if (!subpathMap) return subpath ? [] : conditionalExportTargets(exportsField);
+    if (Object.hasOwn(exportsField, key)) return conditionalExportTargets(exportsField[key]);
+
+    for (const exportKey of keys) {
+      const star = exportKey.indexOf("*");
+      if (star === -1) continue;
+      const prefix = exportKey.slice(0, star);
+      const suffix = exportKey.slice(star + 1);
+      if (!key.startsWith(prefix) || !key.endsWith(suffix)) continue;
+      const match = key.slice(prefix.length, key.length - suffix.length || undefined);
+      return conditionalExportTargets(exportsField[exportKey]).map((target) =>
+        target.replaceAll("*", match),
+      );
+    }
+    return [];
+  }
+
+  if (subpath) return [];
+  return [manifest.source, manifest.module, manifest.main, "./src/index.ts"].filter(
+    (target) => typeof target === "string",
+  );
+}
+
+async function discoverWorkspacePackages(files) {
+  const packages = new Map();
+  for (const manifestPath of files.filter((file) => path.basename(file) === "package.json")) {
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    if (typeof manifest.name !== "string" || !manifest.name.startsWith("@workspace/")) continue;
+    if (packages.has(manifest.name)) {
+      throw new Error(`DUPLICATE_WORKSPACE_PACKAGE: ${manifest.name}`);
+    }
+    packages.set(manifest.name, {
+      manifest,
+      packageRoot: path.dirname(manifestPath),
+    });
+  }
+  return packages;
+}
+
+async function resolveWorkspaceImport(root, importer, specifier, workspacePackages) {
+  const { packageName, subpath } = workspaceSpecifierParts(specifier);
+  const workspacePackage = workspacePackages.get(packageName);
+  if (workspacePackage) {
+    for (const target of workspaceExportTargets(workspacePackage.manifest, subpath)) {
+      const candidate = path.resolve(workspacePackage.packageRoot, target);
+      const relativeToPackage = path.relative(workspacePackage.packageRoot, candidate);
+      if (relativeToPackage.startsWith("..") || path.isAbsolute(relativeToPackage)) continue;
+      const resolved = await resolveSourceFile(candidate);
+      if (resolved) return resolved;
+    }
+  }
+
+  throw new Error(
+    `UNRESOLVED_WORKSPACE_IMPORT: ${specifier} from ${normalizeRelative(root, importer)}`,
+  );
+}
+
+async function resolveImport(root, importer, specifier, workspacePackages) {
   if (specifier.startsWith(".")) {
     return resolveSourceFile(path.resolve(path.dirname(importer), specifier));
   }
   if (specifier.startsWith("@/")) {
     return resolveSourceFile(path.join(root, "artifacts/desk/src", specifier.slice(2)));
   }
-  const alias = WORKSPACE_ALIASES.get(specifier);
-  return alias ? resolveSourceFile(path.join(root, alias)) : null;
+  if (workspaceSpecifierParts(specifier)) {
+    return resolveWorkspaceImport(root, importer, specifier, workspacePackages);
+  }
+  return null;
 }
 
-async function reachableFiles(root, entrypoints) {
+async function reachableFiles(root, entrypoints, workspacePackages) {
   const queue = [];
   for (const relative of entrypoints) {
     const entry = await resolveSourceFile(path.join(root, relative));
@@ -122,7 +215,7 @@ async function reachableFiles(root, entrypoints) {
     visited.add(file);
     const source = await readFile(file, "utf8");
     for (const specifier of importSpecifiers(source)) {
-      const resolved = await resolveImport(root, file, specifier);
+      const resolved = await resolveImport(root, file, specifier, workspacePackages);
       if (resolved && !visited.has(resolved)) queue.push(resolved);
     }
   }
@@ -164,6 +257,7 @@ export async function auditRuntimeSources({
   }
 
   const files = await walk(root);
+  const workspacePackages = await discoverWorkspacePackages(files);
   const discovered = files.map((file) => normalizeRelative(root, file)).filter(isDiscoveredAsset);
   for (const relative of discovered) {
     if (!matchingClassification(relative, document.assets)) {
@@ -171,7 +265,7 @@ export async function auditRuntimeSources({
     }
   }
 
-  const liveReachable = await reachableFiles(root, liveEntrypoints);
+  const liveReachable = await reachableFiles(root, liveEntrypoints, workspacePackages);
   for (const file of liveReachable) {
     const relative = normalizeRelative(root, file);
     if (matchingClassification(relative, document.assets)) {
@@ -179,7 +273,7 @@ export async function auditRuntimeSources({
     }
   }
 
-  const replayReachable = await reachableFiles(root, replayEntrypoints);
+  const replayReachable = await reachableFiles(root, replayEntrypoints, workspacePackages);
   const replayAssets = [...replayReachable]
     .map((file) => normalizeRelative(root, file))
     .filter((relative) => matchingClassification(relative, document.assets)?.classification === "REPLAY_ONLY");

@@ -528,6 +528,10 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Historical brain authorization is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /copilot/replay/event:
     get:
@@ -572,6 +576,10 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Historical brain authorization is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /copilot/replay/explain:
     get:
@@ -616,6 +624,10 @@ paths:
                 $ref: "#/components/schemas/ApiError"
         "503":
           description: Historical brain authorization is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
 components:
   schemas:

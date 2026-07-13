@@ -19,6 +19,19 @@ async function writeClassifications(root, assets) {
   return file;
 }
 
+async function writeWorkspacePackage(
+  root,
+  { name = "@workspace/example", exports = { ".": "./src/index.ts" } } = {},
+) {
+  const packageRoot = path.join(root, "lib", name.split("/").at(-1));
+  await mkdir(path.join(packageRoot, "src"), { recursive: true });
+  await writeFile(
+    path.join(packageRoot, "package.json"),
+    JSON.stringify({ name, private: true, type: "module", exports }),
+  );
+  return packageRoot;
+}
+
 const classification = (assetPath, classificationName = "TEST_ONLY") => ({
   path: assetPath,
   classification: classificationName,
@@ -76,6 +89,83 @@ test("rejects replay fixture reachability without canonical evidence boundary", 
       replayEntrypoints: ["src/live.ts"],
     }),
     /REPLAY_CANONICAL_BOUNDARY_REQUIRED/,
+  );
+});
+
+test("rejects an unknown internal workspace package import", async () => {
+  const root = await fixtureRepo({
+    entry: 'import "@workspace/does-not-exist";\nexport const live = true;\n',
+    asset: false,
+  });
+  const classificationsPath = await writeClassifications(root, []);
+
+  await assert.rejects(
+    auditRuntimeSources({
+      root,
+      classificationsPath,
+      liveEntrypoints: ["src/live.ts"],
+      replayEntrypoints: [],
+    }),
+    /UNRESOLVED_WORKSPACE_IMPORT: @workspace\/does-not-exist/,
+  );
+});
+
+test("rejects an unexported workspace package subpath", async () => {
+  const root = await fixtureRepo({
+    entry: 'import "@workspace/example/unlisted";\nexport const live = true;\n',
+    asset: false,
+  });
+  const packageRoot = await writeWorkspacePackage(root);
+  await writeFile(
+    path.join(packageRoot, "src", "index.ts"),
+    "export const value = 1;\n",
+  );
+  const classificationsPath = await writeClassifications(root, []);
+
+  await assert.rejects(
+    auditRuntimeSources({
+      root,
+      classificationsPath,
+      liveEntrypoints: ["src/live.ts"],
+      replayEntrypoints: [],
+    }),
+    /UNRESOLVED_WORKSPACE_IMPORT: @workspace\/example\/unlisted/,
+  );
+});
+
+test("resolves an exported workspace subpath into the LIVE graph", async () => {
+  const root = await fixtureRepo({
+    entry: 'import "@workspace/example/runtime";\nexport const live = true;\n',
+    asset: false,
+  });
+  const packageRoot = await writeWorkspacePackage(root, {
+    exports: { ".": "./src/index.ts", "./runtime": "./src/runtime.ts" },
+  });
+  await mkdir(path.join(packageRoot, "src", "fixtures"), { recursive: true });
+  await writeFile(
+    path.join(packageRoot, "src", "index.ts"),
+    "export const value = 1;\n",
+  );
+  await writeFile(
+    path.join(packageRoot, "src", "runtime.ts"),
+    'import "./fixtures/data.js";\n',
+  );
+  await writeFile(
+    path.join(packageRoot, "src", "fixtures", "data.ts"),
+    "export const value = 1;\n",
+  );
+  const classificationsPath = await writeClassifications(root, [
+    classification("lib/example/src/fixtures/data.ts", "REPLAY_ONLY"),
+  ]);
+
+  await assert.rejects(
+    auditRuntimeSources({
+      root,
+      classificationsPath,
+      liveEntrypoints: ["src/live.ts"],
+      replayEntrypoints: [],
+    }),
+    /LIVE_RUNTIME_SOURCE_REACHABLE.*lib\/example\/src\/fixtures\/data\.ts/,
   );
 });
 
