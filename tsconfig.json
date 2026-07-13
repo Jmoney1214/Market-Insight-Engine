@@ -4,6 +4,9 @@
   "files": [],
   "references": [
     {
+      "path": "./lib/research-contracts"
+    },
+    {
       "path": "./lib/copilot-core"
     },
     {
