@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, mkdtempSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -119,6 +119,38 @@ describe("EdgarClient", () => {
     await c.getFilingDocument(ref);
     await c.getFilingDocument(ref);
     expect(hits).toBe(1);
+  });
+
+  it("caches documents whose primaryDocument lives in a nested folder (Form 144 style)", async () => {
+    // Regression: "xsl144X01/primary_doc.xml" used to ENOENT on cache write and
+    // kill the whole evidence gather.
+    const cache = mkdtempSync(join(tmpdir(), "edgar-"));
+    let hits = 0;
+    const counting = (async () => {
+      hits++;
+      return new Response(EIGHT_K_HTML, { status: 200 });
+    }) as typeof fetch;
+    const c = new EdgarClient({ userAgent: "t (t@e.com)", cacheDir: cache, minIntervalMs: 0, fetchFn: counting });
+    const ref = { cik: "0001838359", accessionNumber: "0001967940-26-000033", primaryDocument: "xsl144X01/primary_doc.xml" };
+    const first = await c.getFilingDocument(ref);
+    expect(first).toBe(EIGHT_K_HTML);
+    const second = await c.getFilingDocument(ref);
+    expect(second).toBe(EIGHT_K_HTML);
+    expect(hits).toBe(1);
+  });
+
+  it("a traversal-shaped primaryDocument cannot escape the cache dir", async () => {
+    const cache = mkdtempSync(join(tmpdir(), "edgar-"));
+    const c = new EdgarClient({
+      userAgent: "t (t@e.com)",
+      cacheDir: cache,
+      minIntervalMs: 0,
+      fetchFn: fakeFetch({ "Archives/edgar/data": EIGHT_K_HTML }),
+    });
+    const ref = { cik: "0001838359", accessionNumber: "0001967940-26-000033", primaryDocument: "../../escape.htm" };
+    await c.getFilingDocument(ref);
+    expect(existsSync(join(cache, "..", "..", "escape.htm"))).toBe(false);
+    expect(existsSync(join(cache, "filings", "000196794026000033", "escape.htm"))).toBe(true);
   });
 });
 

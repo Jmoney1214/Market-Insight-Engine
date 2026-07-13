@@ -77,14 +77,36 @@ export class EdgarClient {
 
   private cachePath(...parts: string[]): string | null {
     if (!this.cacheDir) return null;
-    const dir = join(this.cacheDir, ...parts.slice(0, -1));
-    mkdirSync(dir, { recursive: true });
-    return join(dir, parts[parts.length - 1]!);
+    // Filing documents may live in nested folders (e.g. "xsl144X01/primary_doc.xml"):
+    // split every part on "/" so mkdir covers the whole tree, and drop traversal tokens.
+    const segments = parts
+      .flatMap((p) => p.split("/"))
+      .filter((s) => s && s !== "." && s !== "..");
+    if (segments.length === 0) return null;
+    try {
+      const dir = join(this.cacheDir, ...segments.slice(0, -1));
+      mkdirSync(dir, { recursive: true });
+      return join(dir, segments[segments.length - 1]!);
+    } catch {
+      return null; // cache is best-effort — never blocks a live fetch
+    }
   }
 
   private cached(path: string | null): string | null {
-    if (path && existsSync(path)) return readFileSync(path, "utf8");
+    try {
+      if (path && existsSync(path)) return readFileSync(path, "utf8");
+    } catch {
+      // fall through — a broken cache entry must not block a live fetch
+    }
     return null;
+  }
+
+  private cacheWrite(path: string, body: string): void {
+    try {
+      writeFileSync(path, body);
+    } catch {
+      // cache is best-effort — never blocks evidence gathering
+    }
   }
 
   static padCik(cik: string): string {
@@ -97,7 +119,7 @@ export class EdgarClient {
     let body = this.cached(path);
     if (body === null) {
       body = await this.get(TICKERS_URL);
-      if (body !== null && path) writeFileSync(path, body);
+      if (body !== null && path) this.cacheWrite(path, body);
     }
     if (body === null) return null;
     try {
@@ -148,7 +170,7 @@ export class EdgarClient {
     if (hit !== null) return hit;
     const cikNum = String(Number(ref.cik));
     const body = await this.get(`${ARCHIVES_BASE}/${cikNum}/${accession}/${ref.primaryDocument}`);
-    if (body !== null && path) writeFileSync(path, body);
+    if (body !== null && path) this.cacheWrite(path, body);
     return body;
   }
 
