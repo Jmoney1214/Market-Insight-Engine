@@ -7,9 +7,17 @@ info:
 servers:
   - url: /api
     description: Base API path
+security:
+  - bearerAuth: []
+  - sessionCookie: []
+    csrfToken: []
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Human, service, and agent application authentication
+  - name: governance
+    description: Step-up protected principal and permanent credential governance
   - name: analysis
     description: Ticker analysis and reports
   - name: watchlist
@@ -19,7 +27,190 @@ tags:
   - name: copilot
     description: Trading Desk Copilot research helper (no order execution)
 
+x-protected-responses: &protectedResponses
+  "401": { $ref: "#/components/responses/AuthRequired" }
+  "403": { $ref: "#/components/responses/AuthForbidden" }
+  "503": { $ref: "#/components/responses/AuditUnavailable" }
+x-idempotent-responses: &idempotentResponses
+  <<: *protectedResponses
+  "409": { $ref: "#/components/responses/IdempotencyConflict" }
+
 paths:
+  /auth/session:
+    post:
+      operationId: createSession
+      tags: [auth]
+      summary: Exchange a permanent human bearer for a browser session
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Browser session created; opaque session and CSRF values are set as strict secure cookies
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessionId, principal, effectiveScopes]
+                properties:
+                  sessionId: { type: string }
+                  principal: { type: object, additionalProperties: true }
+                  effectiveScopes: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+    delete:
+      operationId: deleteSession
+      tags: [auth]
+      summary: Revoke the current browser session
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      responses:
+        "204": { description: Browser session revoked }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+
+  /auth/whoami:
+    get:
+      operationId: getCurrentPrincipal
+      tags: [auth]
+      summary: Return the current verified principal and effective scopes
+      responses:
+        "200":
+          description: Current principal
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [principal, credentialId, effectiveScopes, authMode]
+                properties:
+                  principal: { type: object, additionalProperties: true }
+                  credentialId: { type: string }
+                  effectiveScopes: { type: array, items: { type: string } }
+                  authMode: { type: string, enum: [bearer, cookie] }
+                  sessionId: { type: string }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+
+  /governance/principals:
+    post:
+      operationId: issuePrincipal
+      tags: [governance]
+      summary: Issue a human, service, or manifest-bound agent principal
+      security:
+        - sessionCookie: []
+          csrfToken: []
+          stepUpCredential: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PrincipalIssuanceInput" }
+      responses:
+        "201":
+          description: Principal and signed ACTIVATE decision created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrincipalIssuanceResponse" }
+        "400": { $ref: "#/components/responses/InvalidGovernanceInput" }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "409": { $ref: "#/components/responses/IdempotencyConflict" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+
+  /governance/principals/{principalId}/revoke:
+    post:
+      operationId: revokePrincipal
+      tags: [governance]
+      summary: Append a signed principal revocation decision
+      security:
+        - sessionCookie: []
+          csrfToken: []
+          stepUpCredential: []
+      parameters:
+        - name: principalId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GovernanceRevocationInput" }
+      responses:
+        "200":
+          description: Signed principal revocation decision appended
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PrincipalGovernanceDecision" }
+        "400": { $ref: "#/components/responses/InvalidGovernanceInput" }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "404": { description: Principal not found, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { $ref: "#/components/responses/IdempotencyConflict" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+
+  /governance/credentials:
+    post:
+      operationId: issueCredential
+      tags: [governance]
+      summary: Issue a permanent application credential and return its plaintext once
+      security:
+        - sessionCookie: []
+          csrfToken: []
+          stepUpCredential: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CredentialIssuanceInput" }
+      responses:
+        "201":
+          description: Permanent credential and signed ACTIVATE decision created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialIssuanceResponse" }
+        "400": { $ref: "#/components/responses/InvalidGovernanceInput" }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "404": { description: Principal not found, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { $ref: "#/components/responses/IdempotencyConflict" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+
+  /governance/credentials/{credentialId}/revoke:
+    post:
+      operationId: revokeCredential
+      tags: [governance]
+      summary: Append a signed permanent-credential revocation decision
+      security:
+        - sessionCookie: []
+          csrfToken: []
+          stepUpCredential: []
+      parameters:
+        - name: credentialId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GovernanceRevocationInput" }
+      responses:
+        "200":
+          description: Signed credential revocation decision appended
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CredentialGovernanceDecision" }
+        "400": { $ref: "#/components/responses/InvalidGovernanceInput" }
+        "401": { $ref: "#/components/responses/AuthRequired" }
+        "403": { $ref: "#/components/responses/AuthForbidden" }
+        "404": { description: Credential not found, content: { application/json: { schema: { $ref: "#/components/schemas/ApiError" } } } }
+        "409": { $ref: "#/components/responses/IdempotencyConflict" }
+        "503": { $ref: "#/components/responses/AuditUnavailable" }
+
   /scan/premarket:
     get:
       operationId: getPremarketScan
@@ -38,6 +229,7 @@ paths:
             type: boolean
           description: Bypass the short-lived scan cache
       responses:
+        <<: *idempotentResponses
         "200":
           description: Scan result
           content:
@@ -61,6 +253,7 @@ paths:
         then graded after the close against the session's actual bar
         (intraday = ranged >=2%, jump = closed up, fall = closed down).
       responses:
+        <<: *protectedResponses
         "200":
           description: Scorecard summary
           content:
@@ -87,6 +280,7 @@ paths:
             pattern: "^\\d{4}-\\d{2}-\\d{2}$"
           description: Trading date (YYYY-MM-DD, America/New_York)
       responses:
+        <<: *protectedResponses
         "200":
           description: Universe snapshot
           content:
@@ -109,6 +303,7 @@ paths:
   /healthz:
     get:
       operationId: healthCheck
+      security: []
       tags: [health]
       summary: Health check
       description: Returns server health status
@@ -133,6 +328,7 @@ paths:
             schema:
               $ref: "#/components/schemas/AnalyzeInput"
       responses:
+        <<: *idempotentResponses
         "201":
           description: Report created
           content:
@@ -159,6 +355,7 @@ paths:
       summary: List past analyses
       description: Returns only reports with non-mock persisted provenance.
       responses:
+        <<: *protectedResponses
         "200":
           description: List of reports
           content:
@@ -181,6 +378,7 @@ paths:
           schema:
             type: integer
       responses:
+        <<: *protectedResponses
         "200":
           description: Full report
           content:
@@ -210,6 +408,7 @@ paths:
           schema:
             type: integer
       responses:
+        <<: *idempotentResponses
         "204":
           description: Deleted
 
@@ -219,6 +418,7 @@ paths:
       tags: [watchlist]
       summary: Get watchlist tickers
       responses:
+        <<: *protectedResponses
         "200":
           description: Watchlist entries
           content:
@@ -238,6 +438,7 @@ paths:
             schema:
               $ref: "#/components/schemas/WatchlistInput"
       responses:
+        <<: *idempotentResponses
         "201":
           description: Added
           content:
@@ -257,12 +458,14 @@ paths:
           schema:
             type: string
       responses:
+        <<: *idempotentResponses
         "204":
           description: Removed
 
   /copilot/healthz:
     get:
       operationId: copilotHealthCheck
+      security: []
       tags: [copilot]
       summary: Copilot service health check
       description: Returns health status for the Trading Desk Copilot service
@@ -280,9 +483,9 @@ paths:
       tags: [copilot]
       summary: Build the canonical deterministic copilot event for a symbol
       description: >-
-        Computes one deterministic read-only event from Alpaca SIP. Omitted
-        source means alpaca_live. Fixture and historical modes are rejected
-        until verified replay authorization and canonical case evidence exist.
+        Computes one deterministic read-only event from Alpaca SIP, or resolves
+        an exact authorized canonical historical case. Omitted source means
+        alpaca_live. There is no bundled-fixture fallback.
       parameters:
         - name: symbol
           in: query
@@ -303,7 +506,20 @@ paths:
           schema:
             type: string
             enum: [LIVE, REPLAY, RESEARCH]
+        - name: caseRevisionId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Required with REPLAY or RESEARCH; exact immutable brain case revision.
+        - name: evidenceHash
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Required with REPLAY or RESEARCH; exact evidence hash bound to the case.
       responses:
+        <<: *idempotentResponses
         "200":
           description: Canonical copilot event
           content:
@@ -317,7 +533,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "503":
-          description: Historical brain authorization is not ready
+          description: Canonical historical brain unavailable or integrity check failed
           content:
             application/json:
               schema:
@@ -334,8 +550,8 @@ paths:
         summarizes the deterministic read: it never creates signals, approves
         trades, overrides hard blocks, or invents data. When the event is
         hard-blocked the recommendation can only be a defensive value. Omitted
-        source means read-only Alpaca SIP; fixture and historical modes fail
-        closed until verified replay authorization exists.
+        source means read-only Alpaca SIP. Historical reads require an exact
+        authorized case revision and evidence hash with no fixture fallback.
       parameters:
         - name: symbol
           in: query
@@ -356,7 +572,20 @@ paths:
           schema:
             type: string
             enum: [LIVE, REPLAY, RESEARCH]
+        - name: caseRevisionId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Required with REPLAY or RESEARCH; exact immutable brain case revision.
+        - name: evidenceHash
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Required with REPLAY or RESEARCH; exact evidence hash bound to the case.
       responses:
+        <<: *idempotentResponses
         "200":
           description: Read-only analyst committee explanation
           content:
@@ -370,7 +599,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "503":
-          description: Historical brain authorization is not ready
+          description: Canonical historical brain unavailable or integrity check failed
           content:
             application/json:
               schema:
@@ -382,6 +611,7 @@ paths:
       tags: [copilot]
       summary: List journal entries
       responses:
+        <<: *protectedResponses
         "200":
           description: Journal entries
           content:
@@ -401,6 +631,7 @@ paths:
             schema:
               $ref: "#/components/schemas/JournalEntryInput"
       responses:
+        <<: *idempotentResponses
         "201":
           description: Created
           content:
@@ -426,6 +657,7 @@ paths:
           schema:
             type: integer
       responses:
+        <<: *idempotentResponses
         "204":
           description: Deleted
 
@@ -435,6 +667,7 @@ paths:
       tags: [copilot]
       summary: List strategy registry entries
       responses:
+        <<: *protectedResponses
         "200":
           description: Strategy registry entries
           content:
@@ -453,6 +686,7 @@ paths:
         Compatibility adapter that projects the deterministic edge scoreboard into
         the legacy validation-state shape. Prefer GET /copilot/scoreboard.
       responses:
+        <<: *protectedResponses
         "200":
           description: Validation states
           content:
@@ -468,6 +702,7 @@ paths:
       tags: [copilot]
       summary: Deterministic edge scoreboard computed from journaled outcomes
       responses:
+        <<: *protectedResponses
         "200":
           description: Edge scores, one row per primary-edge hypothesis
           content:
@@ -483,6 +718,7 @@ paths:
       tags: [copilot]
       summary: List historical copilot events
       responses:
+        <<: *protectedResponses
         "200":
           description: History events
           content:
@@ -499,8 +735,8 @@ paths:
       summary: Load replay session metadata for a symbol/date
       description: >-
         Returns canonical historical-case metadata after verified brain
-        authorization. Temporarily returns BRAIN_AUTH_NOT_READY before any
-        fixture read. Replay never executes, simulates, routes, or paper-trades.
+        authorization and exact evidence binding. Replay never executes,
+        simulates, routes, or paper-trades.
       parameters:
         - name: symbol
           in: query
@@ -513,7 +749,20 @@ paths:
           schema:
             type: string
           description: "ISO date (YYYY-MM-DD); defaults to the symbol's available session"
+        - name: caseRevisionId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Exact immutable brain case revision.
+        - name: evidenceHash
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Exact evidence hash bound to the case revision.
       responses:
+        <<: *protectedResponses
         "200":
           description: Replay session metadata
           content:
@@ -527,7 +776,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "503":
-          description: Historical brain authorization is not ready
+          description: Canonical historical brain unavailable or integrity check failed
           content:
             application/json:
               schema:
@@ -540,8 +789,8 @@ paths:
       summary: Build the deterministic copilot event at a replay step
       description: >-
         After verified brain authorization, computes one deterministic event
-        from a canonical case revision and evidence hash. Temporarily returns
-        BRAIN_AUTH_NOT_READY before any fixture read. Never returns order intent.
+        from an exact canonical case revision and evidence hash. Never returns
+        order intent and never reads bundled fixtures.
       parameters:
         - name: symbol
           in: query
@@ -561,7 +810,20 @@ paths:
             type: integer
             minimum: 0
           description: "0-based replay step (0 .. totalSteps-1)"
+        - name: caseRevisionId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Exact immutable brain case revision.
+        - name: evidenceHash
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Exact evidence hash bound to the case revision.
       responses:
+        <<: *protectedResponses
         "200":
           description: Canonical copilot event for the replay step
           content:
@@ -575,7 +837,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "503":
-          description: Historical brain authorization is not ready
+          description: Canonical historical brain unavailable or integrity check failed
           content:
             application/json:
               schema:
@@ -590,8 +852,8 @@ paths:
         Runs the same multi-agent analyst committee over the deterministic
         replay-step event. The committee only explains, critiques, and
         summarizes: it never creates signals, approves trades, overrides hard
-        blocks, or invents data. Temporarily returns BRAIN_AUTH_NOT_READY before
-        any fixture read until verified brain authorization exists.
+        blocks, or invents data. The event is resolved only from the exact
+        authorized canonical case revision and evidence hash.
       parameters:
         - name: symbol
           in: query
@@ -609,7 +871,20 @@ paths:
           schema:
             type: integer
             minimum: 0
+        - name: caseRevisionId
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Exact immutable brain case revision.
+        - name: evidenceHash
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Exact evidence hash bound to the case revision.
       responses:
+        <<: *idempotentResponses
         "200":
           description: Read-only analyst committee explanation for the replay step
           content:
@@ -623,14 +898,167 @@ paths:
               schema:
                 $ref: "#/components/schemas/ApiError"
         "503":
-          description: Historical brain authorization is not ready
+          description: Canonical historical brain unavailable or integrity check failed
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: permanent-application-credential
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: mie_session
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token
+    stepUpCredential:
+      type: apiKey
+      in: header
+      name: X-MIE-Step-Up-Authorization
+  responses:
+    AuthRequired:
+      description: No valid application credential or browser session
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    AuthForbidden:
+      description: Verified principal lacks the required kind, scope, CSRF binding, or resource permission
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    AuditUnavailable:
+      description: Authentication, request audit, or idempotency persistence is unavailable
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    IdempotencyConflict:
+      description: Idempotency key is missing, in progress, or bound to different input
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+    InvalidGovernanceInput:
+      description: Governance request or signed-decision input is invalid
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
   schemas:
+    PrincipalIssuanceInput:
+      type: object
+      additionalProperties: false
+      required: [principalKind, subject, displayName, scopes, rationale]
+      properties:
+        principalKind: { type: string, enum: [human, service, agent] }
+        subject: { type: string, minLength: 1 }
+        displayName: { type: string, minLength: 1 }
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        servicePrincipalId: { type: string, format: uuid }
+        manifestId: { type: string, minLength: 1 }
+        manifestVersion: { type: string, minLength: 1 }
+        rationale: { type: string, minLength: 1 }
+    CredentialIssuanceInput:
+      type: object
+      additionalProperties: false
+      required: [principalId, scopes, rationale]
+      properties:
+        principalId: { type: string, format: uuid }
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, minLength: 1 }
+        expiresAt: { type: string, format: date-time }
+        rationale: { type: string, minLength: 1 }
+    GovernanceRevocationInput:
+      type: object
+      additionalProperties: false
+      required: [expectedRevision, expectedDecisionId, rationale]
+      properties:
+        expectedRevision: { type: integer, minimum: 1 }
+        expectedDecisionId: { type: string, format: uuid }
+        rationale: { type: string, minLength: 1 }
+    PrincipalDecisionSubject:
+      type: object
+      additionalProperties: false
+      required: [subjectType, principalId, principalSha256]
+      properties:
+        subjectType: { type: string, enum: [PRINCIPAL] }
+        principalId: { type: string, format: uuid }
+        principalSha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+    CredentialDecisionSubject:
+      type: object
+      additionalProperties: false
+      required: [subjectType, credentialId, credentialSha256]
+      properties:
+        subjectType: { type: string, enum: [CREDENTIAL] }
+        credentialId: { type: string, format: uuid }
+        credentialSha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+    PrincipalGovernanceDecision:
+      type: object
+      additionalProperties: false
+      required: [decisionType, decisionId, verdict, rationale, subject, revision, supersedesDecisionId, humanPrincipalId, credentialId, requestId, decidedAt, nonce, attestationKeyId, attestationHmacSha256]
+      properties:
+        decisionType: { type: string, enum: [PRINCIPAL] }
+        decisionId: { type: string, format: uuid }
+        verdict: { type: string, enum: [ACTIVATE, REVOKE] }
+        rationale: { type: string, minLength: 1 }
+        subject: { $ref: "#/components/schemas/PrincipalDecisionSubject" }
+        revision: { type: integer, minimum: 1 }
+        supersedesDecisionId: { type: [string, "null"], format: uuid }
+        humanPrincipalId: { type: string, format: uuid }
+        credentialId: { type: string, format: uuid }
+        requestId: { type: string, minLength: 1 }
+        decidedAt: { type: string, description: ISO 8601 timestamp with offset }
+        nonce: { type: string, minLength: 1 }
+        attestationKeyId: { type: string, minLength: 1 }
+        attestationHmacSha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+    CredentialGovernanceDecision:
+      type: object
+      additionalProperties: false
+      required: [decisionType, decisionId, verdict, rationale, subject, revision, supersedesDecisionId, humanPrincipalId, credentialId, requestId, decidedAt, nonce, attestationKeyId, attestationHmacSha256]
+      properties:
+        decisionType: { type: string, enum: [CREDENTIAL] }
+        decisionId: { type: string, format: uuid }
+        verdict: { type: string, enum: [ACTIVATE, REVOKE] }
+        rationale: { type: string, minLength: 1 }
+        subject: { $ref: "#/components/schemas/CredentialDecisionSubject" }
+        revision: { type: integer, minimum: 1 }
+        supersedesDecisionId: { type: [string, "null"], format: uuid }
+        humanPrincipalId: { type: string, format: uuid }
+        credentialId: { type: string, format: uuid }
+        requestId: { type: string, minLength: 1 }
+        decidedAt: { type: string, description: ISO 8601 timestamp with offset }
+        nonce: { type: string, minLength: 1 }
+        attestationKeyId: { type: string, minLength: 1 }
+        attestationHmacSha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+    PrincipalIssuanceResponse:
+      type: object
+      additionalProperties: false
+      required: [principalId, decision]
+      properties:
+        principalId: { type: string, format: uuid }
+        decision: { $ref: "#/components/schemas/PrincipalGovernanceDecision" }
+    CredentialIssuanceResponse:
+      type: object
+      additionalProperties: false
+      required: [credentialId, credentialPrefix, permanentCredential, decision]
+      properties:
+        credentialId: { type: string, format: uuid }
+        credentialPrefix: { type: string }
+        permanentCredential:
+          type: string
+          description: Plaintext permanent application credential. Returned once and never recoverable.
+        decision: { $ref: "#/components/schemas/CredentialGovernanceDecision" }
     ReplaySession:
       type: object
       description: Fixture-backed replay session metadata. Research/practice only; never executes, simulates, or paper-trades.
@@ -639,6 +1067,8 @@ components:
         - date
         - availableDates
         - dataSource
+        - caseRevisionId
+        - evidenceHash
         - totalSteps
         - barSeconds
         - startTime
@@ -656,6 +1086,12 @@ components:
           description: "Every ISO date this symbol can be replayed for (for the date picker)"
         dataSource:
           type: string
+        caseRevisionId:
+          type: string
+          description: Exact immutable brain case revision used for this session.
+        evidenceHash:
+          type: string
+          description: Exact evidence hash bound to the case revision.
         totalSteps:
           type: integer
           description: "Valid replay steps are 0-based: 0 .. totalSteps-1"

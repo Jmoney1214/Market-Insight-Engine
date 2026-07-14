@@ -5,6 +5,170 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
+export type PrincipalIssuanceInputPrincipalKind = typeof PrincipalIssuanceInputPrincipalKind[keyof typeof PrincipalIssuanceInputPrincipalKind];
+
+
+export const PrincipalIssuanceInputPrincipalKind = {
+  human: 'human',
+  service: 'service',
+  agent: 'agent',
+} as const;
+
+export interface PrincipalIssuanceInput {
+  principalKind: PrincipalIssuanceInputPrincipalKind;
+  /** @minLength 1 */
+  subject: string;
+  /** @minLength 1 */
+  displayName: string;
+  /** @minItems 1 */
+  scopes: string[];
+  servicePrincipalId?: string;
+  /** @minLength 1 */
+  manifestId?: string;
+  /** @minLength 1 */
+  manifestVersion?: string;
+  /** @minLength 1 */
+  rationale: string;
+}
+
+export interface CredentialIssuanceInput {
+  principalId: string;
+  /** @minItems 1 */
+  scopes: string[];
+  expiresAt?: string;
+  /** @minLength 1 */
+  rationale: string;
+}
+
+export interface GovernanceRevocationInput {
+  /** @minimum 1 */
+  expectedRevision: number;
+  expectedDecisionId: string;
+  /** @minLength 1 */
+  rationale: string;
+}
+
+export type PrincipalDecisionSubjectSubjectType = typeof PrincipalDecisionSubjectSubjectType[keyof typeof PrincipalDecisionSubjectSubjectType];
+
+
+export const PrincipalDecisionSubjectSubjectType = {
+  PRINCIPAL: 'PRINCIPAL',
+} as const;
+
+export interface PrincipalDecisionSubject {
+  subjectType: PrincipalDecisionSubjectSubjectType;
+  principalId: string;
+  /** @pattern ^[0-9a-f]{64}$ */
+  principalSha256: string;
+}
+
+export type CredentialDecisionSubjectSubjectType = typeof CredentialDecisionSubjectSubjectType[keyof typeof CredentialDecisionSubjectSubjectType];
+
+
+export const CredentialDecisionSubjectSubjectType = {
+  CREDENTIAL: 'CREDENTIAL',
+} as const;
+
+export interface CredentialDecisionSubject {
+  subjectType: CredentialDecisionSubjectSubjectType;
+  credentialId: string;
+  /** @pattern ^[0-9a-f]{64}$ */
+  credentialSha256: string;
+}
+
+export type PrincipalGovernanceDecisionDecisionType = typeof PrincipalGovernanceDecisionDecisionType[keyof typeof PrincipalGovernanceDecisionDecisionType];
+
+
+export const PrincipalGovernanceDecisionDecisionType = {
+  PRINCIPAL: 'PRINCIPAL',
+} as const;
+
+export type PrincipalGovernanceDecisionVerdict = typeof PrincipalGovernanceDecisionVerdict[keyof typeof PrincipalGovernanceDecisionVerdict];
+
+
+export const PrincipalGovernanceDecisionVerdict = {
+  ACTIVATE: 'ACTIVATE',
+  REVOKE: 'REVOKE',
+} as const;
+
+export interface PrincipalGovernanceDecision {
+  decisionType: PrincipalGovernanceDecisionDecisionType;
+  decisionId: string;
+  verdict: PrincipalGovernanceDecisionVerdict;
+  /** @minLength 1 */
+  rationale: string;
+  subject: PrincipalDecisionSubject;
+  /** @minimum 1 */
+  revision: number;
+  /** @nullable */
+  supersedesDecisionId: string | null;
+  humanPrincipalId: string;
+  credentialId: string;
+  /** @minLength 1 */
+  requestId: string;
+  /** ISO 8601 timestamp with offset */
+  decidedAt: string;
+  /** @minLength 1 */
+  nonce: string;
+  /** @minLength 1 */
+  attestationKeyId: string;
+  /** @pattern ^[0-9a-f]{64}$ */
+  attestationHmacSha256: string;
+}
+
+export type CredentialGovernanceDecisionDecisionType = typeof CredentialGovernanceDecisionDecisionType[keyof typeof CredentialGovernanceDecisionDecisionType];
+
+
+export const CredentialGovernanceDecisionDecisionType = {
+  CREDENTIAL: 'CREDENTIAL',
+} as const;
+
+export type CredentialGovernanceDecisionVerdict = typeof CredentialGovernanceDecisionVerdict[keyof typeof CredentialGovernanceDecisionVerdict];
+
+
+export const CredentialGovernanceDecisionVerdict = {
+  ACTIVATE: 'ACTIVATE',
+  REVOKE: 'REVOKE',
+} as const;
+
+export interface CredentialGovernanceDecision {
+  decisionType: CredentialGovernanceDecisionDecisionType;
+  decisionId: string;
+  verdict: CredentialGovernanceDecisionVerdict;
+  /** @minLength 1 */
+  rationale: string;
+  subject: CredentialDecisionSubject;
+  /** @minimum 1 */
+  revision: number;
+  /** @nullable */
+  supersedesDecisionId: string | null;
+  humanPrincipalId: string;
+  credentialId: string;
+  /** @minLength 1 */
+  requestId: string;
+  /** ISO 8601 timestamp with offset */
+  decidedAt: string;
+  /** @minLength 1 */
+  nonce: string;
+  /** @minLength 1 */
+  attestationKeyId: string;
+  /** @pattern ^[0-9a-f]{64}$ */
+  attestationHmacSha256: string;
+}
+
+export interface PrincipalIssuanceResponse {
+  principalId: string;
+  decision: PrincipalGovernanceDecision;
+}
+
+export interface CredentialIssuanceResponse {
+  credentialId: string;
+  credentialPrefix: string;
+  /** Plaintext permanent application credential. Returned once and never recoverable. */
+  permanentCredential: string;
+  decision: CredentialGovernanceDecision;
+}
+
 /**
  * Fixture-backed replay session metadata. Research/practice only; never executes, simulates, or paper-trades.
  */
@@ -15,6 +179,10 @@ export interface ReplaySession {
   /** Every ISO date this symbol can be replayed for (for the date picker) */
   availableDates: string[];
   dataSource: string;
+  /** Exact immutable brain case revision used for this session. */
+  caseRevisionId: string;
+  /** Exact evidence hash bound to the case revision. */
+  evidenceHash: string;
   /** Valid replay steps are 0-based: 0 .. totalSteps-1 */
   totalSteps: number;
   barSeconds: number;
@@ -1163,6 +1331,57 @@ export interface HistoryEvent {
   createdAt: string;
 }
 
+/**
+ * No valid application credential or browser session
+ */
+export type AuthRequiredResponse = ApiError;
+
+/**
+ * Verified principal lacks the required kind, scope, CSRF binding, or resource permission
+ */
+export type AuthForbiddenResponse = ApiError;
+
+/**
+ * Authentication, request audit, or idempotency persistence is unavailable
+ */
+export type AuditUnavailableResponse = ApiError;
+
+/**
+ * Idempotency key is missing, in progress, or bound to different input
+ */
+export type IdempotencyConflictResponse = ApiError;
+
+/**
+ * Governance request or signed-decision input is invalid
+ */
+export type InvalidGovernanceInputResponse = ApiError;
+
+export type CreateSession201Principal = { [key: string]: unknown };
+
+export type CreateSession201 = {
+  sessionId: string;
+  principal: CreateSession201Principal;
+  effectiveScopes: string[];
+};
+
+export type GetCurrentPrincipal200Principal = { [key: string]: unknown };
+
+export type GetCurrentPrincipal200AuthMode = typeof GetCurrentPrincipal200AuthMode[keyof typeof GetCurrentPrincipal200AuthMode];
+
+
+export const GetCurrentPrincipal200AuthMode = {
+  bearer: 'bearer',
+  cookie: 'cookie',
+} as const;
+
+export type GetCurrentPrincipal200 = {
+  principal: GetCurrentPrincipal200Principal;
+  credentialId: string;
+  effectiveScopes: string[];
+  authMode: GetCurrentPrincipal200AuthMode;
+  sessionId?: string;
+};
+
 export type GetPremarketScanParams = {
 /**
  * Bypass the short-lived scan cache
@@ -1185,6 +1404,14 @@ symbol: string;
  */
 source?: GetCopilotEventSource;
 mode?: GetCopilotEventMode;
+/**
+ * Required with REPLAY or RESEARCH; exact immutable brain case revision.
+ */
+caseRevisionId?: string;
+/**
+ * Required with REPLAY or RESEARCH; exact evidence hash bound to the case.
+ */
+evidenceHash?: string;
 };
 
 export type GetCopilotEventSource = typeof GetCopilotEventSource[keyof typeof GetCopilotEventSource];
@@ -1212,6 +1439,14 @@ symbol: string;
  */
 source?: ExplainCopilotEventSource;
 mode?: ExplainCopilotEventMode;
+/**
+ * Required with REPLAY or RESEARCH; exact immutable brain case revision.
+ */
+caseRevisionId?: string;
+/**
+ * Required with REPLAY or RESEARCH; exact evidence hash bound to the case.
+ */
+evidenceHash?: string;
 };
 
 export type ExplainCopilotEventSource = typeof ExplainCopilotEventSource[keyof typeof ExplainCopilotEventSource];
@@ -1238,6 +1473,14 @@ symbol: string;
  * ISO date (YYYY-MM-DD); defaults to the symbol's available session
  */
 date?: string;
+/**
+ * Exact immutable brain case revision.
+ */
+caseRevisionId: string;
+/**
+ * Exact evidence hash bound to the case revision.
+ */
+evidenceHash: string;
 };
 
 export type GetReplayEventParams = {
@@ -1251,6 +1494,14 @@ date: string;
  * @minimum 0
  */
 step: number;
+/**
+ * Exact immutable brain case revision.
+ */
+caseRevisionId: string;
+/**
+ * Exact evidence hash bound to the case revision.
+ */
+evidenceHash: string;
 };
 
 export type ExplainReplayEventParams = {
@@ -1260,5 +1511,13 @@ date: string;
  * @minimum 0
  */
 step: number;
+/**
+ * Exact immutable brain case revision.
+ */
+caseRevisionId: string;
+/**
+ * Exact evidence hash bound to the case revision.
+ */
+evidenceHash: string;
 };
 

@@ -22,21 +22,35 @@ import type {
 import type {
   AnalyzeInput,
   ApiError,
+  AuditUnavailableResponse,
+  AuthForbiddenResponse,
+  AuthRequiredResponse,
   CommitteeRead,
   CopilotEvent,
   CopilotHealth,
+  CreateSession201,
+  CredentialGovernanceDecision,
+  CredentialIssuanceInput,
+  CredentialIssuanceResponse,
   EdgeScore,
   ExplainCopilotEventParams,
   ExplainReplayEventParams,
   GetCopilotEventParams,
+  GetCurrentPrincipal200,
   GetPremarketScanParams,
   GetReplayEventParams,
   GetReplaySessionParams,
   GetUniverseSnapshotParams,
+  GovernanceRevocationInput,
   HealthStatus,
   HistoryEvent,
+  IdempotencyConflictResponse,
+  InvalidGovernanceInputResponse,
   JournalEntry,
   JournalEntryInput,
+  PrincipalGovernanceDecision,
+  PrincipalIssuanceInput,
+  PrincipalIssuanceResponse,
   ReplaySession,
   Report,
   ReportSummary,
@@ -60,6 +74,509 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 
+
+export const getCreateSessionUrl = () => {
+
+
+
+
+  return `/api/auth/session`
+}
+
+/**
+ * @summary Exchange a permanent human bearer for a browser session
+ */
+export const createSession = async ( options?: RequestInit): Promise<CreateSession201> => {
+
+  return customFetch<CreateSession201>(getCreateSessionUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCreateSessionMutationOptions = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createSession>>, TError,void, TContext> => {
+
+const mutationKey = ['createSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSession>>, void> = () => {
+
+
+          return  createSession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createSession>>>
+
+    export type CreateSessionMutationError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
+
+    /**
+ * @summary Exchange a permanent human bearer for a browser session
+ */
+export const useCreateSession = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createSession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCreateSessionMutationOptions(options));
+    }
+
+export const getDeleteSessionUrl = () => {
+
+
+
+
+  return `/api/auth/session`
+}
+
+/**
+ * @summary Revoke the current browser session
+ */
+export const deleteSession = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteSessionUrl(),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteSessionMutationOptions = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSession>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSession>>, void> = () => {
+
+
+          return  deleteSession(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteSessionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSession>>>
+
+    export type DeleteSessionMutationError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
+
+    /**
+ * @summary Revoke the current browser session
+ */
+export const useDeleteSession = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSession>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteSession>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteSessionMutationOptions(options));
+    }
+
+export const getGetCurrentPrincipalUrl = () => {
+
+
+
+
+  return `/api/auth/whoami`
+}
+
+/**
+ * @summary Return the current verified principal and effective scopes
+ */
+export const getCurrentPrincipal = async ( options?: RequestInit): Promise<GetCurrentPrincipal200> => {
+
+  return customFetch<GetCurrentPrincipal200>(getGetCurrentPrincipalUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCurrentPrincipalQueryKey = () => {
+    return [
+    `/api/auth/whoami`
+    ] as const;
+    }
+
+
+export const getGetCurrentPrincipalQueryOptions = <TData = Awaited<ReturnType<typeof getCurrentPrincipal>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentPrincipal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCurrentPrincipalQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCurrentPrincipal>>> = ({ signal }) => getCurrentPrincipal({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCurrentPrincipal>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCurrentPrincipalQueryResult = NonNullable<Awaited<ReturnType<typeof getCurrentPrincipal>>>
+export type GetCurrentPrincipalQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
+
+
+/**
+ * @summary Return the current verified principal and effective scopes
+ */
+
+export function useGetCurrentPrincipal<TData = Awaited<ReturnType<typeof getCurrentPrincipal>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCurrentPrincipal>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCurrentPrincipalQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getIssuePrincipalUrl = () => {
+
+
+
+
+  return `/api/governance/principals`
+}
+
+/**
+ * @summary Issue a human, service, or manifest-bound agent principal
+ */
+export const issuePrincipal = async (principalIssuanceInput: PrincipalIssuanceInput, options?: RequestInit): Promise<PrincipalIssuanceResponse> => {
+
+  return customFetch<PrincipalIssuanceResponse>(getIssuePrincipalUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      principalIssuanceInput,)
+  }
+);}
+
+
+
+
+export const getIssuePrincipalMutationOptions = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issuePrincipal>>, TError,{data: BodyType<PrincipalIssuanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof issuePrincipal>>, TError,{data: BodyType<PrincipalIssuanceInput>}, TContext> => {
+
+const mutationKey = ['issuePrincipal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof issuePrincipal>>, {data: BodyType<PrincipalIssuanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  issuePrincipal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type IssuePrincipalMutationResult = NonNullable<Awaited<ReturnType<typeof issuePrincipal>>>
+    export type IssuePrincipalMutationBody = BodyType<PrincipalIssuanceInput>
+    export type IssuePrincipalMutationError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>
+
+    /**
+ * @summary Issue a human, service, or manifest-bound agent principal
+ */
+export const useIssuePrincipal = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issuePrincipal>>, TError,{data: BodyType<PrincipalIssuanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof issuePrincipal>>,
+        TError,
+        {data: BodyType<PrincipalIssuanceInput>},
+        TContext
+      > => {
+      return useMutation(getIssuePrincipalMutationOptions(options));
+    }
+
+export const getRevokePrincipalUrl = (principalId: string,) => {
+
+
+
+
+  return `/api/governance/principals/${principalId}/revoke`
+}
+
+/**
+ * @summary Append a signed principal revocation decision
+ */
+export const revokePrincipal = async (principalId: string,
+    governanceRevocationInput: GovernanceRevocationInput, options?: RequestInit): Promise<PrincipalGovernanceDecision> => {
+
+  return customFetch<PrincipalGovernanceDecision>(getRevokePrincipalUrl(principalId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      governanceRevocationInput,)
+  }
+);}
+
+
+
+
+export const getRevokePrincipalMutationOptions = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokePrincipal>>, TError,{principalId: string;data: BodyType<GovernanceRevocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokePrincipal>>, TError,{principalId: string;data: BodyType<GovernanceRevocationInput>}, TContext> => {
+
+const mutationKey = ['revokePrincipal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokePrincipal>>, {principalId: string;data: BodyType<GovernanceRevocationInput>}> = (props) => {
+          const {principalId,data} = props ?? {};
+
+          return  revokePrincipal(principalId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokePrincipalMutationResult = NonNullable<Awaited<ReturnType<typeof revokePrincipal>>>
+    export type RevokePrincipalMutationBody = BodyType<GovernanceRevocationInput>
+    export type RevokePrincipalMutationError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>
+
+    /**
+ * @summary Append a signed principal revocation decision
+ */
+export const useRevokePrincipal = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokePrincipal>>, TError,{principalId: string;data: BodyType<GovernanceRevocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokePrincipal>>,
+        TError,
+        {principalId: string;data: BodyType<GovernanceRevocationInput>},
+        TContext
+      > => {
+      return useMutation(getRevokePrincipalMutationOptions(options));
+    }
+
+export const getIssueCredentialUrl = () => {
+
+
+
+
+  return `/api/governance/credentials`
+}
+
+/**
+ * @summary Issue a permanent application credential and return its plaintext once
+ */
+export const issueCredential = async (credentialIssuanceInput: CredentialIssuanceInput, options?: RequestInit): Promise<CredentialIssuanceResponse> => {
+
+  return customFetch<CredentialIssuanceResponse>(getIssueCredentialUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      credentialIssuanceInput,)
+  }
+);}
+
+
+
+
+export const getIssueCredentialMutationOptions = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueCredential>>, TError,{data: BodyType<CredentialIssuanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof issueCredential>>, TError,{data: BodyType<CredentialIssuanceInput>}, TContext> => {
+
+const mutationKey = ['issueCredential'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof issueCredential>>, {data: BodyType<CredentialIssuanceInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  issueCredential(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type IssueCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof issueCredential>>>
+    export type IssueCredentialMutationBody = BodyType<CredentialIssuanceInput>
+    export type IssueCredentialMutationError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>
+
+    /**
+ * @summary Issue a permanent application credential and return its plaintext once
+ */
+export const useIssueCredential = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof issueCredential>>, TError,{data: BodyType<CredentialIssuanceInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof issueCredential>>,
+        TError,
+        {data: BodyType<CredentialIssuanceInput>},
+        TContext
+      > => {
+      return useMutation(getIssueCredentialMutationOptions(options));
+    }
+
+export const getRevokeCredentialUrl = (credentialId: string,) => {
+
+
+
+
+  return `/api/governance/credentials/${credentialId}/revoke`
+}
+
+/**
+ * @summary Append a signed permanent-credential revocation decision
+ */
+export const revokeCredential = async (credentialId: string,
+    governanceRevocationInput: GovernanceRevocationInput, options?: RequestInit): Promise<CredentialGovernanceDecision> => {
+
+  return customFetch<CredentialGovernanceDecision>(getRevokeCredentialUrl(credentialId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      governanceRevocationInput,)
+  }
+);}
+
+
+
+
+export const getRevokeCredentialMutationOptions = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCredential>>, TError,{credentialId: string;data: BodyType<GovernanceRevocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeCredential>>, TError,{credentialId: string;data: BodyType<GovernanceRevocationInput>}, TContext> => {
+
+const mutationKey = ['revokeCredential'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeCredential>>, {credentialId: string;data: BodyType<GovernanceRevocationInput>}> = (props) => {
+          const {credentialId,data} = props ?? {};
+
+          return  revokeCredential(credentialId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeCredentialMutationResult = NonNullable<Awaited<ReturnType<typeof revokeCredential>>>
+    export type RevokeCredentialMutationBody = BodyType<GovernanceRevocationInput>
+    export type RevokeCredentialMutationError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>
+
+    /**
+ * @summary Append a signed permanent-credential revocation decision
+ */
+export const useRevokeCredential = <TError = ErrorType<InvalidGovernanceInputResponse | AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse | AuditUnavailableResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeCredential>>, TError,{credentialId: string;data: BodyType<GovernanceRevocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeCredential>>,
+        TError,
+        {credentialId: string;data: BodyType<GovernanceRevocationInput>},
+        TContext
+      > => {
+      return useMutation(getRevokeCredentialMutationOptions(options));
+    }
 
 export const getGetPremarketScanUrl = (params?: GetPremarketScanParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -103,7 +620,7 @@ export const getGetPremarketScanQueryKey = (params?: GetPremarketScanParams,) =>
     }
 
 
-export const getGetPremarketScanQueryOptions = <TData = Awaited<ReturnType<typeof getPremarketScan>>, TError = ErrorType<ApiError>>(params?: GetPremarketScanParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPremarketScan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetPremarketScanQueryOptions = <TData = Awaited<ReturnType<typeof getPremarketScan>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | ApiError>>(params?: GetPremarketScanParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPremarketScan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -122,14 +639,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetPremarketScanQueryResult = NonNullable<Awaited<ReturnType<typeof getPremarketScan>>>
-export type GetPremarketScanQueryError = ErrorType<ApiError>
+export type GetPremarketScanQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | ApiError>
 
 
 /**
  * @summary Morning market scan
  */
 
-export function useGetPremarketScan<TData = Awaited<ReturnType<typeof getPremarketScan>>, TError = ErrorType<ApiError>>(
+export function useGetPremarketScan<TData = Awaited<ReturnType<typeof getPremarketScan>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | ApiError>>(
  params?: GetPremarketScanParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPremarketScan>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -182,7 +699,7 @@ export const getGetScanScorecardQueryKey = () => {
     }
 
 
-export const getGetScanScorecardQueryOptions = <TData = Awaited<ReturnType<typeof getScanScorecard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScanScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetScanScorecardQueryOptions = <TData = Awaited<ReturnType<typeof getScanScorecard>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScanScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -201,14 +718,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetScanScorecardQueryResult = NonNullable<Awaited<ReturnType<typeof getScanScorecard>>>
-export type GetScanScorecardQueryError = ErrorType<unknown>
+export type GetScanScorecardQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary Scan accountability scorecard
  */
 
-export function useGetScanScorecard<TData = Awaited<ReturnType<typeof getScanScorecard>>, TError = ErrorType<unknown>>(
+export function useGetScanScorecard<TData = Awaited<ReturnType<typeof getScanScorecard>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScanScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -268,7 +785,7 @@ export const getGetUniverseSnapshotQueryKey = (params?: GetUniverseSnapshotParam
     }
 
 
-export const getGetUniverseSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getUniverseSnapshot>>, TError = ErrorType<ApiError>>(params: GetUniverseSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUniverseSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetUniverseSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getUniverseSnapshot>>, TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(params: GetUniverseSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUniverseSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -287,14 +804,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetUniverseSnapshotQueryResult = NonNullable<Awaited<ReturnType<typeof getUniverseSnapshot>>>
-export type GetUniverseSnapshotQueryError = ErrorType<ApiError>
+export type GetUniverseSnapshotQueryError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary Screener universe as of a past trading day
  */
 
-export function useGetUniverseSnapshot<TData = Awaited<ReturnType<typeof getUniverseSnapshot>>, TError = ErrorType<ApiError>>(
+export function useGetUniverseSnapshot<TData = Awaited<ReturnType<typeof getUniverseSnapshot>>, TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
  params: GetUniverseSnapshotParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getUniverseSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -417,7 +934,7 @@ export const analyzeTicker = async (analyzeInput: AnalyzeInput, options?: Reques
 
 
 
-export const getAnalyzeTickerMutationOptions = <TError = ErrorType<ApiError>,
+export const getAnalyzeTickerMutationOptions = <TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeTicker>>, TError,{data: BodyType<AnalyzeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof analyzeTicker>>, TError,{data: BodyType<AnalyzeInput>}, TContext> => {
 
@@ -446,12 +963,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type AnalyzeTickerMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeTicker>>>
     export type AnalyzeTickerMutationBody = BodyType<AnalyzeInput>
-    export type AnalyzeTickerMutationError = ErrorType<ApiError>
+    export type AnalyzeTickerMutationError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>
 
     /**
  * @summary Run AI analysis on a ticker
  */
-export const useAnalyzeTicker = <TError = ErrorType<ApiError>,
+export const useAnalyzeTicker = <TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeTicker>>, TError,{data: BodyType<AnalyzeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof analyzeTicker>>,
@@ -496,7 +1013,7 @@ export const getListReportsQueryKey = () => {
     }
 
 
-export const getListReportsQueryOptions = <TData = Awaited<ReturnType<typeof listReports>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListReportsQueryOptions = <TData = Awaited<ReturnType<typeof listReports>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -515,14 +1032,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListReportsQueryResult = NonNullable<Awaited<ReturnType<typeof listReports>>>
-export type ListReportsQueryError = ErrorType<unknown>
+export type ListReportsQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary List past analyses
  */
 
-export function useListReports<TData = Awaited<ReturnType<typeof listReports>>, TError = ErrorType<unknown>>(
+export function useListReports<TData = Awaited<ReturnType<typeof listReports>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -574,7 +1091,7 @@ export const getGetReportQueryKey = (id: number,) => {
     }
 
 
-export const getGetReportQueryOptions = <TData = Awaited<ReturnType<typeof getReport>>, TError = ErrorType<ApiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReportQueryOptions = <TData = Awaited<ReturnType<typeof getReport>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError | AuditUnavailableResponse>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -593,14 +1110,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReportQueryResult = NonNullable<Awaited<ReturnType<typeof getReport>>>
-export type GetReportQueryError = ErrorType<ApiError>
+export type GetReportQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError | AuditUnavailableResponse>
 
 
 /**
  * @summary Get a specific report
  */
 
-export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ErrorType<ApiError>>(
+export function useGetReport<TData = Awaited<ReturnType<typeof getReport>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError | AuditUnavailableResponse>>(
  id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -643,7 +1160,7 @@ export const deleteReport = async (id: number, options?: RequestInit): Promise<v
 
 
 
-export const getDeleteReportMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteReportMutationOptions = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteReport>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteReport>>, TError,{id: number}, TContext> => {
 
@@ -672,12 +1189,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteReportMutationResult = NonNullable<Awaited<ReturnType<typeof deleteReport>>>
 
-    export type DeleteReportMutationError = ErrorType<unknown>
+    export type DeleteReportMutationError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>
 
     /**
  * @summary Delete a report
  */
-export const useDeleteReport = <TError = ErrorType<unknown>,
+export const useDeleteReport = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteReport>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteReport>>,
@@ -721,7 +1238,7 @@ export const getGetWatchlistQueryKey = () => {
     }
 
 
-export const getGetWatchlistQueryOptions = <TData = Awaited<ReturnType<typeof getWatchlist>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWatchlist>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetWatchlistQueryOptions = <TData = Awaited<ReturnType<typeof getWatchlist>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWatchlist>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -740,14 +1257,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetWatchlistQueryResult = NonNullable<Awaited<ReturnType<typeof getWatchlist>>>
-export type GetWatchlistQueryError = ErrorType<unknown>
+export type GetWatchlistQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary Get watchlist tickers
  */
 
-export function useGetWatchlist<TData = Awaited<ReturnType<typeof getWatchlist>>, TError = ErrorType<unknown>>(
+export function useGetWatchlist<TData = Awaited<ReturnType<typeof getWatchlist>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getWatchlist>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -791,7 +1308,7 @@ export const addToWatchlist = async (watchlistInput: WatchlistInput, options?: R
 
 
 
-export const getAddToWatchlistMutationOptions = <TError = ErrorType<unknown>,
+export const getAddToWatchlistMutationOptions = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addToWatchlist>>, TError,{data: BodyType<WatchlistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof addToWatchlist>>, TError,{data: BodyType<WatchlistInput>}, TContext> => {
 
@@ -820,12 +1337,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type AddToWatchlistMutationResult = NonNullable<Awaited<ReturnType<typeof addToWatchlist>>>
     export type AddToWatchlistMutationBody = BodyType<WatchlistInput>
-    export type AddToWatchlistMutationError = ErrorType<unknown>
+    export type AddToWatchlistMutationError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>
 
     /**
  * @summary Add ticker to watchlist
  */
-export const useAddToWatchlist = <TError = ErrorType<unknown>,
+export const useAddToWatchlist = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addToWatchlist>>, TError,{data: BodyType<WatchlistInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof addToWatchlist>>,
@@ -861,7 +1378,7 @@ export const removeFromWatchlist = async (ticker: string, options?: RequestInit)
 
 
 
-export const getRemoveFromWatchlistMutationOptions = <TError = ErrorType<unknown>,
+export const getRemoveFromWatchlistMutationOptions = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeFromWatchlist>>, TError,{ticker: string}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof removeFromWatchlist>>, TError,{ticker: string}, TContext> => {
 
@@ -890,12 +1407,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type RemoveFromWatchlistMutationResult = NonNullable<Awaited<ReturnType<typeof removeFromWatchlist>>>
 
-    export type RemoveFromWatchlistMutationError = ErrorType<unknown>
+    export type RemoveFromWatchlistMutationError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>
 
     /**
  * @summary Remove ticker from watchlist
  */
-export const useRemoveFromWatchlist = <TError = ErrorType<unknown>,
+export const useRemoveFromWatchlist = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removeFromWatchlist>>, TError,{ticker: string}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof removeFromWatchlist>>,
@@ -1000,7 +1517,7 @@ export const getGetCopilotEventUrl = (params: GetCopilotEventParams,) => {
 }
 
 /**
- * Computes one deterministic read-only event from Alpaca SIP. Omitted source means alpaca_live. Fixture and historical modes are rejected until verified replay authorization and canonical case evidence exist.
+ * Computes one deterministic read-only event from Alpaca SIP, or resolves an exact authorized canonical historical case. Omitted source means alpaca_live. There is no bundled-fixture fallback.
  * @summary Build the canonical deterministic copilot event for a symbol
  */
 export const getCopilotEvent = async (params: GetCopilotEventParams, options?: RequestInit): Promise<CopilotEvent> => {
@@ -1025,7 +1542,7 @@ export const getGetCopilotEventQueryKey = (params?: GetCopilotEventParams,) => {
     }
 
 
-export const getGetCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError>>(params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>>(params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1044,14 +1561,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetCopilotEventQueryResult = NonNullable<Awaited<ReturnType<typeof getCopilotEvent>>>
-export type GetCopilotEventQueryError = ErrorType<ApiError>
+export type GetCopilotEventQueryError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>
 
 
 /**
  * @summary Build the canonical deterministic copilot event for a symbol
  */
 
-export function useGetCopilotEvent<TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError>>(
+export function useGetCopilotEvent<TData = Awaited<ReturnType<typeof getCopilotEvent>>, TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>>(
  params: GetCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1085,7 +1602,7 @@ export const getExplainCopilotEventUrl = (params: ExplainCopilotEventParams,) =>
 }
 
 /**
- * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value. Omitted source means read-only Alpaca SIP; fixture and historical modes fail closed until verified replay authorization exists.
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value. Omitted source means read-only Alpaca SIP. Historical reads require an exact authorized case revision and evidence hash with no fixture fallback.
  * @summary Explain a deterministic copilot event with the read-only analyst committee
  */
 export const explainCopilotEvent = async (params: ExplainCopilotEventParams, options?: RequestInit): Promise<CommitteeRead> => {
@@ -1110,7 +1627,7 @@ export const getExplainCopilotEventQueryKey = (params?: ExplainCopilotEventParam
     }
 
 
-export const getExplainCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError>>(params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getExplainCopilotEventQueryOptions = <TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>>(params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1129,14 +1646,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ExplainCopilotEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainCopilotEvent>>>
-export type ExplainCopilotEventQueryError = ErrorType<ApiError>
+export type ExplainCopilotEventQueryError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>
 
 
 /**
  * @summary Explain a deterministic copilot event with the read-only analyst committee
  */
 
-export function useExplainCopilotEvent<TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError>>(
+export function useExplainCopilotEvent<TData = Awaited<ReturnType<typeof explainCopilotEvent>>, TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse>>(
  params: ExplainCopilotEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainCopilotEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1187,7 +1704,7 @@ export const getListJournalEntriesQueryKey = () => {
     }
 
 
-export const getListJournalEntriesQueryOptions = <TData = Awaited<ReturnType<typeof listJournalEntries>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListJournalEntriesQueryOptions = <TData = Awaited<ReturnType<typeof listJournalEntries>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1206,14 +1723,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListJournalEntriesQueryResult = NonNullable<Awaited<ReturnType<typeof listJournalEntries>>>
-export type ListJournalEntriesQueryError = ErrorType<unknown>
+export type ListJournalEntriesQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary List journal entries
  */
 
-export function useListJournalEntries<TData = Awaited<ReturnType<typeof listJournalEntries>>, TError = ErrorType<unknown>>(
+export function useListJournalEntries<TData = Awaited<ReturnType<typeof listJournalEntries>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listJournalEntries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1257,7 +1774,7 @@ export const createJournalEntry = async (journalEntryInput: JournalEntryInput, o
 
 
 
-export const getCreateJournalEntryMutationOptions = <TError = ErrorType<ApiError>,
+export const getCreateJournalEntryMutationOptions = <TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext> => {
 
@@ -1286,12 +1803,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type CreateJournalEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createJournalEntry>>>
     export type CreateJournalEntryMutationBody = BodyType<JournalEntryInput>
-    export type CreateJournalEntryMutationError = ErrorType<ApiError>
+    export type CreateJournalEntryMutationError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>
 
     /**
  * @summary Create a journal entry
  */
-export const useCreateJournalEntry = <TError = ErrorType<ApiError>,
+export const useCreateJournalEntry = <TError = ErrorType<ApiError | AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createJournalEntry>>, TError,{data: BodyType<JournalEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof createJournalEntry>>,
@@ -1327,7 +1844,7 @@ export const deleteJournalEntry = async (id: number, options?: RequestInit): Pro
 
 
 
-export const getDeleteJournalEntryMutationOptions = <TError = ErrorType<unknown>,
+export const getDeleteJournalEntryMutationOptions = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJournalEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteJournalEntry>>, TError,{id: number}, TContext> => {
 
@@ -1356,12 +1873,12 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
     export type DeleteJournalEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteJournalEntry>>>
 
-    export type DeleteJournalEntryMutationError = ErrorType<unknown>
+    export type DeleteJournalEntryMutationError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>
 
     /**
  * @summary Delete a journal entry
  */
-export const useDeleteJournalEntry = <TError = ErrorType<unknown>,
+export const useDeleteJournalEntry = <TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | IdempotencyConflictResponse | AuditUnavailableResponse>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteJournalEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteJournalEntry>>,
@@ -1405,7 +1922,7 @@ export const getListStrategiesQueryKey = () => {
     }
 
 
-export const getListStrategiesQueryOptions = <TData = Awaited<ReturnType<typeof listStrategies>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListStrategiesQueryOptions = <TData = Awaited<ReturnType<typeof listStrategies>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1424,14 +1941,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListStrategiesQueryResult = NonNullable<Awaited<ReturnType<typeof listStrategies>>>
-export type ListStrategiesQueryError = ErrorType<unknown>
+export type ListStrategiesQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary List strategy registry entries
  */
 
-export function useListStrategies<TData = Awaited<ReturnType<typeof listStrategies>>, TError = ErrorType<unknown>>(
+export function useListStrategies<TData = Awaited<ReturnType<typeof listStrategies>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStrategies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1483,7 +2000,7 @@ export const getListValidationStatesQueryKey = () => {
     }
 
 
-export const getListValidationStatesQueryOptions = <TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listValidationStates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListValidationStatesQueryOptions = <TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listValidationStates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1502,14 +2019,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListValidationStatesQueryResult = NonNullable<Awaited<ReturnType<typeof listValidationStates>>>
-export type ListValidationStatesQueryError = ErrorType<unknown>
+export type ListValidationStatesQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary Deprecated: strategy validation states (projection of the edge scoreboard)
  */
 
-export function useListValidationStates<TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<unknown>>(
+export function useListValidationStates<TData = Awaited<ReturnType<typeof listValidationStates>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listValidationStates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1560,7 +2077,7 @@ export const getGetScoreboardQueryKey = () => {
     }
 
 
-export const getGetScoreboardQueryOptions = <TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetScoreboardQueryOptions = <TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1579,14 +2096,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetScoreboardQueryResult = NonNullable<Awaited<ReturnType<typeof getScoreboard>>>
-export type GetScoreboardQueryError = ErrorType<unknown>
+export type GetScoreboardQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary Deterministic edge scoreboard computed from journaled outcomes
  */
 
-export function useGetScoreboard<TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<unknown>>(
+export function useGetScoreboard<TData = Awaited<ReturnType<typeof getScoreboard>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScoreboard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1637,7 +2154,7 @@ export const getListHistoryEventsQueryKey = () => {
     }
 
 
-export const getListHistoryEventsQueryOptions = <TData = Awaited<ReturnType<typeof listHistoryEvents>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistoryEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListHistoryEventsQueryOptions = <TData = Awaited<ReturnType<typeof listHistoryEvents>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistoryEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1656,14 +2173,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ListHistoryEventsQueryResult = NonNullable<Awaited<ReturnType<typeof listHistoryEvents>>>
-export type ListHistoryEventsQueryError = ErrorType<unknown>
+export type ListHistoryEventsQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>
 
 
 /**
  * @summary List historical copilot events
  */
 
-export function useListHistoryEvents<TData = Awaited<ReturnType<typeof listHistoryEvents>>, TError = ErrorType<unknown>>(
+export function useListHistoryEvents<TData = Awaited<ReturnType<typeof listHistoryEvents>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | AuditUnavailableResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistoryEvents>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1697,7 +2214,7 @@ export const getGetReplaySessionUrl = (params: GetReplaySessionParams,) => {
 }
 
 /**
- * Returns canonical historical-case metadata after verified brain authorization. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Replay never executes, simulates, routes, or paper-trades.
+ * Returns canonical historical-case metadata after verified brain authorization and exact evidence binding. Replay never executes, simulates, routes, or paper-trades.
  * @summary Load replay session metadata for a symbol/date
  */
 export const getReplaySession = async (params: GetReplaySessionParams, options?: RequestInit): Promise<ReplaySession> => {
@@ -1722,7 +2239,7 @@ export const getGetReplaySessionQueryKey = (params?: GetReplaySessionParams,) =>
     }
 
 
-export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReplaySessionQueryOptions = <TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError>>(params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1741,14 +2258,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReplaySessionQueryResult = NonNullable<Awaited<ReturnType<typeof getReplaySession>>>
-export type GetReplaySessionQueryError = ErrorType<ApiError>
+export type GetReplaySessionQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError>
 
 
 /**
  * @summary Load replay session metadata for a symbol/date
  */
 
-export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<ApiError>>(
+export function useGetReplaySession<TData = Awaited<ReturnType<typeof getReplaySession>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError>>(
  params: GetReplaySessionParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplaySession>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1782,7 +2299,7 @@ export const getGetReplayEventUrl = (params: GetReplayEventParams,) => {
 }
 
 /**
- * After verified brain authorization, computes one deterministic event from a canonical case revision and evidence hash. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Never returns order intent.
+ * After verified brain authorization, computes one deterministic event from an exact canonical case revision and evidence hash. Never returns order intent and never reads bundled fixtures.
  * @summary Build the deterministic copilot event at a replay step
  */
 export const getReplayEvent = async (params: GetReplayEventParams, options?: RequestInit): Promise<CopilotEvent> => {
@@ -1807,7 +2324,7 @@ export const getGetReplayEventQueryKey = (params?: GetReplayEventParams,) => {
     }
 
 
-export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError>>(params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1826,14 +2343,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof getReplayEvent>>>
-export type GetReplayEventQueryError = ErrorType<ApiError>
+export type GetReplayEventQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError>
 
 
 /**
  * @summary Build the deterministic copilot event at a replay step
  */
 
-export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<ApiError>>(
+export function useGetReplayEvent<TData = Awaited<ReturnType<typeof getReplayEvent>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError>>(
  params: GetReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
@@ -1867,7 +2384,7 @@ export const getExplainReplayEventUrl = (params: ExplainReplayEventParams,) => {
 }
 
 /**
- * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read until verified brain authorization exists.
+ * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data. The event is resolved only from the exact authorized canonical case revision and evidence hash.
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 export const explainReplayEvent = async (params: ExplainReplayEventParams, options?: RequestInit): Promise<CommitteeRead> => {
@@ -1892,7 +2409,7 @@ export const getExplainReplayEventQueryKey = (params?: ExplainReplayEventParams,
     }
 
 
-export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getExplainReplayEventQueryOptions = <TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse>>(params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -1911,14 +2428,14 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type ExplainReplayEventQueryResult = NonNullable<Awaited<ReturnType<typeof explainReplayEvent>>>
-export type ExplainReplayEventQueryError = ErrorType<ApiError>
+export type ExplainReplayEventQueryError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse>
 
 
 /**
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 
-export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<ApiError>>(
+export function useExplainReplayEvent<TData = Awaited<ReturnType<typeof explainReplayEvent>>, TError = ErrorType<AuthRequiredResponse | AuthForbiddenResponse | ApiError | IdempotencyConflictResponse>>(
  params: ExplainReplayEventParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof explainReplayEvent>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {

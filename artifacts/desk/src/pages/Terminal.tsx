@@ -19,7 +19,7 @@ import { useReplayStore } from "@/hooks/use-replay-store";
 import { useTriggerAlerts } from "@/hooks/use-trigger-alerts";
 
 import { LiveBoardPanel } from "@/components/LiveBoardPanel";
-import { SymbolPicker, FIXTURE_SYMBOLS } from "@/components/SymbolPicker";
+import { SymbolPicker } from "@/components/SymbolPicker";
 import { TriggerBanner } from "@/components/TriggerBanner";
 import { FinalReadPanel } from "@/components/FinalReadPanel";
 import { AnalystCommitteePanel } from "@/components/AnalystCommitteePanel";
@@ -52,12 +52,21 @@ export default function Terminal() {
   const isReplay = deskMode === "REPLAY";
   const isHistorical = deskMode === "REPLAY" || deskMode === "RESEARCH";
 
+  // Task 6 will populate these identifiers from the canonical brain case
+  // selector. Until then an operator may open an exact case-bound link. Empty
+  // identifiers deliberately disable historical requests instead of falling
+  // back to a bundled fixture or guessing a revision.
+  const locationParams = new URLSearchParams(window.location.search);
+  const caseRevisionId = locationParams.get("caseRevisionId")?.trim() ?? "";
+  const evidenceHash = locationParams.get("evidenceHash")?.trim() ?? "";
+  const historicalCaseBound = caseRevisionId.length > 0 && evidenceHash.length > 0;
+
   // --- Replay session: load metadata for the active symbol when in REPLAY. ---
-  const replaySessionParams = { symbol };
+  const replaySessionParams = { symbol, caseRevisionId, evidenceHash };
   const { data: replaySession, error: replaySessionError } =
     useGetReplaySession(replaySessionParams, {
       query: {
-        enabled: isReplay && !!symbol,
+        enabled: isReplay && !!symbol && historicalCaseBound,
         queryKey: getGetReplaySessionQueryKey(replaySessionParams),
         // Canonical case revisions are immutable, so metadata never changes. Pin it
         // as permanently fresh and skip focus refetches; otherwise a refetch
@@ -87,12 +96,24 @@ export default function Terminal() {
   // the API until verified brain authorization and canonical cases ship.
   const deskParams = deskMode === "LIVE"
     ? { symbol, source: "alpaca_live" as const, mode: "LIVE" as const }
-    : { symbol, source: "fixture" as const, mode: "RESEARCH" as const };
-  const replayParams = { symbol, date: date ?? "", step };
+    : {
+        symbol,
+        source: "fixture" as const,
+        mode: "RESEARCH" as const,
+        caseRevisionId,
+        evidenceHash,
+      };
+  const replayParams = {
+    symbol,
+    date: date ?? "",
+    step,
+    caseRevisionId,
+    evidenceHash,
+  };
 
   const deskEvent = useGetCopilotEvent(deskParams, {
     query: {
-      enabled: !isReplay && !!symbol,
+      enabled: !isReplay && !!symbol && (!isHistorical || historicalCaseBound),
       queryKey: getGetCopilotEventQueryKey(deskParams),
       refetchInterval: deskMode === "LIVE" ? 10000 : false,
     },
@@ -109,7 +130,7 @@ export default function Terminal() {
 
   const deskExplain = useExplainCopilotEvent(deskParams, {
     query: {
-      enabled: !isReplay && !!symbol,
+      enabled: !isReplay && !!symbol && (!isHistorical || historicalCaseBound),
       queryKey: getExplainCopilotEventQueryKey(deskParams),
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
@@ -155,7 +176,7 @@ export default function Terminal() {
   });
 
   const currentMode = event?.mode ?? deskMode;
-  const replayUnavailable = isReplay && !!replaySessionError;
+  const replayUnavailable = isReplay && (!historicalCaseBound || !!replaySessionError);
 
   // Live trigger banner. The stream key intentionally excludes the replay step
   // so stepping diffs against the prior bar; symbol/mode/date/source changes
@@ -182,17 +203,10 @@ export default function Terminal() {
     ? explain.provider.toUpperCase()
     : "READY";
 
-  const isFixtureSymbol = (FIXTURE_SYMBOLS as readonly string[]).includes(
-    symbol,
-  );
-
   const selectMode = (m: (typeof MODES)[number]) => {
     if (m === "REPLAY") {
-      // Task 4 replaces this temporary fixture-symbol list with canonical cases.
-      if (!isFixtureSymbol) setSymbol(FIXTURE_SYMBOLS[0]);
       setMode("REPLAY");
     } else if (m === "RESEARCH") {
-      if (!isFixtureSymbol) setSymbol(FIXTURE_SYMBOLS[0]);
       setMode("RESEARCH");
     } else {
       setSource("alpaca_live");
@@ -247,7 +261,6 @@ export default function Terminal() {
             <SymbolPicker
               symbol={symbol}
               onChange={setSymbol}
-              restricted={isHistorical}
             />
 
             {isReplay ? (
@@ -278,7 +291,11 @@ export default function Terminal() {
                 className="bg-card border border-border rounded px-2 py-1 text-xs font-mono text-muted-foreground"
                 title={isHistorical ? "Canonical historical brain source" : "Read-only Alpaca SIP market data"}
               >
-                {isHistorical ? "HISTORICAL BRAIN" : "ALPACA SIP"}
+                {isHistorical
+                  ? historicalCaseBound
+                    ? "HISTORICAL BRAIN"
+                    : "CASE REQUIRED"
+                  : "ALPACA SIP"}
               </span>
             )}
           </div>

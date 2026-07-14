@@ -12,4 +12,12 @@ symbol: string;
  * ISO date (YYYY-MM-DD); defaults to the symbol's available session
  */
 date?: string;
+/**
+ * Exact immutable brain case revision.
+ */
+caseRevisionId: string;
+/**
+ * Exact evidence hash bound to the case revision.
+ */
+evidenceHash: string;
 };

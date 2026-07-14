@@ -1,8 +1,5 @@
 import { useEffect, useState } from "react";
 
-/** Temporary symbols with bundled historical cases; Task 4 replaces this registry. */
-export const FIXTURE_SYMBOLS = ["AAPL", "MSFT", "TSLA", "NODATA"] as const;
-
 /** Mirrors the api-server symbol validation (BRK-B, BTC-USD, ^GSPC, ES=F, 7203.T). */
 export const SYMBOL_PATTERN = /^[A-Z0-9.\-=^]{1,12}$/;
 
@@ -27,15 +24,13 @@ const SUGGESTED_SYMBOLS = [
 interface SymbolPickerProps {
   symbol: string;
   onChange: (symbol: string) => void;
-  /** Restrict to the currently registered historical-case symbols. */
-  restricted: boolean;
 }
 
 /**
- * Ticker selector. Historical contexts stay limited to registered cases; LIVE
- * accepts any symbol supported by the read-only Alpaca SIP feed.
+ * Ticker selector. The API binds historical symbols to an exact canonical case
+ * revision and evidence hash; the client never maintains a fixture allowlist.
  */
-export function SymbolPicker({ symbol, onChange, restricted }: SymbolPickerProps) {
+export function SymbolPicker({ symbol, onChange }: SymbolPickerProps) {
   const [draft, setDraft] = useState(symbol);
   const [invalid, setInvalid] = useState(false);
 
@@ -45,34 +40,6 @@ export function SymbolPicker({ symbol, onChange, restricted }: SymbolPickerProps
     setDraft(symbol);
     setInvalid(false);
   }, [symbol]);
-
-  const isFixture = (FIXTURE_SYMBOLS as readonly string[]).includes(symbol);
-
-  // If we land in a historical context holding an unregistered symbol, commit
-  // the fallback instead of merely displaying it,
-  // so the store and UI never diverge.
-  useEffect(() => {
-    if (restricted && !isFixture) onChange(FIXTURE_SYMBOLS[0]);
-  }, [restricted, isFixture, onChange]);
-
-  if (restricted) {
-    const value = isFixture ? symbol : FIXTURE_SYMBOLS[0];
-    return (
-      <select
-        className="bg-card border border-border rounded px-2 py-1 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label="Symbol"
-        title="Registered historical-case symbols"
-      >
-        {FIXTURE_SYMBOLS.map((s) => (
-          <option key={s} value={s}>
-            {s}
-          </option>
-        ))}
-      </select>
-    );
-  }
 
   const commit = () => {
     const next = draft.toUpperCase().trim();

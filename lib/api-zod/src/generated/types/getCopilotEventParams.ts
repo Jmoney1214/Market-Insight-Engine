@@ -15,4 +15,12 @@ symbol: string;
  */
 source?: GetCopilotEventSource;
 mode?: GetCopilotEventMode;
+/**
+ * Required with REPLAY or RESEARCH; exact immutable brain case revision.
+ */
+caseRevisionId?: string;
+/**
+ * Required with REPLAY or RESEARCH; exact evidence hash bound to the case.
+ */
+evidenceHash?: string;
 };

@@ -16,6 +16,10 @@ export interface ReplaySession {
   /** Every ISO date this symbol can be replayed for (for the date picker) */
   availableDates: string[];
   dataSource: string;
+  /** Exact immutable brain case revision used for this session. */
+  caseRevisionId: string;
+  /** Exact evidence hash bound to the case revision. */
+  evidenceHash: string;
   /** Valid replay steps are 0-based: 0 .. totalSteps-1 */
   totalSteps: number;
   barSeconds: number;

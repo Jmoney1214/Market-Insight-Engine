@@ -16,6 +16,9 @@
       "path": "../../lib/db"
     },
     {
+      "path": "../../lib/research-contracts"
+    },
+    {
       "path": "../../lib/api-zod"
     },
     {

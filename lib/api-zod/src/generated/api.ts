@@ -9,6 +9,154 @@ import * as zod from 'zod';
 
 
 /**
+ * @summary Return the current verified principal and effective scopes
+ */
+export const GetCurrentPrincipalResponse = zod.object({
+  "principal": zod.record(zod.string(), zod.unknown()),
+  "credentialId": zod.string(),
+  "effectiveScopes": zod.array(zod.string()),
+  "authMode": zod.enum(['bearer', 'cookie']),
+  "sessionId": zod.string().optional()
+})
+
+
+/**
+ * @summary Issue a human, service, or manifest-bound agent principal
+ */
+
+
+
+
+
+
+
+
+
+export const IssuePrincipalBody = zod.object({
+  "principalKind": zod.enum(['human', 'service', 'agent']),
+  "subject": zod.string().min(1),
+  "displayName": zod.string().min(1),
+  "scopes": zod.array(zod.string().min(1)).min(1),
+  "servicePrincipalId": zod.string().uuid().optional(),
+  "manifestId": zod.string().min(1).optional(),
+  "manifestVersion": zod.string().min(1).optional(),
+  "rationale": zod.string().min(1)
+})
+
+
+/**
+ * @summary Append a signed principal revocation decision
+ */
+export const RevokePrincipalParams = zod.object({
+  "principalId": zod.coerce.string().uuid()
+})
+
+
+
+
+
+export const RevokePrincipalBody = zod.object({
+  "expectedRevision": zod.number().min(1),
+  "expectedDecisionId": zod.string().uuid(),
+  "rationale": zod.string().min(1)
+})
+
+
+export const revokePrincipalResponseSubjectPrincipalSha256RegExp = new RegExp('^[0-9a-f]{64}$');
+
+
+
+
+export const revokePrincipalResponseAttestationHmacSha256RegExp = new RegExp('^[0-9a-f]{64}$');
+
+
+export const RevokePrincipalResponse = zod.object({
+  "decisionType": zod.enum(['PRINCIPAL']),
+  "decisionId": zod.string().uuid(),
+  "verdict": zod.enum(['ACTIVATE', 'REVOKE']),
+  "rationale": zod.string().min(1),
+  "subject": zod.object({
+  "subjectType": zod.enum(['PRINCIPAL']),
+  "principalId": zod.string().uuid(),
+  "principalSha256": zod.string().regex(revokePrincipalResponseSubjectPrincipalSha256RegExp)
+}),
+  "revision": zod.number().min(1),
+  "supersedesDecisionId": zod.string().uuid().nullable(),
+  "humanPrincipalId": zod.string().uuid(),
+  "credentialId": zod.string().uuid(),
+  "requestId": zod.string().min(1),
+  "decidedAt": zod.string().describe('ISO 8601 timestamp with offset'),
+  "nonce": zod.string().min(1),
+  "attestationKeyId": zod.string().min(1),
+  "attestationHmacSha256": zod.string().regex(revokePrincipalResponseAttestationHmacSha256RegExp)
+})
+
+
+/**
+ * @summary Issue a permanent application credential and return its plaintext once
+ */
+
+
+
+
+
+export const IssueCredentialBody = zod.object({
+  "principalId": zod.string().uuid(),
+  "scopes": zod.array(zod.string().min(1)).min(1),
+  "expiresAt": zod.coerce.date().optional(),
+  "rationale": zod.string().min(1)
+})
+
+
+/**
+ * @summary Append a signed permanent-credential revocation decision
+ */
+export const RevokeCredentialParams = zod.object({
+  "credentialId": zod.coerce.string().uuid()
+})
+
+
+
+
+
+export const RevokeCredentialBody = zod.object({
+  "expectedRevision": zod.number().min(1),
+  "expectedDecisionId": zod.string().uuid(),
+  "rationale": zod.string().min(1)
+})
+
+
+export const revokeCredentialResponseSubjectCredentialSha256RegExp = new RegExp('^[0-9a-f]{64}$');
+
+
+
+
+export const revokeCredentialResponseAttestationHmacSha256RegExp = new RegExp('^[0-9a-f]{64}$');
+
+
+export const RevokeCredentialResponse = zod.object({
+  "decisionType": zod.enum(['CREDENTIAL']),
+  "decisionId": zod.string().uuid(),
+  "verdict": zod.enum(['ACTIVATE', 'REVOKE']),
+  "rationale": zod.string().min(1),
+  "subject": zod.object({
+  "subjectType": zod.enum(['CREDENTIAL']),
+  "credentialId": zod.string().uuid(),
+  "credentialSha256": zod.string().regex(revokeCredentialResponseSubjectCredentialSha256RegExp)
+}),
+  "revision": zod.number().min(1),
+  "supersedesDecisionId": zod.string().uuid().nullable(),
+  "humanPrincipalId": zod.string().uuid(),
+  "credentialId": zod.string().uuid(),
+  "requestId": zod.string().min(1),
+  "decidedAt": zod.string().describe('ISO 8601 timestamp with offset'),
+  "nonce": zod.string().min(1),
+  "attestationKeyId": zod.string().min(1),
+  "attestationHmacSha256": zod.string().regex(revokeCredentialResponseAttestationHmacSha256RegExp)
+})
+
+
+/**
  * Scans a liquid under-$150 universe for the day's best intraday candidates and the largest gappers up/down, ranked by gap, volatility, liquidity and catalysts (earnings, analyst grade changes, news). Evidence-ranked, not a prediction guarantee.
 
  * @summary Morning market scan
@@ -379,7 +527,7 @@ export const CopilotHealthCheckResponse = zod.object({
 
 
 /**
- * Computes one deterministic read-only event from Alpaca SIP. Omitted source means alpaca_live. Fixture and historical modes are rejected until verified replay authorization and canonical case evidence exist.
+ * Computes one deterministic read-only event from Alpaca SIP, or resolves an exact authorized canonical historical case. Omitted source means alpaca_live. There is no bundled-fixture fallback.
  * @summary Build the canonical deterministic copilot event for a symbol
  */
 export const getCopilotEventQuerySourceDefault = `alpaca_live`;
@@ -387,7 +535,9 @@ export const getCopilotEventQuerySourceDefault = `alpaca_live`;
 export const GetCopilotEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
   "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(getCopilotEventQuerySourceDefault).describe('Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE.'),
-  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional(),
+  "caseRevisionId": zod.coerce.string().optional().describe('Required with REPLAY or RESEARCH; exact immutable brain case revision.'),
+  "evidenceHash": zod.coerce.string().optional().describe('Required with REPLAY or RESEARCH; exact evidence hash bound to the case.')
 })
 
 export const GetCopilotEventResponse = zod.object({
@@ -497,7 +647,7 @@ export const GetCopilotEventResponse = zod.object({
 
 
 /**
- * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value. Omitted source means read-only Alpaca SIP; fixture and historical modes fail closed until verified replay authorization exists.
+ * Runs the multi-agent analyst committee over the deterministic copilot event for a symbol. The committee only explains, critiques, and summarizes the deterministic read: it never creates signals, approves trades, overrides hard blocks, or invents data. When the event is hard-blocked the recommendation can only be a defensive value. Omitted source means read-only Alpaca SIP. Historical reads require an exact authorized case revision and evidence hash with no fixture fallback.
  * @summary Explain a deterministic copilot event with the read-only analyst committee
  */
 export const explainCopilotEventQuerySourceDefault = `alpaca_live`;
@@ -505,7 +655,9 @@ export const explainCopilotEventQuerySourceDefault = `alpaca_live`;
 export const ExplainCopilotEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
   "source": zod.enum(['fixture', 'yahoo_delayed', 'alpaca_live']).default(explainCopilotEventQuerySourceDefault).describe('Read-only market-data source. LIVE permits only alpaca_live (SIP); fixture and yahoo_delayed never fall back into LIVE.'),
-  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional()
+  "mode": zod.enum(['LIVE', 'REPLAY', 'RESEARCH']).optional(),
+  "caseRevisionId": zod.coerce.string().optional().describe('Required with REPLAY or RESEARCH; exact immutable brain case revision.'),
+  "evidenceHash": zod.coerce.string().optional().describe('Required with REPLAY or RESEARCH; exact evidence hash bound to the case.')
 })
 
 export const ExplainCopilotEventResponse = zod.object({
@@ -773,12 +925,14 @@ export const ListHistoryEventsResponse = zod.array(ListHistoryEventsResponseItem
 
 
 /**
- * Returns canonical historical-case metadata after verified brain authorization. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Replay never executes, simulates, routes, or paper-trades.
+ * Returns canonical historical-case metadata after verified brain authorization and exact evidence binding. Replay never executes, simulates, routes, or paper-trades.
  * @summary Load replay session metadata for a symbol/date
  */
 export const GetReplaySessionQueryParams = zod.object({
   "symbol": zod.coerce.string(),
-  "date": zod.coerce.string().optional().describe('ISO date (YYYY-MM-DD); defaults to the symbol\'s available session')
+  "date": zod.coerce.string().optional().describe('ISO date (YYYY-MM-DD); defaults to the symbol\'s available session'),
+  "caseRevisionId": zod.coerce.string().describe('Exact immutable brain case revision.'),
+  "evidenceHash": zod.coerce.string().describe('Exact evidence hash bound to the case revision.')
 })
 
 export const GetReplaySessionResponse = zod.object({
@@ -786,6 +940,8 @@ export const GetReplaySessionResponse = zod.object({
   "date": zod.string().describe('ISO date (YYYY-MM-DD) of the replayable session'),
   "availableDates": zod.array(zod.string()).describe('Every ISO date this symbol can be replayed for (for the date picker)'),
   "dataSource": zod.string(),
+  "caseRevisionId": zod.string().describe('Exact immutable brain case revision used for this session.'),
+  "evidenceHash": zod.string().describe('Exact evidence hash bound to the case revision.'),
   "totalSteps": zod.number().describe('Valid replay steps are 0-based: 0 .. totalSteps-1'),
   "barSeconds": zod.number(),
   "startTime": zod.number().describe('Epoch seconds of the first bar'),
@@ -794,7 +950,7 @@ export const GetReplaySessionResponse = zod.object({
 
 
 /**
- * After verified brain authorization, computes one deterministic event from a canonical case revision and evidence hash. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read. Never returns order intent.
+ * After verified brain authorization, computes one deterministic event from an exact canonical case revision and evidence hash. Never returns order intent and never reads bundled fixtures.
  * @summary Build the deterministic copilot event at a replay step
  */
 export const getReplayEventQueryStepMin = 0;
@@ -804,7 +960,9 @@ export const getReplayEventQueryStepMin = 0;
 export const GetReplayEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
   "date": zod.coerce.string().describe('ISO date (YYYY-MM-DD) of the replay session'),
-  "step": zod.coerce.number().min(getReplayEventQueryStepMin).describe('0-based replay step (0 .. totalSteps-1)')
+  "step": zod.coerce.number().min(getReplayEventQueryStepMin).describe('0-based replay step (0 .. totalSteps-1)'),
+  "caseRevisionId": zod.coerce.string().describe('Exact immutable brain case revision.'),
+  "evidenceHash": zod.coerce.string().describe('Exact evidence hash bound to the case revision.')
 })
 
 export const GetReplayEventResponse = zod.object({
@@ -914,7 +1072,7 @@ export const GetReplayEventResponse = zod.object({
 
 
 /**
- * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data. Temporarily returns BRAIN_AUTH_NOT_READY before any fixture read until verified brain authorization exists.
+ * Runs the same multi-agent analyst committee over the deterministic replay-step event. The committee only explains, critiques, and summarizes: it never creates signals, approves trades, overrides hard blocks, or invents data. The event is resolved only from the exact authorized canonical case revision and evidence hash.
  * @summary Explain the replay-step event with the read-only analyst committee
  */
 export const explainReplayEventQueryStepMin = 0;
@@ -924,7 +1082,9 @@ export const explainReplayEventQueryStepMin = 0;
 export const ExplainReplayEventQueryParams = zod.object({
   "symbol": zod.coerce.string(),
   "date": zod.coerce.string(),
-  "step": zod.coerce.number().min(explainReplayEventQueryStepMin)
+  "step": zod.coerce.number().min(explainReplayEventQueryStepMin),
+  "caseRevisionId": zod.coerce.string().describe('Exact immutable brain case revision.'),
+  "evidenceHash": zod.coerce.string().describe('Exact evidence hash bound to the case revision.')
 })
 
 export const ExplainReplayEventResponse = zod.object({

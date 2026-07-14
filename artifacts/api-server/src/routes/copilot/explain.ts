@@ -14,6 +14,11 @@ import {
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
 import { resolveSourcePolicy } from "../../lib/sourcePolicy.js";
+import {
+  BrainUnavailableError,
+  isExactHistoricalCase,
+} from "../../auth/historicalCasePort.js";
+import type { AuthRuntime } from "../../auth/types.js";
 
 const router: IRouter = Router();
 
@@ -27,6 +32,12 @@ router.get("/explain", async (req, res) => {
   const { symbol, mode } = parsed.data;
   const source = typeof req.query.source === "string" ? parsed.data.source : undefined;
   const requestedMode = mode ?? "LIVE";
+  const caseRevisionId = typeof req.query.caseRevisionId === "string"
+    ? req.query.caseRevisionId
+    : undefined;
+  const evidenceHash = typeof req.query.evidenceHash === "string"
+    ? req.query.evidenceHash
+    : undefined;
   const symbolUpper = symbol.toUpperCase().trim();
   // Permissive enough for real Yahoo symbols: BRK-B, BTC-USD, ^GSPC, ES=F, 7203.T
   if (!symbolUpper || !/^[A-Z0-9.\-=^]{1,12}$/.test(symbolUpper)) {
@@ -34,18 +45,12 @@ router.get("/explain", async (req, res) => {
     return;
   }
 
-  if (requestedMode !== "LIVE" || source === "fixture") {
-    res.status(503).json({
-      error: "Historical brain access is unavailable until verified replay authorization is installed.",
-      code: "BRAIN_AUTH_NOT_READY",
-    });
-    return;
-  }
-
   const policy = resolveSourcePolicy({
-    mode: "LIVE",
+    mode: requestedMode,
     source,
-    canReplay: false,
+    canReplay: req.auth?.effectiveScopes.includes("replay:read") ?? false,
+    ...(caseRevisionId ? { caseRevisionId } : {}),
+    ...(evidenceHash ? { evidenceHash } : {}),
   });
   if (!policy.ok) {
     res.status(policy.status).json({ error: policy.code, code: policy.code });
@@ -55,13 +60,60 @@ router.get("/explain", async (req, res) => {
   // null when the OpenAI integration is not configured -> deterministic read.
   const provider = getCommitteeProvider();
   try {
-    const input = await fetchAlpacaIntradayInput(symbolUpper, "LIVE");
-    const core = await buildEventWithValidation(input);
+    const input = policy.source === "alpaca_live"
+      ? await fetchAlpacaIntradayInput(symbolUpper, "LIVE")
+      : await (async () => {
+          const runtime = req.app.locals["authRuntime"] as AuthRuntime;
+          const historicalRequest = {
+            caseRevisionId: policy.caseRevisionId,
+            evidenceHash: policy.evidenceHash,
+            symbol: symbolUpper,
+          } as const;
+          const historicalCase = await runtime.historicalCasePort.resolveReplayCase(
+            historicalRequest,
+            req.auth!,
+          );
+          if (!historicalCase) {
+            res.status(404).json({
+              error: "Canonical historical case was not found",
+              code: "CANONICAL_CASE_NOT_FOUND",
+            });
+            return null;
+          }
+          if (
+            requestedMode === "LIVE" ||
+            !isExactHistoricalCase(historicalCase, historicalRequest, requestedMode)
+          ) {
+            res.status(503).json({
+              error: "Canonical historical case failed integrity checks",
+              code: "BRAIN_INTEGRITY_FAILURE",
+            });
+            return null;
+          }
+          return historicalCase.input;
+        })();
+    if (!input) return;
+    const core = policy.source === "fixture"
+      ? buildCopilotEvent(input)
+      : await buildEventWithValidation(input);
     const result = await runCommittee(core, provider);
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result, {
       provenanceMode: policy.provenanceMode,
+      ...(policy.source === "fixture"
+        ? {
+            caseRevisionId: policy.caseRevisionId,
+            evidenceHash: policy.evidenceHash,
+          }
+        : {}),
     })));
   } catch (err) {
+    if (err instanceof BrainUnavailableError) {
+      res.status(503).json({
+        error: err.message,
+        code: "BRAIN_UNAVAILABLE",
+      });
+      return;
+    }
     if (err instanceof CopilotDataError) {
       // Explain a deterministic DATA_FAILURE event so consumers always get a
       // canonical, safe committee read even when the upstream feed is down.
