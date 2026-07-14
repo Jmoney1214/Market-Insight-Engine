@@ -160,11 +160,16 @@ export async function gradeEventStudies(limit = 20): Promise<number> {
     let graded = 0;
     for (const row of pending) {
       if (!row.findingRef || !row.symbol) continue;
-      const eventColumns = await computeEventColumns(row.findingRef, row.symbol, markets);
-      if (!eventColumns) continue; // not printed / unestimable — retried on later sweeps
-
-      await db.update(findingGradesTable).set(eventColumns).where(eq(findingGradesTable.id, row.id));
-      graded += 1;
+      try {
+        const eventColumns = await computeEventColumns(row.findingRef, row.symbol, markets);
+        if (!eventColumns) continue; // not printed / unestimable — retried on later sweeps
+        await db.update(findingGradesTable).set(eventColumns).where(eq(findingGradesTable.id, row.id));
+        graded += 1;
+      } catch (err) {
+        // One poisoned row must not abort the rest of the sweep; it stays
+        // pending and is retried next time.
+        logger.warn({ err: String(err), findingRef: row.findingRef }, "Event-study row failed (skipped)");
+      }
     }
     if (graded > 0) logger.info({ graded }, "Event studies graded");
     return graded;
@@ -195,14 +200,18 @@ export async function regradeEventStudies(limit = 200): Promise<{ checked: numbe
   let regraded = 0;
   for (const row of graded) {
     if (!row.findingRef || !row.symbol) continue;
-    const stored = (row.eventStudy as { benchmark?: string } | null)?.benchmark ?? "SPY";
-    const wanted = await benchmarkFor(row.symbol);
-    if (stored === wanted) continue;
+    try {
+      const stored = (row.eventStudy as { benchmark?: string } | null)?.benchmark ?? "SPY";
+      const wanted = await benchmarkFor(row.symbol);
+      if (stored === wanted) continue;
 
-    const eventColumns = await computeEventColumns(row.findingRef, row.symbol, markets);
-    if (!eventColumns) continue;
-    await db.update(findingGradesTable).set(eventColumns).where(eq(findingGradesTable.id, row.id));
-    regraded += 1;
+      const eventColumns = await computeEventColumns(row.findingRef, row.symbol, markets);
+      if (!eventColumns) continue;
+      await db.update(findingGradesTable).set(eventColumns).where(eq(findingGradesTable.id, row.id));
+      regraded += 1;
+    } catch (err) {
+      logger.warn({ err: String(err), findingRef: row.findingRef }, "Event-study regrade row failed (skipped)");
+    }
   }
   if (regraded > 0) logger.info({ regraded }, "Event studies re-graded onto size-matched benchmarks");
   return { checked: graded.length, regraded };

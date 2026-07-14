@@ -15,11 +15,13 @@ export type BenchmarkSymbol = "SPY" | "IWM";
 export const LARGE_CAP_MIN_MARKET_CAP = 10_000_000_000;
 
 const CAP_TTL_MS = 6 * 3_600_000;
+/** Failed lookups retry quickly — a 6h miss-pin could misclassify a large cap. */
+const CAP_MISS_TTL_MS = 10 * 60_000;
 const capCache = new Map<string, { at: number; cap: number | null }>();
 
 async function marketCapOf(symbol: string): Promise<number | null> {
   const hit = capCache.get(symbol);
-  if (hit && Date.now() - hit.at < CAP_TTL_MS) return hit.cap;
+  if (hit && Date.now() - hit.at < (hit.cap === null ? CAP_MISS_TTL_MS : CAP_TTL_MS)) return hit.cap;
   const quote = await fmp.getQuote(symbol).catch(() => null);
   const cap =
     quote && Number.isFinite(quote.marketCap) && quote.marketCap > 0 ? quote.marketCap : null;

@@ -49,7 +49,7 @@ import {
 import { claimFromCatalyst, MATERIAL_FORMS } from "./researchRunner.js";
 import { persistLeadRun } from "./researchStore.js";
 import { judgeLeadRun } from "./judgeStore.js";
-import { gradeEventStudyByRef } from "./eventStudyGrader.js";
+import { gradeEventStudyByRef, type MarketSeries } from "./eventStudyGrader.js";
 import { clusterKey } from "./newsEvents.js";
 import { etEpochMs, etIso } from "./etTime.js";
 import { mapEconomicCalendar } from "./macroCalendar.js";
@@ -377,12 +377,9 @@ export async function startResearchBacktest(opts: StartBacktestOptions): Promise
   // Fire-and-forget: progress is pollable at GET /api/research/backtest/:id.
   void (async () => {
     try {
-      // One series per benchmark serves every event-study grade in the batch
-      // (size-matched: IWM for small caps, SPY for large — issue #33).
-      const markets = {
-        SPY: await alpaca.getDailyClosesDated("SPY").catch(() => null),
-        IWM: await alpaca.getDailyClosesDated("IWM").catch(() => null),
-      };
+      // Benchmarks are fetched lazily on first use and cached for the whole
+      // batch (size-matched: IWM for small caps, SPY for large — issue #33).
+      const markets: MarketSeries = {};
       for (const candidate of universe) {
         progress.current = `${candidate.date} ${candidate.symbol}`;
         await updateBatch(batchId, progress);
