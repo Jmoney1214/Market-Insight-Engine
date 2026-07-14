@@ -1,7 +1,23 @@
 import { Router, type IRouter } from "express";
 import { getBacktestStatus, startResearchBacktest } from "../lib/backtestStore.js";
+import { regradeEventStudies } from "../lib/eventStudyGrader.js";
 
 const router: IRouter = Router();
+
+/**
+ * One-time migration sweep after the size-matched benchmark fix (#33):
+ * re-grades stored event studies whose benchmark no longer matches the size
+ * rule (pre-fix SPY grades on small caps). Idempotent — correct rows are
+ * untouched, so re-running it is safe and cheap.
+ */
+router.post("/research/event-grades/regrade", async (req, res) => {
+  try {
+    res.json(await regradeEventStudies());
+  } catch (err) {
+    req.log.error({ err }, "Event-study regrade failed");
+    res.status(500).json({ error: "Regrade sweep failed." });
+  }
+});
 
 /**
  * Launches a point-in-time research backtest over the recorded scan history,

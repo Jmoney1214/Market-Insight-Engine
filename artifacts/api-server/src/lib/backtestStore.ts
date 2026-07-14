@@ -377,8 +377,12 @@ export async function startResearchBacktest(opts: StartBacktestOptions): Promise
   // Fire-and-forget: progress is pollable at GET /api/research/backtest/:id.
   void (async () => {
     try {
-      // One SPY series serves every event-study grade in the batch.
-      const market = await alpaca.getDailyClosesDated("SPY").catch(() => null);
+      // One series per benchmark serves every event-study grade in the batch
+      // (size-matched: IWM for small caps, SPY for large — issue #33).
+      const markets = {
+        SPY: await alpaca.getDailyClosesDated("SPY").catch(() => null),
+        IWM: await alpaca.getDailyClosesDated("IWM").catch(() => null),
+      };
       for (const candidate of universe) {
         progress.current = `${candidate.date} ${candidate.symbol}`;
         await updateBatch(batchId, progress);
@@ -392,7 +396,7 @@ export async function startResearchBacktest(opts: StartBacktestOptions): Promise
               symbol: candidate.symbol,
               runId: result.packet.provenance.runId,
               packetId: result.packet.packetId,
-              market,
+              markets,
             })
           : false;
         const committeeRecommendation = await committeeReadAt(candidate.date, candidate.symbol);
