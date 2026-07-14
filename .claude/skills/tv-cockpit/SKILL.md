@@ -49,9 +49,10 @@ harness for a verdict.
 5. **Run parity** against the Node engine on the SAME range:
    ```
    cd tools/research && node tv_parity_check.mjs \
-     --trades <dump.json> --symbol SYM --from YYYY-MM-DD --to YYYY-MM-DD \
-     --class rider|scalper
+     --trades dump.json --symbol SYM --from YYYY-MM-DD --to YYYY-MM-DD \
+     --class rider
    ```
+   (use `--class scalper` for a large-cap scalper twin.)
 6. **Report the verdict**: PARITY OK / DRIFT / HARD FAIL, with the mismatch
    lines. DRIFT or HARD FAIL means the Pine twin and the desk's engine disagree
    — that is a bug to fix in the twin (or the spec), never something to wave

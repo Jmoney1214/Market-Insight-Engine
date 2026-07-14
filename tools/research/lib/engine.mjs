@@ -20,6 +20,7 @@ export const EXEC = {
   notionalCap: S.exec.notionalCapPct / 100, // engine works in fractions
   stopBuf: S.exec.stopBufPct,
   commPct: S.exec.commissionPct / 100, // 0.02% -> 0.0002 fraction
+  dailyLossLimit: S.exec.dailyLossLimit,
 };
 
 const round = (n, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
@@ -138,7 +139,7 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
   const cfg = cls === "rider"
     ? { maxTrades: 1, rr: null, liveCeil: true }
     : { maxTrades: 3, rr: 1.5, liveCeil: false };
-  const { equity: EQ, riskPct, notionalCap, stopBuf, commPct } = EXEC;
+  const { equity: EQ, riskPct, notionalCap, stopBuf, commPct, dailyLossLimit } = EXEC;
   const firstRth = dayBars.find((b) => b.hm >= "09:30");
   if (!firstRth) return { status: "no-session", trades: [] };
   const gap = ((firstRth.o - prevClose) / prevClose) * 100;
@@ -157,7 +158,7 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
   for (const b of dayBars) {
     const tp = (b.h + b.l + b.c) / 3; cumPV += tp * b.v; cumV += b.v;
     const vwap = cumV > 0 ? cumPV / cumV : b.c;
-    e9 = ema(e9, b.c, 9); e20 = ema(e20, b.c, 20);
+    e9 = ema(e9, b.c, S.indicators.emaFast); e20 = ema(e20, b.c, S.indicators.emaSlow);
     const rth = b.hm >= "09:30" && b.hm < "16:00";
     if (rth) lastRth = b;
     if (pending && rth) {
@@ -177,11 +178,11 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
       if (hit === "stop") record(Math.min(b.o, pos.stop) - slip, b.hm, "stop");
       else if (hit === "target") record(pos.tgt, b.hm, "target");
       // EOD flatten is a market sell — take slippage like every other market exit.
-      else if (b.hm >= "15:50") record(b.c - slip, b.hm, "eod");
+      else if (b.hm >= S.session.flattenHm) record(b.c - slip, b.hm, "eod");
     }
     // Session "0940-1100": end-exclusive — last signal bar 10:55, fill 11:00.
-    const canSignal = rth && b.hm >= "09:40" && b.hm < "11:00" && !pos && !pending &&
-      nT < cfg.maxTrades && dayPnl > -500;
+    const canSignal = rth && b.hm >= S.session.entryStartHm && b.hm < S.session.entryEndHm && !pos && !pending &&
+      nT < cfg.maxTrades && dayPnl > -dailyLossLimit;
     if (canSignal && prev) {
       const ceilOk = !cfg.liveCeil || b.c <= T.priceCeil;
       if (ceilOk && b.l <= e9 && b.c > e9 && b.c > vwap && e9 > e20) {

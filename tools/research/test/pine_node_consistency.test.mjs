@@ -18,7 +18,8 @@ const readPine = (f) => readFileSync(join(pineDir, f), "utf8");
 
 // --- Pine constant extractors (default value of input.* / assignment) ---
 const num = (src, name) => {
-  const m = src.match(new RegExp(`${name}\\s*=\\s*input\\.(?:float|int)\\(\\s*([0-9.eE_]+)`));
+  // Tolerate optional whitespace before the paren: input.float (1.5) too.
+  const m = src.match(new RegExp(`${name}\\s*=\\s*input\\.(?:float|int)\\s*\\(\\s*([0-9.eE_]+)`));
   return m ? Number(m[1].replace(/_/g, "")) : undefined;
 };
 const sess = (src, name) => {
@@ -68,6 +69,9 @@ for (const file of [RIDER, SCALPER]) {
     // Execution — shared.
     assert.equal(num(src, "stopBufPct"), S.exec.stopBufPct, "stopBufPct");
     assert.equal(num(src, "riskPct"), S.exec.riskPct, "riskPct");
+    assert.equal(num(src, "notionalCap"), S.exec.notionalCapPct, "notionalCap");
+    assert.equal(num(src, "dayLoss"), S.exec.dailyLossLimit, "dayLoss");
+    assert.equal(assign(src, "initial_capital"), S.exec.equity, "initial_capital");
     assert.equal(assign(src, "commission_value"), S.exec.commissionPct, "commission");
     assert.equal(assign(src, "slippage"), S.exec.slippageTicks, "slippage");
 

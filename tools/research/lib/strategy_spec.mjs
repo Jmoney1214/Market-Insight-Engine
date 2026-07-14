@@ -40,7 +40,9 @@ export const STRATEGY_SPEC = {
     notionalCapPct: 50, // max position as % of equity
     stopBufPct: 0.8, // structural stop this % below the pullback low
     commissionPct: 0.02, // per side, TradingView "percent" units (= 2 bps)
-    slippageTicks: 2, // TradingView tester slippage
+    slippageTicks: 2, // TradingView tester slippage input (Pine side; the Node
+    // engine uses its own dynamic fill slippage, reconciled by the parity harness)
+    dailyLossLimit: 500, // halt new entries once the day is down this many $
   },
 
   // Session windows (ET).
