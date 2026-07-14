@@ -17,6 +17,7 @@ export const AgentReadAgent = {
   catalyst: 'catalyst',
   position: 'position',
   memory: 'memory',
+  sentiment: 'sentiment',
   bull_case: 'bull_case',
   bear_case: 'bear_case',
   risk_critic: 'risk_critic',

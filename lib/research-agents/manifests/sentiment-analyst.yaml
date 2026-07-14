@@ -1,0 +1,20 @@
+id: sentiment-analyst
+version: 1.0.0
+description: Grounded sentiment reader (TradingAgents pattern). Scores only pre-fetched news/Reddit/X blocks — it never searches. Band is derived from the score by code, confidence is capped by coverage, citations must be input blocks, and the reading is attention only, never event proof.
+category: research
+model_policy:
+  tier: quick
+  structured_output: true
+allowed_tools:
+  - attention.get_blocks
+read_scopes: ["attention_signal:recent", "news_events:recent"]
+write_scopes: ["sentiment_reading:append"]
+budgets:
+  maximum_model_calls: 1
+  maximum_tool_calls: 5
+  maximum_seconds: 60
+  maximum_cost_usd: 0.10
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/research-agents/src/sentiment.test.ts
+deterministic_guards: ["band_from_score_by_code", "citations_must_be_input_blocks", "is_event_proof_pinned_false", "no_blocks_no_reading"]
+memory_policy: current_run_only

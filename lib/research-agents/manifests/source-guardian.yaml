@@ -1,0 +1,20 @@
+id: source-guardian
+version: 1.0.0
+description: Fail-closed claim auditor. Judges claim-to-passage entailment, enforces source-class policy, collapses syndicated copies to one independent source, and lets corrections supersede. Unaudited or unsupported claims cannot enter a packet.
+category: research
+model_policy:
+  tier: quick
+  structured_output: true
+allowed_tools:
+  - evidence.get_passages
+read_scopes: ["claim:current_run", "source_document:current_run", "news_events:recent"]
+write_scopes: ["source_audit:append"]
+budgets:
+  maximum_model_calls: 5
+  maximum_tool_calls: 20
+  maximum_seconds: 120
+  maximum_cost_usd: 0.20
+failure_mode: FAIL_CLOSED
+eval_suite: lib/research-agents/src/sourceGuardian.test.ts
+deterministic_guards: ["admission_requires_supported_audit", "syndication_collapsed_by_cluster", "corrections_supersede", "entity_and_numeric_checks_by_code"]
+memory_policy: current_run_only

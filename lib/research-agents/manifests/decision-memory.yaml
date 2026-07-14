@@ -1,0 +1,21 @@
+id: decision-memory
+version: 1.0.0
+description: DeepFund decision memory. Renders the last N research verdicts on a ticker (outcome-joined against the grade ledger) as deterministic lines fed into the committee memory lens. Pure formatting - ungraded verdicts render as outcome pending, never invented.
+category: memory
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools:
+  - packets.read
+  - grades.read
+read_scopes: ["research_packets:by_symbol", "finding_grades:by_packet"]
+write_scopes: []
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 4
+  maximum_seconds: 15
+  maximum_cost_usd: 0
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/research-agents/src/memory.test.ts
+deterministic_guards: ["outcomes_never_invented", "verdicts_from_persisted_packets_only"]
+memory_policy: gated_cross_run

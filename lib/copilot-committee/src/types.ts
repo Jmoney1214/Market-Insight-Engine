@@ -12,9 +12,41 @@ export type AgentName =
   | "catalyst"
   | "position"
   | "memory"
+  | "sentiment"
   | "bull_case"
   | "bear_case"
   | "risk_critic";
+
+/**
+ * Pre-fetched, grounded sentiment reading injected by the caller (the research
+ * layer's sentiment analyst). The lens NEVER searches or scores on its own —
+ * absent input renders the lens UNAVAILABLE. Attention only, never event proof.
+ */
+export interface SentimentLensInput {
+  band: "STRONG_BEARISH" | "BEARISH" | "NEUTRAL" | "BULLISH" | "STRONG_BULLISH";
+  /** Clamped to [-1,1] upstream. */
+  score: number;
+  /** Clamped to [0,1] upstream. */
+  confidence: number;
+  sources: Array<{ kind: string; itemCount: number }>;
+  isEventProof: false;
+}
+
+/** Optional pre-fetched context for lenses that need data beyond the event. */
+export interface CommitteeExtras {
+  sentiment?: SentimentLensInput | null;
+  /**
+   * Validated planner selection (from validateLensSelection). Omitted/null =
+   * run every lens (parallel mode, the default). Lenses not selected render
+   * a deterministic "not selected" read; bull/bear/risk always run.
+   */
+  lensSelection?: string[] | null;
+  /**
+   * Decision memory (DeepFund): pre-rendered lines describing the last N
+   * research verdicts on this ticker, attached to the memory lens as factors.
+   */
+  decisionMemory?: string[] | null;
+}
 
 /** A single specialist agent's read. */
 export interface AgentRead {
@@ -45,7 +77,7 @@ export interface DashboardRead {
   riskNotes: string[];
 }
 
-/** All ten specialist reads, keyed for the synthesizer. */
+/** All eleven specialist reads, keyed for the synthesizer. */
 export interface CommitteeReads {
   technical: AgentRead;
   pattern: AgentRead;
@@ -54,6 +86,7 @@ export interface CommitteeReads {
   catalyst: AgentRead;
   position: AgentRead;
   memory: AgentRead;
+  sentiment: AgentRead;
   bullCase: AgentRead;
   bearCase: AgentRead;
   riskCritic: AgentRead;

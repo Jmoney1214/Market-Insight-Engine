@@ -1,0 +1,20 @@
+id: committee-planner
+version: 1.0.0
+description: DeepFund-pattern lens planner. Proposes which committee lenses run per ticker, selecting ONLY from the verified lens registry; deterministic validation rejects invalid proposals wholesale and the committee runs every lens (parallel default). It can narrow work, never widen it, and never invents an agent.
+category: committee
+model_policy:
+  tier: quick
+  structured_output: true
+allowed_tools:
+  - committee.lens_registry
+read_scopes: ["copilot_event:current"]
+write_scopes: []
+budgets:
+  maximum_model_calls: 1
+  maximum_tool_calls: 2
+  maximum_seconds: 30
+  maximum_cost_usd: 0.05
+failure_mode: ABSTAIN
+eval_suite: lib/copilot-committee/src/lensRegistry.test.ts
+deterministic_guards: ["registry_only_selection", "invalid_proposal_runs_all_lenses", "synthesis_agents_always_run"]
+memory_policy: current_run_only

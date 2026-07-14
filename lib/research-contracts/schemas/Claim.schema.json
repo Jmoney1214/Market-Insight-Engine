@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "Claim"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "claimId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Z0-9.\\-=^]{1,12}$"
+    },
+    "cik": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "predicate": {
+      "type": "string"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "structuredValue": {
+      "anyOf": [
+        {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "unit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "assertedByAgent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "assertedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    },
+    "criticality": {
+      "type": "string",
+      "enum": [
+        "CORE",
+        "SUPPORTING"
+      ]
+    },
+    "requiredForCompletion": {
+      "type": "boolean"
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sourceDocumentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "passageLocator": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "JSON_POINTER",
+                  "CHAR_RANGE",
+                  "SECTION",
+                  "WHOLE_DOCUMENT"
+                ]
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "supportType": {
+            "type": "string",
+            "enum": [
+              "DIRECT",
+              "INDIRECT",
+              "CONTEXTUAL"
+            ]
+          }
+        },
+        "required": [
+          "sourceDocumentId",
+          "passageLocator",
+          "supportType"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "claimId",
+    "symbol",
+    "cik",
+    "predicate",
+    "text",
+    "structuredValue",
+    "unit",
+    "assertedByAgent",
+    "assertedAt",
+    "criticality",
+    "requiredForCompletion",
+    "evidence"
+  ],
+  "additionalProperties": false
+}

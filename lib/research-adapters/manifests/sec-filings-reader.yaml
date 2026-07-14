@@ -1,0 +1,22 @@
+id: sec-filings-reader
+version: 1.0.0
+description: Fetches SEC EDGAR submissions and filings, extracts Item sections deterministically, emits SourceDocument evidence.
+category: research
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools:
+  - sec.get_submissions
+  - sec.get_filing_document
+  - sec.extract_sections
+read_scopes: ["candidate_seed:current"]
+write_scopes: ["source_document:append", "evidence:append"]
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 40
+  maximum_seconds: 120
+  maximum_cost_usd: 0
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/research-adapters/src/adapters.test.ts
+deterministic_guards: ["sec_user_agent_required", "max_10_requests_per_second", "cache_by_accession"]
+memory_policy: current_run_only

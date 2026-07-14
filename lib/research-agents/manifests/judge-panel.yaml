@@ -1,0 +1,20 @@
+id: judge-panel
+version: 1.0.0
+description: ContestTrade deduction-only judge panel. Every finding starts at 100; independent judges may only subtract points for fixed rubric categories with cited reasons. Code clamps deductions, floors at zero, and takes the multi-judge median; malformed judges are dropped and zero valid judges yields no grade.
+category: committee
+model_policy:
+  tier: quick
+  structured_output: true
+allowed_tools:
+  - grades.read_rubric
+read_scopes: ["catalyst_record:current_run", "source_audit:current_run"]
+write_scopes: ["finding_grades:append"]
+budgets:
+  maximum_model_calls: 3
+  maximum_tool_calls: 6
+  maximum_seconds: 90
+  maximum_cost_usd: 0.15
+failure_mode: ABSTAIN
+eval_suite: lib/research-agents/src/judgePanel.test.ts
+deterministic_guards: ["deduction_only_scoring", "rubric_codes_fixed", "median_across_judges", "malformed_judge_dropped"]
+memory_policy: current_run_only

@@ -223,3 +223,109 @@ export async function getDailyBars(symbol: string, days = 500): Promise<DailyBar
     volumes: bars.map((b) => Number(b["v"])),
   };
 }
+
+export type MarketNewsItem = {
+  id: string;
+  headline: string;
+  symbols: string[];
+  source: string;
+  url: string | null;
+  createdAt: string;
+};
+
+/** Market-wide news (no symbol filter) — feed for the news-event scanner. */
+export async function getMarketNews(limit = 50): Promise<MarketNewsItem[] | null> {
+  const url = new URL("https://data.alpaca.markets/v1beta1/news");
+  url.searchParams.set("limit", String(Math.min(limit, 50)));
+  url.searchParams.set("sort", "desc");
+  const data = await alpacaGet<{ news?: Array<Record<string, any>> }>(url);
+  if (!data?.news || data.news.length === 0) return null;
+  return data.news.map((n) => ({
+    id: String(n["id"] ?? ""),
+    headline: decodeEntities(String(n["headline"] ?? "")),
+    symbols: Array.isArray(n["symbols"]) ? n["symbols"].map(String) : [],
+    source: String(n["source"] ?? "Alpaca"),
+    url: n["url"] ? String(n["url"]) : null,
+    createdAt: String(n["created_at"] ?? ""),
+  }));
+}
+
+export type DatedClose = { date: string; close: number };
+
+/** Dated daily closes (split-adjusted) — feed for the event-study grader. */
+export async function getDailyClosesDated(symbol: string, days = 250): Promise<DatedClose[] | null> {
+  const start = new Date();
+  start.setDate(start.getDate() - days);
+  const url = new URL(`${DATA_BASE}/${encodeURIComponent(symbol)}/bars`);
+  url.searchParams.set("timeframe", "1Day");
+  url.searchParams.set("feed", alpacaFeed);
+  url.searchParams.set("adjustment", "split");
+  url.searchParams.set("start", start.toISOString().split("T")[0]!);
+  url.searchParams.set("limit", "1000");
+
+  const data = await alpacaGet<{ bars?: Array<Record<string, unknown>> }>(url);
+  const bars = data?.bars;
+  if (!bars || bars.length === 0) return null;
+  const out: DatedClose[] = [];
+  for (const b of bars) {
+    const t = String(b["t"] ?? "");
+    const c = Number(b["c"]);
+    if (t.length >= 10 && Number.isFinite(c)) out.push({ date: t.slice(0, 10), close: c });
+  }
+  return out.length > 0 ? out : null;
+}
+
+/** Historical news for one symbol in [start, end] — original timestamps kept. */
+export async function getHistoricalNews(
+  symbol: string,
+  startIso: string,
+  endIso: string,
+  limit = 50,
+): Promise<MarketNewsItem[] | null> {
+  const url = new URL("https://data.alpaca.markets/v1beta1/news");
+  url.searchParams.set("symbols", symbol);
+  url.searchParams.set("start", startIso);
+  url.searchParams.set("end", endIso);
+  url.searchParams.set("limit", String(Math.min(limit, 50)));
+  url.searchParams.set("sort", "desc");
+  const data = await alpacaGet<{ news?: Array<Record<string, any>> }>(url);
+  if (!data?.news || data.news.length === 0) return null;
+  return data.news.map((n) => ({
+    id: String(n["id"] ?? ""),
+    headline: decodeEntities(String(n["headline"] ?? "")),
+    symbols: Array.isArray(n["symbols"]) ? n["symbols"].map(String) : [],
+    source: String(n["source"] ?? "Alpaca"),
+    url: n["url"] ? String(n["url"]) : null,
+    createdAt: String(n["created_at"] ?? ""),
+  }));
+}
+
+export type IntradayBar = { t: number; o: number; h: number; l: number; c: number; v: number };
+
+/** Historical 5-min bars in [start, end] (epoch-second t) — PIT committee feed. */
+export async function getIntradayBars5m(
+  symbol: string,
+  startIso: string,
+  endIso: string,
+): Promise<IntradayBar[] | null> {
+  const url = new URL(`${DATA_BASE}/${encodeURIComponent(symbol)}/bars`);
+  url.searchParams.set("timeframe", "5Min");
+  url.searchParams.set("feed", alpacaFeed);
+  url.searchParams.set("adjustment", "raw");
+  url.searchParams.set("start", startIso);
+  url.searchParams.set("end", endIso);
+  url.searchParams.set("limit", "10000");
+  url.searchParams.set("sort", "asc");
+  const data = await alpacaGet<{ bars?: Array<Record<string, unknown>> }>(url);
+  const bars = data?.bars;
+  if (!bars || bars.length === 0) return null;
+  const out: IntradayBar[] = [];
+  for (const b of bars) {
+    const t = typeof b["t"] === "string" ? Math.floor(Date.parse(b["t"]) / 1000) : NaN;
+    const nums = [b["o"], b["h"], b["l"], b["c"]].map(Number);
+    if (Number.isFinite(t) && nums.every(Number.isFinite)) {
+      out.push({ t, o: nums[0]!, h: nums[1]!, l: nums[2]!, c: nums[3]!, v: Number(b["v"]) || 0 });
+    }
+  }
+  return out.length > 0 ? out : null;
+}

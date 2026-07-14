@@ -2,7 +2,7 @@ import { Router } from "express";
 import { db, reportsTable } from "@workspace/db";
 import { eq, desc } from "drizzle-orm";
 import { AnalyzeTickerBody, GetReportParams, DeleteReportParams } from "@workspace/api-zod";
-import { buildReport } from "../lib/buildReport.js";
+import { buildReport, NoLiveDataError } from "../lib/buildReport.js";
 
 const router = Router();
 
@@ -21,7 +21,17 @@ router.post("/analyze", async (req, res) => {
     return;
   }
 
-  const report = await buildReport(tickerUpper, 0);
+  let report: Awaited<ReturnType<typeof buildReport>>;
+  try {
+    report = await buildReport(tickerUpper, 0);
+  } catch (err) {
+    if (err instanceof NoLiveDataError) {
+      // Fail closed: without providers we return an error, never a fabricated report.
+      res.status(503).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
 
   const [inserted] = await db
     .insert(reportsTable)

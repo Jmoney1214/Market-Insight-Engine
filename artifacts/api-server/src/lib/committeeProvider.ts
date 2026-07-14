@@ -37,7 +37,7 @@ const proseSchema = z.object({
 const MODELS: Record<LlmProviderId, Record<ModelTier, string>> = {
   openai: { quick: "gpt-5-mini", deep: "gpt-5.4" },
   gemini: { quick: "gemini-3-flash-preview", deep: "gemini-3.1-pro-preview" },
-  anthropic: { quick: "claude-haiku-4-5", deep: "claude-sonnet-4-6" },
+  anthropic: { quick: "claude-opus-4-8", deep: "claude-opus-4-8" },
 };
 
 function buildPrompt(context: ProviderContext): string {

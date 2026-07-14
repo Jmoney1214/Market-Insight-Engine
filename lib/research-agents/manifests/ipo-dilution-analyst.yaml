@@ -1,0 +1,22 @@
+id: ipo-dilution-analyst
+version: 1.0.0
+description: Deterministic lifecycle router and capital-structure extractor. Runs only for recent IPO / SPAC / offering / active shelf lifecycles; extracts share counts from SEC filing text with the method labeled ESTIMATED; unextractable fields are per-field UNKNOWN, never guessed.
+category: research
+model_policy:
+  tier: none
+  structured_output: false
+allowed_tools:
+  - sec.get_submissions
+  - sec.get_filing_document
+  - sec.extract_sections
+read_scopes: ["candidate_seed:current", "source_document:current_run"]
+write_scopes: ["capital_structure:append"]
+budgets:
+  maximum_model_calls: 0
+  maximum_tool_calls: 30
+  maximum_seconds: 120
+  maximum_cost_usd: 0
+failure_mode: RETURN_UNKNOWN
+eval_suite: lib/research-agents/src/dilution.test.ts
+deterministic_guards: ["lifecycle_router_is_code", "extracted_numbers_labeled_estimated_with_method", "float_never_fabricated"]
+memory_policy: current_run_only

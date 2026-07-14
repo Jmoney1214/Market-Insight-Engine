@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "SourceAudit"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "auditId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "claimId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "validationStatus": {
+      "type": "string",
+      "enum": [
+        "SUPPORTED",
+        "PARTIALLY_SUPPORTED",
+        "CONFLICTED",
+        "UNSUPPORTED",
+        "UNKNOWN"
+      ]
+    },
+    "supportingSourceIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      }
+    },
+    "excludedSources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "sourceDocumentId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "reasonCode": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourceDocumentId",
+          "reasonCode"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "temporalStatus": {
+      "type": "string",
+      "enum": [
+        "CURRENT",
+        "STALE",
+        "UNKNOWN"
+      ]
+    },
+    "entityStatus": {
+      "type": "string",
+      "enum": [
+        "MATCHED",
+        "MISMATCHED",
+        "UNKNOWN"
+      ]
+    },
+    "numericStatus": {
+      "type": "string",
+      "enum": [
+        "CONSISTENT",
+        "INCONSISTENT",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "auditReasonCodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "auditedBy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120
+    },
+    "agentVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-]\\d{2}:\\d{2})))$"
+    }
+  },
+  "required": [
+    "contract",
+    "version",
+    "auditId",
+    "claimId",
+    "validationStatus",
+    "supportingSourceIds",
+    "excludedSources",
+    "temporalStatus",
+    "entityStatus",
+    "numericStatus",
+    "auditReasonCodes",
+    "auditedBy",
+    "agentVersion",
+    "createdAt"
+  ],
+  "additionalProperties": false
+}

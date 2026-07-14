@@ -342,7 +342,7 @@ describe("every agent read is schema-valid and forbidden-free over all fixtures"
   for (const symbol of ALL_FIXTURES) {
     it(`${symbol}`, () => {
       const reads = readsToArray(runAgents(eventFor(symbol)));
-      expect(reads.length).toBe(10);
+      expect(reads.length).toBe(11);
       for (const r of reads) {
         expect(validateAgentRead(r), `invalid read for ${r.agent}`).toEqual([]);
         expect(

@@ -18,6 +18,9 @@ import {
   ALPACA_SOURCE,
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
+import { getSentimentLensInput } from "../../lib/sentimentContext.js";
+import { getDecisionMemory } from "../../lib/memoryStore.js";
+import { planLenses } from "../../lib/committeePlanner.js";
 
 const router: IRouter = Router();
 
@@ -60,13 +63,28 @@ router.get("/explain", async (req, res) => {
     return;
   }
   const liveSource = source === "alpaca_live" ? ALPACA_SOURCE : INTRADAY_SOURCE;
+
+  // Grounded news-only sentiment + decision memory for the committee — LIVE
+  // reads ONLY, enforced here: a REPLAY/RESEARCH read of historical bars must
+  // never receive present-day context (look-ahead contamination). Fetched in
+  // parallel; both are independent of the market-data fetch below.
+  const isLiveRead = (mode ?? "LIVE") === "LIVE";
+  const [sentiment, decisionMemory] = isLiveRead
+    ? await Promise.all([
+        getSentimentLensInput(symbolUpper).catch(() => null),
+        getDecisionMemory(symbolUpper).catch(() => [] as string[]),
+      ])
+    : [null, [] as string[]];
+
   try {
     const input =
       source === "alpaca_live"
         ? await fetchAlpacaIntradayInput(symbolUpper, mode ?? "LIVE")
         : await fetchIntradayInput(symbolUpper, mode ?? "LIVE");
     const core = await buildEventWithValidation(input);
-    const result = await runCommittee(core, provider);
+    // Opt-in planner (COMMITTEE_PLANNER=on): null → all lenses (the default).
+    const lensSelection = await planLenses(core);
+    const result = await runCommittee(core, provider, { sentiment, lensSelection, decisionMemory });
     res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
   } catch (err) {
     if (err instanceof CopilotDataError) {
@@ -83,7 +101,7 @@ router.get("/explain", async (req, res) => {
         bars: [],
         quote: null,
       });
-      const result = await runCommittee(core, provider);
+      const result = await runCommittee(core, provider, { sentiment, decisionMemory });
       res.json(ExplainCopilotEventResponse.parse(committeeResultToApiRead(result)));
       return;
     }

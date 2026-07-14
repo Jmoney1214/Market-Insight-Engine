@@ -1,12 +1,23 @@
 /**
  * Assembles an analyst report from live market data (FMP fundamentals +
- * Alpaca SIP pricing/technicals), filling the exact shape produced by
- * generateMockReport. Every section degrades gracefully: if a provider call
- * fails or a key is missing, that section falls back to mock values, and
- * placeholder flags reflect whether the data is real.
+ * Alpaca SIP pricing/technicals) over a neutral, honestly-empty skeleton.
+ *
+ * FAIL-CLOSED: with no provider configured this THROWS NoLiveDataError —
+ * it never fabricates a report. With partial providers, sections a provider
+ * did not fill stay visibly empty with isPlaceholder: true; no value is ever
+ * invented. (The old mock-as-base merge was removed 2026-07-12; see
+ * docs/decisions/0001-single-canonical-build.md and reports.source.)
  */
-import { generateMockReport } from "./mockData.js";
+import { neutralBaseReport } from "./baseReport.js";
 import { hasLiveData, hasFmp, hasAlpaca } from "./providers/config.js";
+
+/** Thrown when no market-data provider is configured. Routes map this to 503. */
+export class NoLiveDataError extends Error {
+  constructor() {
+    super("No market-data provider configured; refusing to fabricate a report.");
+    this.name = "NoLiveDataError";
+  }
+}
 import { logger } from "./logger.js";
 import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
@@ -60,10 +71,11 @@ type TodaySetup = {
   multiTradeDays: number | null;
 };
 
-type Report = ReturnType<typeof generateMockReport> & {
+type Report = ReturnType<typeof neutralBaseReport> & {
   fundamentals?: Fundamentals;
   todaySetup?: TodaySetup;
-  // Provenance so a consumer can tell a real verdict from a placeholder. Persisted to reports.source.
+  // Provenance so a consumer can tell a real verdict from a placeholder. Persisted to
+  // reports.source. 'mock' survives only on legacy rows — new code never produces it.
   dataSource?: "live" | "partial" | "mock";
 };
 
@@ -88,12 +100,12 @@ function headlineSentiment(title: string): "Bullish" | "Bearish" | "Neutral" {
 }
 
 /**
- * Build a report for `ticker`. Falls back to a fully mock report when no live
- * provider is configured.
+ * Build a report for `ticker` from live providers only.
+ * @throws NoLiveDataError when no provider key is configured.
  */
 export async function buildReport(ticker: string, id = 0): Promise<Report> {
-  const base = generateMockReport(ticker, id);
-  if (!hasLiveData) return { ...base, dataSource: "mock" };
+  if (!hasLiveData) throw new NoLiveDataError();
+  const base = neutralBaseReport(ticker, id);
 
   const [
     quote,
@@ -318,7 +330,7 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
   } else if (rating && Number.isFinite(rating.overallScore)) {
     finalRating = rating.overallScore >= 4 ? "BUY" : rating.overallScore <= 2 ? "SELL" : "HOLD";
     ratingReal = true;
-  } else if (consensus && price) {
+  } else if (consensus && price > 0) {
     const up = (consensus - price) / price;
     finalRating = up >= 0.12 ? "BUY" : up <= -0.08 ? "SELL" : "HOLD";
     ratingReal = true;
@@ -348,13 +360,12 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     };
   }
 
-  report.actionPlan = {
-    ...base.actionPlan,
-    rating: finalRating,
-    entryZone: `$${round(price * 0.95)} – $${round(price * 0.99)} (current area or pullback toward support)`,
-    stopLoss: `$${report.technical.supportLevel != null ? round(report.technical.supportLevel) : round(price * 0.85)} (key support / risk level)`,
-    profitTarget: `$${round(consensus || price * 1.15)} (consensus) | $${round(priceTarget?.targetHigh || price * 1.45)} (high target)`,
-  };
+  report.actionPlan = { ...base.actionPlan, rating: finalRating };
+  if (price > 0) {
+    report.actionPlan.entryZone = `$${round(price * 0.95)} – $${round(price * 0.99)} (current area or pullback toward support)`;
+    report.actionPlan.stopLoss = `$${report.technical.supportLevel > 0 ? round(report.technical.supportLevel) : round(price * 0.85)} (key support / risk level)`;
+    report.actionPlan.profitTarget = `$${round(consensus || price * 1.15)} (consensus) | $${round(priceTarget?.targetHigh || price * 1.45)} (high target)`;
+  }
 
   // ---- Rich fundamentals block (dashboard cards + research agents) ---------
   if (hasFmp && (balanceSheet || cashFlow || ratingsSummary || estimates)) {
