@@ -153,7 +153,13 @@ export async function getCalibration(modelVersion?: string): Promise<Calibration
   const conditions = [isNotNull(kronosForecastsTable.gradedAt), gte(kronosForecastsTable.createdAt, since)];
   if (modelVersion) conditions.push(eq(kronosForecastsTable.modelVersion, modelVersion));
   const rows = await db
-    .select({ pUp: kronosForecastsTable.pUp, hit: kronosForecastsTable.hit, brier: kronosForecastsTable.brier, realizedMovePct: kronosForecastsTable.realizedMovePct })
+    .select({
+      pUp: kronosForecastsTable.pUp,
+      hit: kronosForecastsTable.hit,
+      brier: kronosForecastsTable.brier,
+      realizedMovePct: kronosForecastsTable.realizedMovePct,
+      anchorTs: kronosForecastsTable.anchorTs,
+    })
     .from(kronosForecastsTable)
     .where(and(...conditions))
     .limit(2000);
@@ -164,6 +170,9 @@ export async function getCalibration(modelVersion?: string): Promise<Calibration
       .map((r) => ({
         pUp: r.pUp,
         grade: { hit: r.hit!, brier: r.brier!, realizedUp: r.realizedMovePct! > 0 },
+        // ET calendar day of the anchor — the regime-clustering key for the
+        // day-clustered hit test (same-morning forecasts share one shock).
+        anchorDay: r.anchorTs.toLocaleDateString("en-CA", { timeZone: "America/New_York" }),
       })),
   );
   calibrationCache.set(cacheKey, { at: Date.now(), report });
