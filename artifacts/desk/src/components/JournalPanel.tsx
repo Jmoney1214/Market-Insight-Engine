@@ -1,9 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 import {
   useListJournalEntries,
   getListJournalEntriesQueryKey,
   getGetScoreboardQueryKey,
   useCreateJournalEntry,
+  newIdempotencyKey,
   type CopilotEvent,
   type JournalEntry,
 } from "@workspace/api-client-react";
@@ -134,7 +136,10 @@ function EntryRow({ entry }: { entry: JournalEntry }) {
 export function JournalPanel({ event }: JournalPanelProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const createJournal = useCreateJournalEntry();
+  const journalHeaders = useRef(new Headers());
+  const createJournal = useCreateJournalEntry({
+    request: { headers: journalHeaders.current },
+  });
   const {
     data: entries,
     isLoading,
@@ -155,6 +160,7 @@ export function JournalPanel({ event }: JournalPanelProps) {
     const manualOutcome = buildManualActionOutcome(key);
     if (!manualOutcome) return;
     try {
+      journalHeaders.current.set("Idempotency-Key", newIdempotencyKey());
       await createJournal.mutateAsync({
         data: {
           mode: event.mode,

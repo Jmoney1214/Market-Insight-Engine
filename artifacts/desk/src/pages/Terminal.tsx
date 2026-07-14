@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type MutableRefObject } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import {
   useGetCopilotEvent,
@@ -7,6 +7,11 @@ import {
   useGetReplayEvent,
   useExplainReplayEvent,
   useCopilotHealthCheck,
+  getCopilotEvent,
+  explainCopilotEvent,
+  explainReplayEvent,
+  createIdempotentExecution,
+  type IdempotentExecution,
   getGetCopilotEventQueryKey,
   getExplainCopilotEventQueryKey,
   getGetReplaySessionQueryKey,
@@ -29,10 +34,27 @@ import { HistoryLogPanel } from "@/components/HistoryLogPanel";
 import { ChartPanel } from "@/components/ChartPanel";
 import { ReplayBar } from "@/components/ReplayBar";
 import { MeasurementDrawer } from "@/components/MeasurementDrawer";
+import { useAuth } from "@/auth/AuthProvider";
 
 const MODES = ["LIVE", "REPLAY", "RESEARCH"] as const;
 
+type ExecutionSlot = {
+  scope: string;
+  execution: IdempotentExecution;
+};
+
+function executionForScope(
+  slot: MutableRefObject<ExecutionSlot | null>,
+  scope: string,
+): IdempotentExecution {
+  if (!slot.current || slot.current.scope !== scope) {
+    slot.current = { scope, execution: createIdempotentExecution() };
+  }
+  return slot.current.execution;
+}
+
 export default function Terminal() {
+  const { state: authState, logout } = useAuth();
   const { symbol, setSymbol, setSource } = useTerminalStore();
   const {
     mode: deskMode,
@@ -51,6 +73,9 @@ export default function Terminal() {
 
   const isReplay = deskMode === "REPLAY";
   const isHistorical = deskMode === "REPLAY" || deskMode === "RESEARCH";
+  const eventExecutionSlot = useRef<ExecutionSlot | null>(null);
+  const explainExecutionSlot = useRef<ExecutionSlot | null>(null);
+  const replayExplainExecutionSlot = useRef<ExecutionSlot | null>(null);
 
   // Task 6 will populate these identifiers from the canonical brain case
   // selector. Until then an operator may open an exact case-bound link. Empty
@@ -110,12 +135,33 @@ export default function Terminal() {
     caseRevisionId,
     evidenceHash,
   };
+  const deskExecutionScope = JSON.stringify(deskParams);
+  const replayExecutionScope = JSON.stringify(replayParams);
+  const eventExecution = executionForScope(
+    eventExecutionSlot,
+    deskExecutionScope,
+  );
+  const explainExecution = executionForScope(
+    explainExecutionSlot,
+    deskExecutionScope,
+  );
+  const replayExplainExecution = executionForScope(
+    replayExplainExecutionSlot,
+    replayExecutionScope,
+  );
 
   const deskEvent = useGetCopilotEvent(deskParams, {
     query: {
       enabled: !isReplay && !!symbol && (!isHistorical || historicalCaseBound),
       queryKey: getGetCopilotEventQueryKey(deskParams),
       refetchInterval: deskMode === "LIVE" ? 10000 : false,
+      queryFn: ({ signal }) =>
+        eventExecution.run((idempotencyKey) =>
+          getCopilotEvent(deskParams, {
+            signal,
+            headers: { "Idempotency-Key": idempotencyKey },
+          }),
+        ),
     },
   });
   const replayEvent = useGetReplayEvent(replayParams, {
@@ -132,6 +178,13 @@ export default function Terminal() {
     query: {
       enabled: !isReplay && !!symbol && (!isHistorical || historicalCaseBound),
       queryKey: getExplainCopilotEventQueryKey(deskParams),
+      queryFn: ({ signal }) =>
+        explainExecution.run((idempotencyKey) =>
+          explainCopilotEvent(deskParams, {
+            signal,
+            headers: { "Idempotency-Key": idempotencyKey },
+          }),
+        ),
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
     },
@@ -143,6 +196,13 @@ export default function Terminal() {
       // for the settled step the moment playback pauses.
       enabled: replayReady && !playing,
       queryKey: getExplainReplayEventQueryKey(replayParams),
+      queryFn: ({ signal }) =>
+        replayExplainExecution.run((idempotencyKey) =>
+          explainReplayEvent(replayParams, {
+            signal,
+            headers: { "Idempotency-Key": idempotencyKey },
+          }),
+        ),
       placeholderData: keepPreviousData,
       staleTime: 5 * 60 * 1000,
       gcTime: 10 * 60 * 1000,
@@ -257,6 +317,20 @@ export default function Terminal() {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
+          {authState.status === "authenticated" ? (
+            <div className="hidden xl:flex items-center gap-2 font-mono text-[10px] text-muted-foreground">
+              <span title="Verified human principal">
+                {authState.principal.principal.subject}
+              </span>
+              <button
+                type="button"
+                onClick={() => void logout()}
+                className="rounded border border-border px-1.5 py-0.5 hover:text-foreground"
+              >
+                LOG OUT
+              </button>
+            </div>
+          ) : null}
           <div className="flex items-center gap-2">
             <SymbolPicker
               symbol={symbol}

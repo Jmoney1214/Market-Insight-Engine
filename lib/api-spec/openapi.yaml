@@ -53,7 +53,7 @@ paths:
                 required: [sessionId, principal, effectiveScopes]
                 properties:
                   sessionId: { type: string }
-                  principal: { type: object, additionalProperties: true }
+                  principal: { $ref: "#/components/schemas/VerifiedPrincipal" }
                   effectiveScopes: { type: array, items: { type: string } }
         "401": { $ref: "#/components/responses/AuthRequired" }
         "403": { $ref: "#/components/responses/AuthForbidden" }
@@ -85,7 +85,7 @@ paths:
                 type: object
                 required: [principal, credentialId, effectiveScopes, authMode]
                 properties:
-                  principal: { type: object, additionalProperties: true }
+                  principal: { $ref: "#/components/schemas/VerifiedPrincipal" }
                   credentialId: { type: string }
                   effectiveScopes: { type: array, items: { type: string } }
                   authMode: { type: string, enum: [bearer, cookie] }
@@ -949,6 +949,17 @@ components:
         application/json:
           schema: { $ref: "#/components/schemas/ApiError" }
   schemas:
+    VerifiedPrincipal:
+      type: object
+      additionalProperties: false
+      required: [principalId, kind, subject]
+      properties:
+        principalId: { type: string, format: uuid }
+        kind: { type: string, enum: [human, service, agent] }
+        subject: { type: string, minLength: 1 }
+        servicePrincipalId: { type: string, format: uuid }
+        manifestId: { type: string, minLength: 1 }
+        manifestVersion: { type: string, minLength: 1 }
     PrincipalIssuanceInput:
       type: object
       additionalProperties: false

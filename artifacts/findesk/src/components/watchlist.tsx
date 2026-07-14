@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Plus, List, Trash2, Loader2, LineChart } from "lucide-react";
 import {
@@ -7,6 +7,7 @@ import {
   useRemoveFromWatchlist,
   useAnalyzeTicker,
   getGetWatchlistQueryKey,
+  newIdempotencyKey,
 } from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,15 +19,21 @@ export function Watchlist() {
   const [newTicker, setNewTicker] = useState("");
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const addHeaders = useRef(new Headers());
+  const removeHeaders = useRef(new Headers());
+  const analyzeHeaders = useRef(new Headers());
 
   const { data: watchlist, isLoading } = useGetWatchlist();
-  const addMutation = useAddToWatchlist();
-  const removeMutation = useRemoveFromWatchlist();
-  const analyze = useAnalyzeTicker();
+  const addMutation = useAddToWatchlist({ request: { headers: addHeaders.current } });
+  const removeMutation = useRemoveFromWatchlist({
+    request: { headers: removeHeaders.current },
+  });
+  const analyze = useAnalyzeTicker({ request: { headers: analyzeHeaders.current } });
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTicker) return;
+    addHeaders.current.set("Idempotency-Key", newIdempotencyKey());
 
     addMutation.mutate(
       { data: { ticker: newTicker.toUpperCase() } },
@@ -40,6 +47,7 @@ export function Watchlist() {
   };
 
   const handleRemove = (ticker: string) => {
+    removeHeaders.current.set("Idempotency-Key", newIdempotencyKey());
     removeMutation.mutate(
       { ticker },
       {
@@ -52,6 +60,7 @@ export function Watchlist() {
 
   const handleAnalyze = (ticker: string) => {
     if (analyze.isPending) return;
+    analyzeHeaders.current.set("Idempotency-Key", newIdempotencyKey());
     analyze.mutate(
       { data: { ticker } },
       { onSuccess: (report) => setLocation(`/report/${report.id}`) }

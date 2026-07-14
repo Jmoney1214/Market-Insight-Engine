@@ -1,5 +1,7 @@
 export type CustomFetchOptions = RequestInit & {
   responseType?: "json" | "text" | "blob" | "auto";
+  /** Stable key for one logical mutation or quota-spending request. */
+  idempotencyKey?: string;
 };
 
 export type ErrorType<T = unknown> = ApiError<T>;
@@ -7,6 +9,8 @@ export type ErrorType<T = unknown> = ApiError<T>;
 export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
+export type CsrfTokenGetter = () => string | null;
+export type UnauthorizedHandler = () => Promise<void> | void;
 
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
@@ -17,6 +21,8 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
+let _csrfTokenGetter: CsrfTokenGetter | null = null;
+let _unauthorizedHandler: UnauthorizedHandler | null = null;
 
 /**
  * Set a base URL that is prepended to every relative request URL
@@ -42,6 +48,22 @@ export function setBaseUrl(url: string | null): void {
  */
 export function setAuthTokenGetter(getter: AuthTokenGetter | null): void {
   _authTokenGetter = getter;
+}
+
+/**
+ * Register the in-memory browser CSRF getter. The permanent human credential
+ * is never stored here; this getter exposes only the non-HttpOnly CSRF token
+ * paired with the browser session cookie.
+ */
+export function setCsrfTokenGetter(getter: CsrfTokenGetter | null): void {
+  _csrfTokenGetter = getter;
+}
+
+/** Register the browser session boundary's 401 handler. */
+export function setUnauthorizedHandler(
+  handler: UnauthorizedHandler | null,
+): void {
+  _unauthorizedHandler = handler;
 }
 
 function isRequest(input: RequestInfo | URL): input is Request {
@@ -326,8 +348,14 @@ export async function customFetch<T = unknown>(
   input: RequestInfo | URL,
   options: CustomFetchOptions = {},
 ): Promise<T> {
+  const browserRelative = _baseUrl === null && resolveUrl(input).startsWith("/");
   input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+  const {
+    responseType = "auto",
+    idempotencyKey,
+    headers: headersInit,
+    ...init
+  } = options;
 
   const method = resolveMethod(input, init.method);
 
@@ -349,6 +377,20 @@ export async function customFetch<T = unknown>(
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
+  if (idempotencyKey !== undefined) {
+    const normalized = idempotencyKey.trim();
+    if (!normalized) {
+      throw new TypeError("customFetch: idempotencyKey cannot be empty.");
+    }
+    const existing = headers.get("idempotency-key");
+    if (existing && existing !== normalized) {
+      throw new TypeError(
+        "customFetch: idempotencyKey conflicts with the Idempotency-Key header.",
+      );
+    }
+    headers.set("idempotency-key", normalized);
+  }
+
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
   if (_authTokenGetter && !headers.has("authorization")) {
@@ -358,9 +400,27 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  if (
+    browserRelative &&
+    !headers.has("authorization") &&
+    !["GET", "HEAD", "OPTIONS"].includes(method) &&
+    _csrfTokenGetter
+  ) {
+    const csrfToken = _csrfTokenGetter();
+    if (csrfToken) headers.set("x-csrf-token", csrfToken);
+  }
+
+  if (browserRelative && init.credentials === undefined) {
+    init.credentials = "include";
+  }
+
   const requestInfo = { method, url: resolveUrl(input) };
 
   const response = await fetch(input, { ...init, method, headers });
+
+  if (response.status === 401 && browserRelative && _unauthorizedHandler) {
+    await Promise.resolve(_unauthorizedHandler()).catch(() => undefined);
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

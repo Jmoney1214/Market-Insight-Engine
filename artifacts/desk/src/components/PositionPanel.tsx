@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,7 @@ import {
   useCreateJournalEntry,
   getListJournalEntriesQueryKey,
   getGetScoreboardQueryKey,
+  newIdempotencyKey,
   type CopilotEvent,
 } from "@workspace/api-client-react";
 import { buildCloseOutcome } from "@/lib/journal-actions";
@@ -44,7 +45,10 @@ export function PositionPanel({ event }: PositionPanelProps) {
   const [confirmed, setConfirmed] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const createJournal = useCreateJournalEntry();
+  const journalHeaders = useRef(new Headers());
+  const createJournal = useCreateJournalEntry({
+    request: { headers: journalHeaders.current },
+  });
 
   const stackName = event?.triggerStack?.stackName ?? null;
 
@@ -82,6 +86,7 @@ export function PositionPanel({ event }: PositionPanelProps) {
       return;
     }
     try {
+      journalHeaders.current.set("Idempotency-Key", newIdempotencyKey());
       await createJournal.mutateAsync({
         data: {
           mode: event.mode,
@@ -147,6 +152,7 @@ export function PositionPanel({ event }: PositionPanelProps) {
       return;
     }
     try {
+      journalHeaders.current.set("Idempotency-Key", newIdempotencyKey());
       await createJournal.mutateAsync({
         data: {
           mode: event.mode,

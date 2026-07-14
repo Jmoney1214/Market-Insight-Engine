@@ -5,10 +5,10 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
-import type { CreateSession201Principal } from './createSession201Principal';
+import type { VerifiedPrincipal } from './verifiedPrincipal';
 
 export type CreateSession201 = {
   sessionId: string;
-  principal: CreateSession201Principal;
+  principal: VerifiedPrincipal;
   effectiveScopes: string[];
 };

@@ -11,8 +11,20 @@ import * as zod from 'zod';
 /**
  * @summary Return the current verified principal and effective scopes
  */
+
+
+
+
+
 export const GetCurrentPrincipalResponse = zod.object({
-  "principal": zod.record(zod.string(), zod.unknown()),
+  "principal": zod.object({
+  "principalId": zod.string().uuid(),
+  "kind": zod.enum(['human', 'service', 'agent']),
+  "subject": zod.string().min(1),
+  "servicePrincipalId": zod.string().uuid().optional(),
+  "manifestId": zod.string().min(1).optional(),
+  "manifestVersion": zod.string().min(1).optional()
+}),
   "credentialId": zod.string(),
   "effectiveScopes": zod.array(zod.string()),
   "authMode": zod.enum(['bearer', 'cookie']),

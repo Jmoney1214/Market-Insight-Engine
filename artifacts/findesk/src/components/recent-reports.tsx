@@ -1,7 +1,12 @@
 import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { Clock, Trash2 } from "lucide-react";
-import { useListReports, useDeleteReport, getListReportsQueryKey } from "@workspace/api-client-react";
+import {
+  useListReports,
+  useDeleteReport,
+  getListReportsQueryKey,
+  newIdempotencyKey,
+} from "@workspace/api-client-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,15 +14,18 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { ratingTone, toneBadge } from "@/lib/finance";
+import { useRef } from "react";
 
 export function RecentReports() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const deleteHeaders = useRef(new Headers());
   const { data: reports, isLoading } = useListReports();
-  const deleteReport = useDeleteReport();
+  const deleteReport = useDeleteReport({ request: { headers: deleteHeaders.current } });
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
+    deleteHeaders.current.set("Idempotency-Key", newIdempotencyKey());
     deleteReport.mutate(
       { id },
       {

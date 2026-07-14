@@ -61,7 +61,7 @@ describe("human browser sessions", () => {
     const cookies = response.headers["set-cookie"] as unknown as string[];
     expect(cookies).toHaveLength(2);
     expect(cookies[0]).toMatch(/mie_session=.*; Path=\/api; HttpOnly; Secure; SameSite=Strict/);
-    expect(cookies[1]).toMatch(/mie_csrf=.*; Path=\/api; Secure; SameSite=Strict/);
+    expect(cookies[1]).toMatch(/mie_csrf=.*; Path=\/; Secure; SameSite=Strict/);
     expect(JSON.stringify(response.body)).not.toContain("permanent-human-key");
 
     const input = fixture.createBrowserSession.mock.calls[0]?.[0];

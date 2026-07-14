@@ -5,6 +5,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Terminal from "@/pages/Terminal";
 import { useEffect } from "react";
+import { AuthProvider } from "@/auth/AuthProvider";
+import { RequireAuth } from "@/auth/RequireAuth";
 
 const queryClient = new QueryClient();
 
@@ -25,12 +27,16 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={150}>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AppRouter />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider delayDuration={150}>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <RequireAuth>
+              <AppRouter />
+            </RequireAuth>
+          </WouterRouter>
+          <Toaster />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }

@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { GetCurrentPrincipal200AuthMode } from './getCurrentPrincipal200AuthMode';
-import type { GetCurrentPrincipal200Principal } from './getCurrentPrincipal200Principal';
+import type { VerifiedPrincipal } from './verifiedPrincipal';
 
 export type GetCurrentPrincipal200 = {
-  principal: GetCurrentPrincipal200Principal;
+  principal: VerifiedPrincipal;
   credentialId: string;
   effectiveScopes: string[];
   authMode: GetCurrentPrincipal200AuthMode;

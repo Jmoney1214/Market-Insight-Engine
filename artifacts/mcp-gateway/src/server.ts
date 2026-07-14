@@ -8,11 +8,14 @@
  * (see docs/plans/research-layer-buildout.md §9, ADR 0001 boundaries).
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
-const API_BASE = process.env["MIE_API_BASE"] ?? "http://127.0.0.1:8080";
-/** Optional bearer token, forwarded so the server can enforce it once auth lands. */
-const API_TOKEN = process.env["MIE_API_TOKEN"];
+export type GatewayOptions = Readonly<{
+  apiBase: string;
+  credential: string | null;
+  fetch: typeof globalThis.fetch;
+}>;
 
 const SYMBOL = z
   .string()
@@ -20,14 +23,25 @@ const SYMBOL = z
   .describe("Ticker symbol, e.g. AAPL or BRK-B");
 const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD");
 
-async function apiGet(path: string, params?: Record<string, string | undefined>) {
-  const url = new URL(`/api${path}`, API_BASE);
+type RequestPolicy = Readonly<{ public?: boolean; idempotent?: boolean }>;
+
+async function apiGet(
+  options: GatewayOptions,
+  path: string,
+  params?: Record<string, string | undefined>,
+  policy: RequestPolicy = {},
+) {
+  if (!policy.public && !options.credential) {
+    throw new Error(`MIE service credential is required for GET /api${path}`);
+  }
+  const url = new URL(`/api${path}`, options.apiBase);
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined && v !== "") url.searchParams.set(k, v);
   }
   const headers: Record<string, string> = { accept: "application/json" };
-  if (API_TOKEN) headers["authorization"] = `Bearer ${API_TOKEN}`;
-  const res = await fetch(url, { headers });
+  if (!policy.public) headers["authorization"] = `Bearer ${options.credential}`;
+  if (policy.idempotent) headers["idempotency-key"] = randomUUID();
+  const res = await options.fetch(url, { headers });
   const body = await res.text();
   if (!res.ok) {
     throw new Error(`GET ${url.pathname}${url.search} -> ${res.status}: ${body.slice(0, 500)}`);
@@ -36,9 +50,14 @@ async function apiGet(path: string, params?: Record<string, string | undefined>)
 }
 
 /** Wrap an API call as an MCP tool result, reporting errors as tool errors. */
-async function proxy(path: string, params?: Record<string, string | undefined>) {
+async function proxy(
+  options: GatewayOptions,
+  path: string,
+  params?: Record<string, string | undefined>,
+  policy?: RequestPolicy,
+) {
   try {
-    const body = await apiGet(path, params);
+    const body = await apiGet(options, path, params, policy);
     return { content: [{ type: "text" as const, text: body }] };
   } catch (err) {
     return {
@@ -48,8 +67,10 @@ async function proxy(path: string, params?: Record<string, string | undefined>) 
   }
 }
 
-export function createServer(): McpServer {
-  const server = new McpServer({ name: "market-insight-desk", version: "0.1.0" });
+export function registerDeskTools(
+  server: McpServer,
+  options: GatewayOptions,
+): McpServer {
 
   server.registerTool(
     "desk_health",
@@ -60,8 +81,12 @@ export function createServer(): McpServer {
     },
     async () => {
       const [api, copilot] = await Promise.all([
-        apiGet("/healthz").catch((e: Error) => JSON.stringify({ error: e.message })),
-        apiGet("/copilot/healthz").catch((e: Error) => JSON.stringify({ error: e.message })),
+        apiGet(options, "/healthz", undefined, { public: true }).catch((e: Error) =>
+          JSON.stringify({ error: e.message }),
+        ),
+        apiGet(options, "/copilot/healthz", undefined, { public: true }).catch(
+          (e: Error) => JSON.stringify({ error: e.message }),
+        ),
       ]);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ api: JSON.parse(api), copilot: JSON.parse(copilot) }) }],
@@ -77,7 +102,13 @@ export function createServer(): McpServer {
         "The premarket Morning Scan board: gap/relative-volume candidates with scores and lists. Set refresh=true to force a re-scan (spends provider quota).",
       inputSchema: { refresh: z.boolean().optional().describe("Force a fresh scan instead of the cached board") },
     },
-    ({ refresh }) => proxy("/scan/premarket", { refresh: refresh ? "true" : undefined }),
+    ({ refresh }) =>
+      proxy(
+        options,
+        "/scan/premarket",
+        { refresh: refresh ? "true" : undefined },
+        { idempotent: true },
+      ),
   );
 
   server.registerTool(
@@ -87,7 +118,7 @@ export function createServer(): McpServer {
       description: "How past Morning Scan candidates actually played out (graded hits/misses).",
       inputSchema: {},
     },
-    () => proxy("/scan/scorecard"),
+    () => proxy(options, "/scan/scorecard"),
   );
 
   server.registerTool(
@@ -97,7 +128,7 @@ export function createServer(): McpServer {
       description: "The tradeable-universe snapshot for a given date (survivorship-bias-safe daily freeze).",
       inputSchema: { date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe("YYYY-MM-DD; omit for latest") },
     },
-    ({ date }) => proxy("/scan/universe-snapshot", { date }),
+    ({ date }) => proxy(options, "/scan/universe-snapshot", { date }),
   );
 
   server.registerTool(
@@ -112,7 +143,8 @@ export function createServer(): McpServer {
         mode: z.literal("LIVE").optional().describe("Read-only live research mode"),
       },
     },
-    ({ symbol, source, mode }) => proxy("/copilot/event", { symbol, source, mode }),
+    ({ symbol, source, mode }) =>
+      proxy(options, "/copilot/event", { symbol, source, mode }, { idempotent: true }),
   );
 
   server.registerTool(
@@ -126,7 +158,8 @@ export function createServer(): McpServer {
         source: z.literal("alpaca_live").optional(),
       },
     },
-    ({ symbol, source }) => proxy("/copilot/explain", { symbol, source }),
+    ({ symbol, source }) =>
+      proxy(options, "/copilot/explain", { symbol, source }, { idempotent: true }),
   );
 
   server.registerTool(
@@ -136,7 +169,7 @@ export function createServer(): McpServer {
       description: "Recent CopilotEvent timeline entries (the desk's event log).",
       inputSchema: {},
     },
-    () => proxy("/copilot/history"),
+    () => proxy(options, "/copilot/history"),
   );
 
   server.registerTool(
@@ -146,7 +179,7 @@ export function createServer(): McpServer {
       description: "Journal entries: manual trade outcomes attached to events. Read-only — journaling stays human-only.",
       inputSchema: {},
     },
-    () => proxy("/copilot/journal"),
+    () => proxy(options, "/copilot/journal"),
   );
 
   server.registerTool(
@@ -156,7 +189,7 @@ export function createServer(): McpServer {
       description: "Measured-edge scoreboard derived from journaled outcomes (validated vs unproven hypotheses).",
       inputSchema: {},
     },
-    () => proxy("/copilot/scoreboard"),
+    () => proxy(options, "/copilot/scoreboard"),
   );
 
   server.registerTool(
@@ -166,7 +199,7 @@ export function createServer(): McpServer {
       description: "Per-strategy validation status and sample counts.",
       inputSchema: {},
     },
-    () => proxy("/copilot/validation"),
+    () => proxy(options, "/copilot/validation"),
   );
 
   server.registerTool(
@@ -176,7 +209,7 @@ export function createServer(): McpServer {
       description: "Registered strategy hypotheses with definitions and minimum sample counts.",
       inputSchema: {},
     },
-    () => proxy("/copilot/strategies"),
+    () => proxy(options, "/copilot/strategies"),
   );
 
   server.registerTool(
@@ -184,9 +217,20 @@ export function createServer(): McpServer {
     {
       title: "Replay session",
       description: "Canonical historical replay session metadata (requires verified brain authorization).",
-      inputSchema: { symbol: SYMBOL, date: DATE },
+      inputSchema: {
+        symbol: SYMBOL,
+        date: DATE,
+        caseRevisionId: z.string().min(1),
+        evidenceHash: z.string().min(1),
+      },
     },
-    ({ symbol, date }) => proxy("/copilot/replay/session", { symbol, date }),
+    ({ symbol, date, caseRevisionId, evidenceHash }) =>
+      proxy(options, "/copilot/replay/session", {
+        symbol,
+        date,
+        caseRevisionId,
+        evidenceHash,
+      }),
   );
 
   server.registerTool(
@@ -198,9 +242,18 @@ export function createServer(): McpServer {
         symbol: SYMBOL,
         date: DATE,
         step: z.number().int().min(0).describe("Replay step index"),
+        caseRevisionId: z.string().min(1),
+        evidenceHash: z.string().min(1),
       },
     },
-    ({ symbol, date, step }) => proxy("/copilot/replay/event", { symbol, date, step: String(step) }),
+    ({ symbol, date, step, caseRevisionId, evidenceHash }) =>
+      proxy(options, "/copilot/replay/event", {
+        symbol,
+        date,
+        step: String(step),
+        caseRevisionId,
+        evidenceHash,
+      }),
   );
 
   server.registerTool(
@@ -211,7 +264,7 @@ export function createServer(): McpServer {
         "List persisted analyst reports (ticker, rating, generated time, and recorded source provenance).",
       inputSchema: {},
     },
-    () => proxy("/reports"),
+    () => proxy(options, "/reports"),
   );
 
   server.registerTool(
@@ -221,7 +274,7 @@ export function createServer(): McpServer {
       description: "Fetch one persisted analyst report by id.",
       inputSchema: { id: z.number().int().positive() },
     },
-    ({ id }) => proxy(`/reports/${id}`),
+    ({ id }) => proxy(options, `/reports/${id}`),
   );
 
   server.registerTool(
@@ -231,8 +284,16 @@ export function createServer(): McpServer {
       description: "Current watchlist. Read-only — additions stay human-only.",
       inputSchema: {},
     },
-    () => proxy("/watchlist"),
+    () => proxy(options, "/watchlist"),
   );
 
   return server;
+}
+
+export function createServer(options: GatewayOptions): McpServer {
+  if (!options.apiBase.trim()) throw new Error("MIE API base is required");
+  return registerDeskTools(
+    new McpServer({ name: "market-insight-desk", version: "0.2.0" }),
+    options,
+  );
 }

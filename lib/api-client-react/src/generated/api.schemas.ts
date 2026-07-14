@@ -5,6 +5,27 @@
  * FinDesk AI Analyst API
  * OpenAPI spec version: 0.1.0
  */
+export type VerifiedPrincipalKind = typeof VerifiedPrincipalKind[keyof typeof VerifiedPrincipalKind];
+
+
+export const VerifiedPrincipalKind = {
+  human: 'human',
+  service: 'service',
+  agent: 'agent',
+} as const;
+
+export interface VerifiedPrincipal {
+  principalId: string;
+  kind: VerifiedPrincipalKind;
+  /** @minLength 1 */
+  subject: string;
+  servicePrincipalId?: string;
+  /** @minLength 1 */
+  manifestId?: string;
+  /** @minLength 1 */
+  manifestVersion?: string;
+}
+
 export type PrincipalIssuanceInputPrincipalKind = typeof PrincipalIssuanceInputPrincipalKind[keyof typeof PrincipalIssuanceInputPrincipalKind];
 
 
@@ -1356,15 +1377,11 @@ export type IdempotencyConflictResponse = ApiError;
  */
 export type InvalidGovernanceInputResponse = ApiError;
 
-export type CreateSession201Principal = { [key: string]: unknown };
-
 export type CreateSession201 = {
   sessionId: string;
-  principal: CreateSession201Principal;
+  principal: VerifiedPrincipal;
   effectiveScopes: string[];
 };
-
-export type GetCurrentPrincipal200Principal = { [key: string]: unknown };
 
 export type GetCurrentPrincipal200AuthMode = typeof GetCurrentPrincipal200AuthMode[keyof typeof GetCurrentPrincipal200AuthMode];
 
@@ -1375,7 +1392,7 @@ export const GetCurrentPrincipal200AuthMode = {
 } as const;
 
 export type GetCurrentPrincipal200 = {
-  principal: GetCurrentPrincipal200Principal;
+  principal: VerifiedPrincipal;
   credentialId: string;
   effectiveScopes: string[];
   authMode: GetCurrentPrincipal200AuthMode;

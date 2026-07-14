@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { Search, Loader2 } from "lucide-react";
-import { useAnalyzeTicker } from "@workspace/api-client-react";
+import { newIdempotencyKey, useAnalyzeTicker } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -17,11 +17,13 @@ export function TickerSearch({ variant = "compact", autoFocus, className, exampl
   const [ticker, setTicker] = useState("");
   const [pendingTicker, setPendingTicker] = useState("");
   const [, setLocation] = useLocation();
-  const analyze = useAnalyzeTicker();
+  const analyzeHeaders = useRef(new Headers());
+  const analyze = useAnalyzeTicker({ request: { headers: analyzeHeaders.current } });
 
   const runAnalyze = (raw: string) => {
     const value = raw.trim().toUpperCase();
     if (!value || analyze.isPending) return;
+    analyzeHeaders.current.set("Idempotency-Key", newIdempotencyKey());
     setPendingTicker(value);
     analyze.mutate(
       { data: { ticker: value } },

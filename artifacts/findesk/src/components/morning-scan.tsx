@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sunrise, TrendingUp, TrendingDown, Crosshair, RefreshCw, Loader2, Users, ChevronDown } from "lucide-react";
@@ -8,7 +8,10 @@ import {
   getGetPremarketScanQueryKey,
   useAnalyzeTicker,
   useExplainCopilotEvent,
+  explainCopilotEvent,
   getExplainCopilotEventQueryKey,
+  createIdempotentExecution,
+  newIdempotencyKey,
   type ScanCandidate,
 } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -40,11 +43,20 @@ const biasTone: Record<string, string> = {
  * server-side). The committee explains the deterministic read — it never
  * creates signals or overrides blocks. */
 function CommitteePanel({ symbol }: { symbol: string }) {
+  const explainExecution = useRef(createIdempotentExecution());
+  const params = { symbol, source: "alpaca_live" as const };
   const { data, isLoading, isError } = useExplainCopilotEvent(
-    { symbol, source: "alpaca_live" },
+    params,
     {
       query: {
-        queryKey: getExplainCopilotEventQueryKey({ symbol, source: "alpaca_live" }),
+        queryKey: getExplainCopilotEventQueryKey(params),
+        queryFn: ({ signal }) =>
+          explainExecution.current.run((idempotencyKey) =>
+            explainCopilotEvent(params, {
+              signal,
+              headers: { "Idempotency-Key": idempotencyKey },
+            }),
+          ),
         staleTime: 5 * 60 * 1000,
       },
     },
@@ -220,16 +232,30 @@ function CandidateList({
 export function MorningScan() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const analyze = useAnalyzeTicker();
+  const analyzeHeaders = useRef(new Headers());
+  const scanExecution = useRef(createIdempotentExecution());
+  const analyze = useAnalyzeTicker({ request: { headers: analyzeHeaders.current } });
   const [analyzing, setAnalyzing] = useState<string | null>(null);
   const [rescanning, setRescanning] = useState(false);
 
   const { data, isLoading, isError, isFetching } = useGetPremarketScan(undefined, {
-    query: { queryKey: getGetPremarketScanQueryKey(), staleTime: 5 * 60 * 1000 },
+    query: {
+      queryKey: getGetPremarketScanQueryKey(),
+      queryFn: ({ signal }) =>
+        scanExecution.current.run((idempotencyKey) =>
+          getPremarketScan(undefined, {
+            signal,
+            headers: { "Idempotency-Key": idempotencyKey },
+          }),
+        ),
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+    },
   });
 
   const runAnalyze = (symbol: string) => {
     if (analyze.isPending) return;
+    analyzeHeaders.current.set("Idempotency-Key", newIdempotencyKey());
     setAnalyzing(symbol);
     analyze.mutate(
       { data: { ticker: symbol } },
@@ -246,7 +272,13 @@ export function MorningScan() {
   const refresh = async () => {
     setRescanning(true);
     try {
-      const fresh = await getPremarketScan({ refresh: true });
+      scanExecution.current.rotate();
+      const fresh = await scanExecution.current.run((idempotencyKey) =>
+        getPremarketScan(
+          { refresh: true },
+          { headers: { "Idempotency-Key": idempotencyKey } },
+        ),
+      );
       queryClient.setQueryData(getGetPremarketScanQueryKey(), fresh);
     } catch {
       /* leave existing data in place; the button re-enables */
