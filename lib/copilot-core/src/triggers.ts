@@ -65,6 +65,16 @@ const BEARISH = new Set([
   "RELATIVE_STRENGTH_MOMENTUM_SHORT",
 ]);
 
+/**
+ * True when a trigger name is a bearish structural signal. In the LONG-ONLY
+ * desk these are INVERTED into long entries, so consumers use this to present
+ * the bearish trigger as the *reason* for the inverted long (not an argument
+ * against it). Single source of truth for "what is bearish".
+ */
+export function isBearishTrigger(name: string): boolean {
+  return BEARISH.has(name);
+}
+
 function makeTrigger(
   name: string,
   category: TriggerCategory,

@@ -67,4 +67,15 @@ describe("LONG-ONLY: computeRiskReward only previews a long", () => {
     expect(rr.direction).toBeNull();
     expect(rr.target).toBeNull();
   });
+
+  it("an INVERTED long (price below the range) mirrors a structural stop below entry", () => {
+    // Price broke BELOW the opening range (98-101); entry 97 is under the low,
+    // so the stop must mirror the upper structure below entry, not collapse to
+    // ATR-only. Upper distance = 101 - 97 = 4 -> mirrored stop 97 - 4 = 93.
+    const broke: Features = { ...features, price: 97, openingRangeLow: 98, openingRangeHigh: 101 };
+    const rr = computeRiskReward(broke, "LONG");
+    expect(rr.direction).toBe("LONG");
+    expect(rr.invalidation! < rr.entry!).toBe(true); // stop below entry
+    expect(rr.invalidation!).toBeCloseTo(93, 4); // mirrored, not the -atr default (95)
+  });
 });

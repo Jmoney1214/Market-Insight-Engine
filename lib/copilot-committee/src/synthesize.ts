@@ -3,7 +3,7 @@
 // alert level or L5 block, always obeys the risk critic's ceiling, and only ever
 // emits an approved recommendation.
 
-import type { CopilotEvent } from "@workspace/copilot-core";
+import { isBearishTrigger, type CopilotEvent } from "@workspace/copilot-core";
 import type { Recommendation } from "./vocab";
 import type { CommitteeReads, DashboardRead } from "./types";
 import { applyRiskCeiling, clampConfidence, enforceHardBlock, isHardBlocked } from "./guardrails";
@@ -149,15 +149,25 @@ export function synthesize(event: CopilotEvent, reads: CommitteeReads): Dashboar
 
   let whatSupports: string[];
   let whatArguesAgainst: string[];
+  // An INVERTED long is one entered off a bearish structural trigger. For it,
+  // the bearish evidence IS the reason for the (inverted) entry, so it must
+  // read as support — not as an argument against the trade the operator is in.
+  const inverted =
+    !defensive && event.triggerStack.detectedTriggers.some(isBearishTrigger);
+
   if (defensive) {
     whatSupports = uniq([
       ...reads.riskCritic.supportingFactors,
       ...reads.bearCase.supportingFactors,
     ]);
     whatArguesAgainst = uniq(reads.bullCase.supportingFactors);
+  } else if (inverted) {
+    // The breakdown triggers are the rationale for the inverted long; the
+    // bullish case (weak here by construction) is what argues against it.
+    whatSupports = uniq(reads.bearCase.supportingFactors);
+    whatArguesAgainst = uniq(reads.bullCase.supportingFactors);
   } else {
-    // LONG-ONLY: every actionable read is a long, so the bull case supports and
-    // the bear case is what argues against (the risk on the inverted entry).
+    // A normal (bullish-structured) long: bull case supports, bear case warns.
     whatSupports = uniq(reads.bullCase.supportingFactors);
     whatArguesAgainst = uniq(reads.bearCase.supportingFactors);
   }

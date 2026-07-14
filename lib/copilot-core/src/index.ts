@@ -18,6 +18,7 @@ export {
   detectTriggers,
   buildTriggerStack,
   inferDirection,
+  isBearishTrigger,
   newlyFiredTriggers,
 } from "./triggers";
 

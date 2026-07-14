@@ -28,11 +28,19 @@ export function computeRiskReward(
   }
 
   // LONG-ONLY: direction is always LONG here (the null case returned above).
-  // A bearish structural signal reaches this path already INVERTED into a long
-  // (triggers.ts inferDirection), so the preview is a long entry with a stop
-  // below structure and a target above — the mirrored risk of the raw signal.
+  // The stop sits below the entry. For a normal long, the opening-range LOW is
+  // the structural support. For an INVERTED long — price broke BELOW the range
+  // (a bearish signal bought as a long) — the range is above the entry and
+  // gives no support below, so we MIRROR the upper structure (the opening-range
+  // HIGH distance) below the entry. Without this, every inverted trade silently
+  // collapsed to the ATR stop.
   const entry = round(price, 4);
-  const structural = openingRangeLow ?? entry - atr;
+  const brokeBelowRange = openingRangeLow !== null && entry < openingRangeLow;
+  const structural = brokeBelowRange
+    ? openingRangeHigh !== null
+      ? entry - (openingRangeHigh - entry) // mirror the upper structure below
+      : entry - atr
+    : (openingRangeLow ?? entry - atr);
   const invalidation = round(Math.min(structural, entry - atr), 4);
 
   const riskPerShare = round(Math.abs(entry - invalidation), 4);
