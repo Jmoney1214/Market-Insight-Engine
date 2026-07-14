@@ -66,7 +66,7 @@ export function parseBootstrapArgs(argv: readonly string[]): { subject: string }
     index += 1;
   }
   if (!subject) {
-    throw new Error("Usage: pnpm --filter @workspace/scripts bootstrap:auth -- --subject <operator-subject>");
+    throw new Error("Usage: pnpm --filter @workspace/scripts bootstrap:auth --subject <operator-subject>");
   }
   return { subject };
 }
@@ -131,6 +131,47 @@ function permanentCredential(): string {
   return `${prefix}.${randomBytes(32).toString("base64url")}`;
 }
 
+export async function bootstrapHumanWithPool(
+  pool: Pick<pg.Pool, "connect">,
+  input: BootstrapHumanInput,
+  credentialPepper: string,
+): Promise<BootstrapRecord> {
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query(
+      "select set_config($1, $2, true)",
+      [`mie.credential_pepper_${input.pepperVersion}`, credentialPepper],
+    );
+    const result = await client.query<{ payload: Record<string, unknown> }>(
+      `select governance.bootstrap_human_principal(
+         $1, $2, $3::text[], $4, $5, $6
+       ) as payload`,
+      [
+        input.subject,
+        input.displayName,
+        [...input.scopes],
+        input.rawSecret,
+        input.pepperVersion,
+        input.requestId,
+      ],
+    );
+    const payload = result.rows[0]?.payload;
+    const principalId = payload?.["principal_id"];
+    const credentialId = payload?.["credential_id"];
+    if (typeof principalId !== "string" || typeof credentialId !== "string") {
+      throw new Error("Bootstrap function returned an invalid identity payload");
+    }
+    await client.query("commit");
+    return { principalId, credentialId };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export function createPgBootstrapRuntime(env: NodeJS.ProcessEnv) {
   const pepper = requiredEnv(env, "MIE_CREDENTIAL_PEPPER_V1");
   if (!/^[A-Za-z0-9_-]{32,}$/.test(pepper)) {
@@ -138,59 +179,18 @@ export function createPgBootstrapRuntime(env: NodeJS.ProcessEnv) {
   }
   const pool = new Pool({
     connectionString: requiredEnv(env, "MIE_MIGRATOR_DATABASE_URL"),
-    options: `-c mie.credential_pepper_v1=${pepper}`,
     max: 1,
   });
 
   const dependencies: BootstrapAuthDependencies = {
     async hasActiveHuman() {
-      const result = await pool.query<{ exists: boolean }>(`
-        select exists(
-          select 1
-          from governance.principals principal
-          join lateral (
-            select verdict
-            from governance.principal_decisions
-            where principal_id = principal.principal_id
-            order by revision desc
-            limit 1
-          ) principal_head on principal_head.verdict = 'ACTIVE'
-          join governance.api_credentials credential
-            on credential.principal_id = principal.principal_id
-          join lateral (
-            select verdict
-            from governance.credential_decisions
-            where credential_id = credential.credential_id
-            order by revision desc
-            limit 1
-          ) credential_head on credential_head.verdict = 'ACTIVE'
-          where principal.principal_kind = 'human'
-            and (credential.expires_at is null or credential.expires_at > clock_timestamp())
-        ) as exists
-      `);
-      return result.rows[0]?.exists === true;
+      // The least-privilege migrator can execute the atomic SECURITY DEFINER
+      // bootstrap function but intentionally cannot read governance tables.
+      // The function owns the advisory lock and authoritative existence check.
+      return false;
     },
     async bootstrapHuman(input) {
-      const result = await pool.query<{ payload: Record<string, unknown> }>(
-        `select governance.bootstrap_human_principal(
-           $1, $2, $3::text[], $4, $5, $6
-         ) as payload`,
-        [
-          input.subject,
-          input.displayName,
-          [...input.scopes],
-          input.rawSecret,
-          input.pepperVersion,
-          input.requestId,
-        ],
-      );
-      const payload = result.rows[0]?.payload;
-      const principalId = payload?.["principal_id"];
-      const credentialId = payload?.["credential_id"];
-      if (typeof principalId !== "string" || typeof credentialId !== "string") {
-        throw new Error("Bootstrap function returned an invalid identity payload");
-      }
-      return { principalId, credentialId };
+      return bootstrapHumanWithPool(pool, input, pepper);
     },
     newPermanentCredential: permanentCredential,
     newRequestId: () => `bootstrap-${randomUUID()}`,

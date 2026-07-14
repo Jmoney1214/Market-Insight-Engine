@@ -33,6 +33,38 @@ async function setLocalContext(
   );
 }
 
+async function setLocalSecrets(
+  client: pg.PoolClient,
+  pools: ControlPlanePools,
+): Promise<void> {
+  await client.query(
+    `select
+       set_config('mie.credential_pepper_v1', $1, true),
+       set_config('mie.session_pepper_v1', $2, true)`,
+    [pools.secrets.credentialPepper, pools.secrets.sessionPepper],
+  );
+}
+
+export async function withControlPlaneSecretsTransaction<T>(
+  pools: ControlPlanePools,
+  capability: ControlPlaneCapability,
+  work: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> {
+  const client = await pools[capability].connect();
+  try {
+    await client.query("begin");
+    await setLocalSecrets(client, pools);
+    const result = await work(client);
+    await client.query("commit");
+    return result;
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function withControlPlaneTransaction<T>(
   pools: ControlPlanePools,
   capability: ControlPlaneCapability,
@@ -43,17 +75,8 @@ export async function withControlPlaneTransaction<T>(
     throw new Error("A non-empty verified request ID is required");
   }
 
-  const client = await pools[capability].connect();
-  try {
-    await client.query("begin");
+  return withControlPlaneSecretsTransaction(pools, capability, async (client) => {
     await setLocalContext(client, context);
-    const result = await work(client);
-    await client.query("commit");
-    return result;
-  } catch (error) {
-    await client.query("rollback").catch(() => undefined);
-    throw error;
-  } finally {
-    client.release();
-  }
+    return work(client);
+  });
 }

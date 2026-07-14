@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   closeControlPlanePools,
   createControlPlanePools,
+  type ControlPlanePools,
+  withControlPlaneTransaction,
 } from "@workspace/db/control-plane";
 
 const urls = {
@@ -12,23 +14,61 @@ const urls = {
 };
 
 describe("named control-plane pools", () => {
-  it("installs versioned credential and session peppers on every connection", async () => {
+  it("retains versioned peppers for transaction-local binding", async () => {
     const pools = createControlPlanePools({
       ...urls,
       MIE_CREDENTIAL_PEPPER_V1: "credential_pepper_material_for_test_v1",
       MIE_SESSION_PEPPER_V1: "session_pepper_material_for_test_v1_00",
     });
     try {
-      for (const pool of Object.values(pools)) {
-        const options = (
-          pool as unknown as { options: { options: string } }
-        ).options.options;
-        expect(options).toContain("mie.credential_pepper_v1=");
-        expect(options).toContain("mie.session_pepper_v1=");
-      }
+      expect(pools.secrets).toEqual({
+        credentialPepper: "credential_pepper_material_for_test_v1",
+        sessionPepper: "session_pepper_material_for_test_v1_00",
+      });
     } finally {
       await closeControlPlanePools(pools);
     }
+  });
+
+  it("sets both peppers locally before verified request context", async () => {
+    const query = vi.fn(async (_sql: string, _values?: readonly unknown[]) => ({
+      rows: [],
+    }));
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn(async () => ({ query, release })),
+      end: vi.fn(async () => undefined),
+    };
+    const pools = {
+      api: pool,
+      worker: pool,
+      evaluator: pool,
+      reviewer: pool,
+      secrets: {
+        credentialPepper: "credential_pepper_material_for_test_v1",
+        sessionPepper: "session_pepper_material_for_test_v1_00",
+      },
+    } as unknown as ControlPlanePools;
+
+    await withControlPlaneTransaction(
+      pools,
+      "api",
+      { requestId: "request-1" },
+      async (client) => client.query("select 1"),
+    );
+
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      "begin",
+      expect.stringContaining("mie.credential_pepper_v1"),
+      expect.stringContaining("mie.request_id"),
+      "select 1",
+      "commit",
+    ]);
+    expect(query.mock.calls[1]?.[1]).toEqual([
+      "credential_pepper_material_for_test_v1",
+      "session_pepper_material_for_test_v1_00",
+    ]);
+    expect(release).toHaveBeenCalledOnce();
   });
 
   it("refuses to create pools without every URL and both strong peppers", () => {

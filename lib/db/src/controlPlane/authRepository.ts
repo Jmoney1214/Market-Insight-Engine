@@ -1,6 +1,7 @@
 import type pg from "pg";
 import {
   withControlPlaneTransaction,
+  withControlPlaneSecretsTransaction,
   type VerifiedControlPlaneContext,
 } from "./context.js";
 import type { ControlPlanePools } from "./pools.js";
@@ -302,10 +303,15 @@ export class ControlPlaneAuthRepository {
   constructor(private readonly pools: ControlPlanePools) {}
 
   async verifyApiCredential(rawSecret: string): Promise<DbVerifiedIdentity | null> {
-    const payload = await scalarPayload(
-      this.pools.api,
-      "select governance.verify_api_credential($1) as payload",
-      [rawSecret],
+    const payload = await withControlPlaneSecretsTransaction(
+      this.pools,
+      "api",
+      (client) =>
+        scalarPayload(
+          client,
+          "select governance.verify_api_credential($1) as payload",
+          [rawSecret],
+        ),
     );
     return identityFromPayload(payload);
   }
@@ -314,10 +320,15 @@ export class ControlPlaneAuthRepository {
     rawSessionToken: string,
     rawCsrfToken: string,
   ): Promise<DbVerifiedIdentity | null> {
-    const payload = await scalarPayload(
-      this.pools.api,
-      "select governance.verify_browser_session($1, $2) as payload",
-      [rawSessionToken, rawCsrfToken],
+    const payload = await withControlPlaneSecretsTransaction(
+      this.pools,
+      "api",
+      (client) =>
+        scalarPayload(
+          client,
+          "select governance.verify_browser_session($1, $2) as payload",
+          [rawSessionToken, rawCsrfToken],
+        ),
     );
     return identityFromPayload(payload);
   }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   BOOTSTRAP_HUMAN_SCOPES,
+  bootstrapHumanWithPool,
   parseBootstrapArgs,
   runBootstrapAuth,
   type BootstrapAuthDependencies,
@@ -26,6 +27,57 @@ function dependencies(
 }
 
 describe("one-time human bootstrap", () => {
+  it("sets the credential pepper transaction-locally before the atomic bootstrap", async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            payload: {
+              principal_id: "10000000-0000-4000-8000-000000000001",
+              credential_id: "10000000-0000-4000-8000-000000000002",
+            },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+    const release = vi.fn();
+    const pool = {
+      connect: vi.fn(async () => ({ query, release })),
+    };
+
+    const result = await bootstrapHumanWithPool(
+      pool as never,
+      {
+        subject: "operator@example.com",
+        displayName: "Desk Operator",
+        scopes: BOOTSTRAP_HUMAN_SCOPES,
+        rawSecret: RAW_SECRET,
+        pepperVersion: "v1",
+        requestId: "bootstrap-request-1",
+      },
+      "credential_pepper_material_for_test_v1",
+    );
+
+    expect(result).toEqual({
+      principalId: "10000000-0000-4000-8000-000000000001",
+      credentialId: "10000000-0000-4000-8000-000000000002",
+    });
+    expect(query.mock.calls.map(([sql]) => sql)).toEqual([
+      "begin",
+      "select set_config($1, $2, true)",
+      expect.stringContaining("governance.bootstrap_human_principal"),
+      "commit",
+    ]);
+    expect(query.mock.calls[1]?.[1]).toEqual([
+      "mie.credential_pepper_v1",
+      "credential_pepper_material_for_test_v1",
+    ]);
+    expect(release).toHaveBeenCalledOnce();
+  });
+
   it("atomically bootstraps the human and prints plaintext exactly once", async () => {
     const deps = dependencies();
 
