@@ -1404,7 +1404,6 @@ components:
             - WAIT
             - AVOID
             - POSSIBLE_LONG_ZONE
-            - POSSIBLE_SHORT_ZONE
             - THESIS_VALID
             - THESIS_WEAKENING
             - TRAIL_STOP
@@ -1438,7 +1437,6 @@ components:
             - WAIT
             - AVOID
             - POSSIBLE_LONG_ZONE
-            - POSSIBLE_SHORT_ZONE
             - THESIS_VALID
             - THESIS_WEAKENING
             - TRAIL_STOP
@@ -1647,7 +1645,7 @@ components:
       properties:
         direction:
           type: ["string", "null"]
-          enum: [LONG, SHORT, null]
+          enum: [LONG, null]
         entry:
           type: ["number", "null"]
         invalidation:
@@ -1671,7 +1669,7 @@ components:
           enum: [FLAT, IN_POSITION]
         side:
           type: ["string", "null"]
-          enum: [LONG, SHORT, null]
+          enum: [LONG, null]
         unrealizedR:
           type: ["number", "null"]
         thesisStatus:

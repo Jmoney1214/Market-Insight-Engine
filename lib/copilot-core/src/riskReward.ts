@@ -27,15 +27,13 @@ export function computeRiskReward(
     };
   }
 
+  // LONG-ONLY: direction is always LONG here (the null case returned above).
+  // A bearish structural signal reaches this path already INVERTED into a long
+  // (triggers.ts inferDirection), so the preview is a long entry with a stop
+  // below structure and a target above — the mirrored risk of the raw signal.
   const entry = round(price, 4);
-  let invalidation: number;
-  if (direction === "LONG") {
-    const structural = openingRangeLow ?? entry - atr;
-    invalidation = round(Math.min(structural, entry - atr), 4);
-  } else {
-    const structural = openingRangeHigh ?? entry + atr;
-    invalidation = round(Math.max(structural, entry + atr), 4);
-  }
+  const structural = openingRangeLow ?? entry - atr;
+  const invalidation = round(Math.min(structural, entry - atr), 4);
 
   const riskPerShare = round(Math.abs(entry - invalidation), 4);
   if (riskPerShare <= 0) {
@@ -50,10 +48,7 @@ export function computeRiskReward(
     };
   }
 
-  const target =
-    direction === "LONG"
-      ? round(entry + TARGET_R_MULTIPLE * riskPerShare, 4)
-      : round(entry - TARGET_R_MULTIPLE * riskPerShare, 4);
+  const target = round(entry + TARGET_R_MULTIPLE * riskPerShare, 4);
   const ratio = round(Math.abs(target - entry) / riskPerShare, 2);
   const suffix =
     ratio < MIN_RR_RATIO ? " Reward-to-risk is below the preferred threshold." : "";

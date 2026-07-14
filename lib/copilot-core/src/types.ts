@@ -17,9 +17,14 @@ export type TriggerCategory = "primary_edge" | "entry_refinement";
 
 export type PositionStatus = "FLAT" | "IN_POSITION";
 
-export type PositionSide = "LONG" | "SHORT";
+// LONG-ONLY INVARIANT (operator directive): the desk carries no short side.
+// Every position is a long; every tradeable direction is LONG. Bearish
+// structural signals are INVERTED into long entries (see triggers.ts
+// inferDirection) rather than producing a short. No SHORT state exists at
+// runtime, in contracts, or on the wire.
+export type PositionSide = "LONG";
 
-export type Direction = "LONG" | "SHORT";
+export type Direction = "LONG";
 
 export type ThesisStatus = "VALID" | "WEAKENING" | "INVALIDATED" | "UNKNOWN";
 

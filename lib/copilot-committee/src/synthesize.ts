@@ -9,7 +9,7 @@ import type { CommitteeReads, DashboardRead } from "./types";
 import { applyRiskCeiling, clampConfidence, enforceHardBlock, isHardBlocked } from "./guardrails";
 import { fmtNum, uniq } from "./format";
 
-type Direction = "LONG" | "SHORT";
+type Direction = "LONG";
 
 const DEFENSIVE: ReadonlySet<Recommendation> = new Set<Recommendation>([
   "AVOID",
@@ -25,7 +25,6 @@ const PHRASE: Record<Recommendation, string> = {
   WAIT: "wait for better conditions",
   AVOID: "avoid — no setup",
   POSSIBLE_LONG_ZONE: "possible long research zone",
-  POSSIBLE_SHORT_ZONE: "possible short research zone",
   THESIS_VALID: "thesis valid",
   THESIS_WEAKENING: "thesis weakening",
   TRAIL_STOP: "consider trailing stop",
@@ -35,14 +34,14 @@ const PHRASE: Record<Recommendation, string> = {
   DO_NOT_ADD: "do not add",
 };
 
+// LONG-ONLY (invert bearish to buy): any directional structural read — bullish
+// OR bearish — resolves to a LONG. A bearish read is treated as an inverted
+// long entry, never a short. Null only when the read is purely neutral.
 function inferDirection(event: CopilotEvent, reads: CommitteeReads): Direction | null {
   if (event.riskReward.direction) return event.riskReward.direction;
   const considered = [reads.technical, reads.pattern];
-  const bull = considered.filter((r) => r.bias === "BULLISH").length;
-  const bear = considered.filter((r) => r.bias === "BEARISH").length;
-  if (bull > bear) return "LONG";
-  if (bear > bull) return "SHORT";
-  return null;
+  const directional = considered.some((r) => r.bias === "BULLISH" || r.bias === "BEARISH");
+  return directional ? "LONG" : null;
 }
 
 function chooseRecommendation(
@@ -84,7 +83,7 @@ function chooseRecommendation(
   const primary = event.triggerStack.category === "primary_edge";
 
   if (direction && primary && cred >= 0.7 && !anyWarn) {
-    return direction === "LONG" ? "POSSIBLE_LONG_ZONE" : "POSSIBLE_SHORT_ZONE";
+    return "POSSIBLE_LONG_ZONE"; // long-only: the only actionable research zone
   }
   if (cred >= 0.5) return "WATCH";
   return "WAIT";
@@ -128,7 +127,6 @@ function buildPositionGuidance(event: CopilotEvent, rec: Recommendation): string
 
   switch (rec) {
     case "POSSIBLE_LONG_ZONE":
-    case "POSSIBLE_SHORT_ZONE":
       return ["Research-only zone; wait for your own confirmation and predefined risk."];
     case "WATCH":
       return ["On watch; no setup is confirmed yet."];
@@ -157,10 +155,9 @@ export function synthesize(event: CopilotEvent, reads: CommitteeReads): Dashboar
       ...reads.bearCase.supportingFactors,
     ]);
     whatArguesAgainst = uniq(reads.bullCase.supportingFactors);
-  } else if (direction === "SHORT") {
-    whatSupports = uniq(reads.bearCase.supportingFactors);
-    whatArguesAgainst = uniq(reads.bullCase.supportingFactors);
   } else {
+    // LONG-ONLY: every actionable read is a long, so the bull case supports and
+    // the bear case is what argues against (the risk on the inverted entry).
     whatSupports = uniq(reads.bullCase.supportingFactors);
     whatArguesAgainst = uniq(reads.bearCase.supportingFactors);
   }

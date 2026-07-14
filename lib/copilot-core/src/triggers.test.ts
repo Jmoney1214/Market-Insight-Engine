@@ -250,8 +250,9 @@ describe("gap detectors (gated on prior-session close)", () => {
     const names = detectedNames(triggers);
     expect(names).toContain("GAP_FADE_SHORT");
     expect(names).not.toContain("GAP_CONTINUATION_LONG");
-    // Gap fade is a directional primary edge: a gap-up fade is bearish.
-    expect(inferDirection(triggers)).toBe("SHORT");
+    // The bearish structure still fires as intelligence (GAP_FADE_SHORT), but
+    // LONG-ONLY inverts it: the actionable direction is a long, never a short.
+    expect(inferDirection(triggers)).toBe("LONG");
   });
 
   it("treats a gap-down fade back above the range as a bullish edge", () => {
@@ -344,7 +345,8 @@ describe("post-earnings drift (gated on a recent earnings date)", () => {
     );
     const names = detectedNames(triggers);
     expect(names).toContain("POST_EARNINGS_DRIFT_SHORT");
-    expect(inferDirection(triggers)).toBe("SHORT");
+    // Bearish drift detected as intelligence; LONG-ONLY inverts it to a long.
+    expect(inferDirection(triggers)).toBe("LONG");
   });
 
   it("classifies the drift trigger as a promotable primary edge", () => {
@@ -443,7 +445,8 @@ describe("relative-strength momentum (gated on a benchmark return)", () => {
     });
     const names = detectedNames(triggers);
     expect(names).toContain("RELATIVE_STRENGTH_MOMENTUM_SHORT");
-    expect(inferDirection(triggers)).toBe("SHORT");
+    // Underperformance detected as intelligence; LONG-ONLY inverts it to a long.
+    expect(inferDirection(triggers)).toBe("LONG");
   });
 });
 

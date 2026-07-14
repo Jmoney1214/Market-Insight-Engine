@@ -686,17 +686,20 @@ export function buildTriggerStack(triggers: Trigger[]): TriggerStack {
   return { stackName, category, credibility, detectedTriggers };
 }
 
-/** Net directional bias from detected triggers, or null when balanced/none. */
+/**
+ * LONG-ONLY signal direction (operator directive: invert bearish to buy).
+ *
+ * Every detected directional primary trigger — bullish OR bearish — signals a
+ * LONG. A bearish structural break (e.g. OPENING_RANGE_FAILURE, a _SHORT
+ * variant) is INVERTED into a long entry with mirrored risk (computeRiskReward
+ * builds the long stop/target). The desk never produces a SHORT. Returns null
+ * only when no directional primary edge is detected.
+ */
 export function inferDirection(triggers: Trigger[]): Direction | null {
-  let score = 0;
-  for (const t of triggers) {
-    if (!t.detected) continue;
-    if (BULLISH.has(t.name)) score += 1;
-    if (BEARISH.has(t.name)) score -= 1;
-  }
-  if (score > 0) return "LONG";
-  if (score < 0) return "SHORT";
-  return null;
+  const anyDirectional = triggers.some(
+    (t) => t.detected && (BULLISH.has(t.name) || BEARISH.has(t.name)),
+  );
+  return anyDirectional ? "LONG" : null;
 }
 
 /**

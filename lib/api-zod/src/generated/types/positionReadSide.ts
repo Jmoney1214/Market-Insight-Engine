@@ -14,5 +14,4 @@ export type PositionReadSide = typeof PositionReadSide[keyof typeof PositionRead
 
 export const PositionReadSide = {
   LONG: 'LONG',
-  SHORT: 'SHORT',
 } as const;
