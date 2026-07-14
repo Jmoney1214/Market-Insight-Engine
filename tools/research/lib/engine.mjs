@@ -2,11 +2,24 @@
 // Rules are the faithful twins of tools/pine/morning_scan_jumpday_long.pine
 // (rider) and morning_scan_largecap_scalper.pine (scalper) — see
 // research/parity-audit.md. Any rule change here MUST be mirrored in Pine.
+import { STRATEGY_SPEC as S } from "./strategy_spec.mjs";
 
 export const THRESHOLDS = {
-  gap: 1.5, rangeDay: 2, mtdMin: 7, pmDollarMin: 2e6, priceCeil: 150,
-  riderRange: 6.5, riderPriceFloor: 20, scalperDollarVol: 8e9, cautionRange: 4.5,
+  gap: S.scan.gapUpMin, rangeDay: S.scan.rangeThresh, mtdMin: S.scan.mtdMin,
+  pmDollarMin: S.scan.pmDollarMin, priceCeil: S.scan.priceCeil,
+  riderRange: S.klass.riderRange, riderPriceFloor: S.klass.riderPriceFloor,
+  scalperDollarVol: S.klass.scalperDollarVol, cautionRange: S.klass.cautionRange,
   finalists: 30, boardN: 12, eligibleN: 5,
+};
+
+// Execution constants, sourced from the spec so the Pine twins, this engine,
+// and pine_node_consistency.test.mjs can never fork silently.
+export const EXEC = {
+  equity: S.exec.equity,
+  riskPct: S.exec.riskPct,
+  notionalCap: S.exec.notionalCapPct / 100, // engine works in fractions
+  stopBuf: S.exec.stopBufPct,
+  commPct: S.exec.commissionPct / 100, // 0.02% -> 0.0002 fraction
 };
 
 const round = (n, p = 2) => Math.round(n * 10 ** p) / 10 ** p;
@@ -125,7 +138,7 @@ export function runEngine(cls, dayBars, prevClose, fillMode = "stop_first") {
   const cfg = cls === "rider"
     ? { maxTrades: 1, rr: null, liveCeil: true }
     : { maxTrades: 3, rr: 1.5, liveCeil: false };
-  const EQ = 25000, riskPct = 1, notionalCap = 0.5, stopBuf = 0.8, commPct = 0.0002;
+  const { equity: EQ, riskPct, notionalCap, stopBuf, commPct } = EXEC;
   const firstRth = dayBars.find((b) => b.hm >= "09:30");
   if (!firstRth) return { status: "no-session", trades: [] };
   const gap = ((firstRth.o - prevClose) / prevClose) * 100;
