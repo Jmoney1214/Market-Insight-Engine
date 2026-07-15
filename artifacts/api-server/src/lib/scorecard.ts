@@ -30,7 +30,10 @@ export function gradeRow(
   const refClose = priceAtScan / (1 + gapPct / 100);
   const changePct = round(((bar.close - refClose) / refClose) * 100);
   const rangePct = round(((bar.high - bar.low) / bar.close) * 100);
-  const hit = list === "intraday" ? rangePct >= 2 : list === "jump" ? changePct > 0 : changePct < 0;
+  // LONG-ONLY (invert bearish to buy): the "fall" list is gap-down names taken
+  // as inverted long dip-buys, so a hit is UPSIDE (changePct > 0), same as the
+  // jump list — never the old short-side changePct < 0.
+  const hit = list === "intraday" ? rangePct >= 2 : changePct > 0;
   return { changePct, rangePct, hit };
 }
 

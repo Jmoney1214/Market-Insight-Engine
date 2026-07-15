@@ -30,16 +30,18 @@ describe("gradeRow", () => {
     expect(g.hit).toBe(false);
   });
 
-  it("fall pick hits when the session closes below the reference", () => {
-    // Scanned at 95 on a -5% gap -> refClose = 100. Closed 93: down move held.
+  // LONG-ONLY (invert bearish to buy): a "fall" pick is a gap-down name taken
+  // as an inverted long dip-buy, so a hit is UPSIDE, not the old short-side down.
+  it("fall pick (inverted long) MISSES when it keeps falling", () => {
+    // Scanned at 95 on a -5% gap -> refClose = 100. Closed 93: the dip-buy lost.
     const g = gradeRow("fall", -5, 95, { high: 96, low: 92, close: 93 });
     expect(g.changePct).toBeCloseTo(-7, 6);
-    expect(g.hit).toBe(true);
+    expect(g.hit).toBe(false);
   });
 
-  it("fall pick misses when the stock reverses and closes up", () => {
+  it("fall pick (inverted long) HITS when the stock reverses and closes up", () => {
     const g = gradeRow("fall", -5, 95, { high: 103, low: 94, close: 102 });
     expect(g.changePct).toBeCloseTo(2, 6);
-    expect(g.hit).toBe(false);
+    expect(g.hit).toBe(true);
   });
 });

@@ -34,8 +34,12 @@ export function patternAgent(event: CopilotEvent): AgentRead {
     warnings.push("Stack category is unclassified.");
   }
 
+  // LONG-ONLY (invert bearish to buy): a detected directional structure is an
+  // actionable long — bullish outright, or a bearish break inverted into a long
+  // entry. Either way the structural read is BULLISH for the (long) trade; a
+  // stack with no direction stays NEUTRAL.
   const dir = event.riskReward.direction;
-  const bias: Bias = dir === "LONG" ? "BULLISH" : dir === "SHORT" ? "BEARISH" : "NEUTRAL";
+  const bias: Bias = dir === "LONG" ? "BULLISH" : "NEUTRAL";
   const confidence = clampConfidence(
     stack.credibility - (stack.category === "entry_refinement" ? 0.15 : 0),
   );

@@ -598,7 +598,6 @@ export type RiskRewardDirection = typeof RiskRewardDirection[keyof typeof RiskRe
 
 export const RiskRewardDirection = {
   LONG: 'LONG',
-  SHORT: 'SHORT',
 } as const;
 
 /**
@@ -636,7 +635,6 @@ export type PositionReadSide = typeof PositionReadSide[keyof typeof PositionRead
 
 export const PositionReadSide = {
   LONG: 'LONG',
-  SHORT: 'SHORT',
 } as const;
 
 export type PositionReadThesisStatus = typeof PositionReadThesisStatus[keyof typeof PositionReadThesisStatus];
@@ -782,7 +780,6 @@ export const AgentReadMaxRecommendation = {
   WAIT: 'WAIT',
   AVOID: 'AVOID',
   POSSIBLE_LONG_ZONE: 'POSSIBLE_LONG_ZONE',
-  POSSIBLE_SHORT_ZONE: 'POSSIBLE_SHORT_ZONE',
   THESIS_VALID: 'THESIS_VALID',
   THESIS_WEAKENING: 'THESIS_WEAKENING',
   TRAIL_STOP: 'TRAIL_STOP',
@@ -824,7 +821,6 @@ export const DashboardReadRecommendation = {
   WAIT: 'WAIT',
   AVOID: 'AVOID',
   POSSIBLE_LONG_ZONE: 'POSSIBLE_LONG_ZONE',
-  POSSIBLE_SHORT_ZONE: 'POSSIBLE_SHORT_ZONE',
   THESIS_VALID: 'THESIS_VALID',
   THESIS_WEAKENING: 'THESIS_WEAKENING',
   TRAIL_STOP: 'TRAIL_STOP',

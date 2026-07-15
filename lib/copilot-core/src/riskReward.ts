@@ -27,15 +27,21 @@ export function computeRiskReward(
     };
   }
 
+  // LONG-ONLY: direction is always LONG here (the null case returned above).
+  // The stop sits below the entry. For a normal long, the opening-range LOW is
+  // the structural support. For an INVERTED long — price broke BELOW the range
+  // (a bearish signal bought as a long) — the range is above the entry and
+  // gives no support below, so we MIRROR the upper structure (the opening-range
+  // HIGH distance) below the entry. Without this, every inverted trade silently
+  // collapsed to the ATR stop.
   const entry = round(price, 4);
-  let invalidation: number;
-  if (direction === "LONG") {
-    const structural = openingRangeLow ?? entry - atr;
-    invalidation = round(Math.min(structural, entry - atr), 4);
-  } else {
-    const structural = openingRangeHigh ?? entry + atr;
-    invalidation = round(Math.max(structural, entry + atr), 4);
-  }
+  const brokeBelowRange = openingRangeLow !== null && entry < openingRangeLow;
+  const structural = brokeBelowRange
+    ? openingRangeHigh !== null
+      ? entry - (openingRangeHigh - entry) // mirror the upper structure below
+      : entry - atr
+    : (openingRangeLow ?? entry - atr);
+  const invalidation = round(Math.min(structural, entry - atr), 4);
 
   const riskPerShare = round(Math.abs(entry - invalidation), 4);
   if (riskPerShare <= 0) {
@@ -50,10 +56,7 @@ export function computeRiskReward(
     };
   }
 
-  const target =
-    direction === "LONG"
-      ? round(entry + TARGET_R_MULTIPLE * riskPerShare, 4)
-      : round(entry - TARGET_R_MULTIPLE * riskPerShare, 4);
+  const target = round(entry + TARGET_R_MULTIPLE * riskPerShare, 4);
   const ratio = round(Math.abs(target - entry) / riskPerShare, 2);
   const suffix =
     ratio < MIN_RR_RATIO ? " Reward-to-risk is below the preferred threshold." : "";

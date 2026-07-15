@@ -337,6 +337,9 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     .filter((c) => c.gapPct >= GAP_THRESHOLD)
     .sort((a, b) => b.gapPct - a.gapPct)
     .slice(0, TOP_N);
+  // LONG-ONLY (invert bearish to buy): the biggest gap-DOWN names, taken as
+  // inverted long dip-buy candidates (deepest gap = strongest reversal
+  // candidate). Same names as before; the desk reads them as longs, never shorts.
   const likelyFall = candidates
     .filter((c) => c.gapPct <= -GAP_THRESHOLD)
     .sort((a, b) => a.gapPct - b.gapPct)
@@ -346,7 +349,7 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     generatedAt: new Date().toISOString(),
     universeSize: universe.length,
     priceCeiling: PRICE_CEILING,
-    note: "Evidence-ranked scan (gap, range, liquidity, catalysts) over a liquid under-$150 universe — research input, not a guarantee of direction.",
+    note: "Long-only evidence-ranked scan (gap, range, liquidity, catalysts) over a liquid under-$150 universe. likelyJump = gap-up longs; likelyFall = gap-down names inverted into long dip-buys. Research input, not a guarantee.",
     topIntraday,
     likelyJump,
     likelyFall,

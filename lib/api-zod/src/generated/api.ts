@@ -452,7 +452,7 @@ export const GetCopilotEventResponse = zod.object({
 }),
   "hardBlocks": zod.array(zod.string()).describe('Non-overridable L5 hard-block codes; empty when not blocked'),
   "riskReward": zod.object({
-  "direction": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "direction": zod.union([zod.literal('LONG'),zod.literal(null)]).nullable(),
   "entry": zod.number().nullable(),
   "invalidation": zod.number().nullable(),
   "target": zod.number().nullable(),
@@ -462,7 +462,7 @@ export const GetCopilotEventResponse = zod.object({
 }).describe('Research-only structural preview. Never an order, instruction, or signal to transact.'),
   "position": zod.object({
   "status": zod.enum(['FLAT', 'IN_POSITION']),
-  "side": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "side": zod.union([zod.literal('LONG'),zod.literal(null)]).nullable(),
   "unrealizedR": zod.number().nullable(),
   "thesisStatus": zod.enum(['VALID', 'WEAKENING', 'INVALIDATED', 'UNKNOWN']),
   "notes": zod.string()
@@ -519,11 +519,11 @@ export const ExplainCopilotEventResponse = zod.object({
   "supportingFactors": zod.array(zod.string()),
   "warnings": zod.array(zod.string()),
   "riskVerdict": zod.union([zod.literal('PASS'),zod.literal('WARN'),zod.literal('BLOCK'),zod.literal(null)]).nullable().describe('Risk critic verdict; null for every other agent'),
-  "maxRecommendation": zod.union([zod.literal('WATCH'),zod.literal('WAIT'),zod.literal('AVOID'),zod.literal('POSSIBLE_LONG_ZONE'),zod.literal('POSSIBLE_SHORT_ZONE'),zod.literal('THESIS_VALID'),zod.literal('THESIS_WEAKENING'),zod.literal('TRAIL_STOP'),zod.literal('TAKE_PARTIALS'),zod.literal('EXIT_WARNING'),zod.literal('THESIS_INVALIDATED'),zod.literal('DO_NOT_ADD'),zod.literal(null)]).nullable().describe('Risk critic recommendation ceiling; null for every other agent')
+  "maxRecommendation": zod.union([zod.literal('WATCH'),zod.literal('WAIT'),zod.literal('AVOID'),zod.literal('POSSIBLE_LONG_ZONE'),zod.literal('THESIS_VALID'),zod.literal('THESIS_WEAKENING'),zod.literal('TRAIL_STOP'),zod.literal('TAKE_PARTIALS'),zod.literal('EXIT_WARNING'),zod.literal('THESIS_INVALIDATED'),zod.literal('DO_NOT_ADD'),zod.literal(null)]).nullable().describe('Risk critic recommendation ceiling; null for every other agent')
 }).describe('One specialist analyst\'s read. Explanatory only; never an instruction to transact.')),
   "dashboardRead": zod.object({
   "oneSentenceRead": zod.string(),
-  "recommendation": zod.enum(['WATCH', 'WAIT', 'AVOID', 'POSSIBLE_LONG_ZONE', 'POSSIBLE_SHORT_ZONE', 'THESIS_VALID', 'THESIS_WEAKENING', 'TRAIL_STOP', 'TAKE_PARTIALS', 'EXIT_WARNING', 'THESIS_INVALIDATED', 'DO_NOT_ADD']),
+  "recommendation": zod.enum(['WATCH', 'WAIT', 'AVOID', 'POSSIBLE_LONG_ZONE', 'THESIS_VALID', 'THESIS_WEAKENING', 'TRAIL_STOP', 'TAKE_PARTIALS', 'EXIT_WARNING', 'THESIS_INVALIDATED', 'DO_NOT_ADD']),
   "confidence": zod.number().describe('Clamped to [0,1]'),
   "whatSupports": zod.array(zod.string()),
   "whatArguesAgainst": zod.array(zod.string()),
@@ -719,7 +719,7 @@ export const ListHistoryEventsResponseItem = zod.object({
 }),
   "hardBlocks": zod.array(zod.string()).describe('Non-overridable L5 hard-block codes; empty when not blocked'),
   "riskReward": zod.object({
-  "direction": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "direction": zod.union([zod.literal('LONG'),zod.literal(null)]).nullable(),
   "entry": zod.number().nullable(),
   "invalidation": zod.number().nullable(),
   "target": zod.number().nullable(),
@@ -729,7 +729,7 @@ export const ListHistoryEventsResponseItem = zod.object({
 }).describe('Research-only structural preview. Never an order, instruction, or signal to transact.'),
   "position": zod.object({
   "status": zod.enum(['FLAT', 'IN_POSITION']),
-  "side": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "side": zod.union([zod.literal('LONG'),zod.literal(null)]).nullable(),
   "unrealizedR": zod.number().nullable(),
   "thesisStatus": zod.enum(['VALID', 'WEAKENING', 'INVALIDATED', 'UNKNOWN']),
   "notes": zod.string()
@@ -860,7 +860,7 @@ export const GetReplayEventResponse = zod.object({
 }),
   "hardBlocks": zod.array(zod.string()).describe('Non-overridable L5 hard-block codes; empty when not blocked'),
   "riskReward": zod.object({
-  "direction": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "direction": zod.union([zod.literal('LONG'),zod.literal(null)]).nullable(),
   "entry": zod.number().nullable(),
   "invalidation": zod.number().nullable(),
   "target": zod.number().nullable(),
@@ -870,7 +870,7 @@ export const GetReplayEventResponse = zod.object({
 }).describe('Research-only structural preview. Never an order, instruction, or signal to transact.'),
   "position": zod.object({
   "status": zod.enum(['FLAT', 'IN_POSITION']),
-  "side": zod.union([zod.literal('LONG'),zod.literal('SHORT'),zod.literal(null)]).nullable(),
+  "side": zod.union([zod.literal('LONG'),zod.literal(null)]).nullable(),
   "unrealizedR": zod.number().nullable(),
   "thesisStatus": zod.enum(['VALID', 'WEAKENING', 'INVALIDATED', 'UNKNOWN']),
   "notes": zod.string()
@@ -929,11 +929,11 @@ export const ExplainReplayEventResponse = zod.object({
   "supportingFactors": zod.array(zod.string()),
   "warnings": zod.array(zod.string()),
   "riskVerdict": zod.union([zod.literal('PASS'),zod.literal('WARN'),zod.literal('BLOCK'),zod.literal(null)]).nullable().describe('Risk critic verdict; null for every other agent'),
-  "maxRecommendation": zod.union([zod.literal('WATCH'),zod.literal('WAIT'),zod.literal('AVOID'),zod.literal('POSSIBLE_LONG_ZONE'),zod.literal('POSSIBLE_SHORT_ZONE'),zod.literal('THESIS_VALID'),zod.literal('THESIS_WEAKENING'),zod.literal('TRAIL_STOP'),zod.literal('TAKE_PARTIALS'),zod.literal('EXIT_WARNING'),zod.literal('THESIS_INVALIDATED'),zod.literal('DO_NOT_ADD'),zod.literal(null)]).nullable().describe('Risk critic recommendation ceiling; null for every other agent')
+  "maxRecommendation": zod.union([zod.literal('WATCH'),zod.literal('WAIT'),zod.literal('AVOID'),zod.literal('POSSIBLE_LONG_ZONE'),zod.literal('THESIS_VALID'),zod.literal('THESIS_WEAKENING'),zod.literal('TRAIL_STOP'),zod.literal('TAKE_PARTIALS'),zod.literal('EXIT_WARNING'),zod.literal('THESIS_INVALIDATED'),zod.literal('DO_NOT_ADD'),zod.literal(null)]).nullable().describe('Risk critic recommendation ceiling; null for every other agent')
 }).describe('One specialist analyst\'s read. Explanatory only; never an instruction to transact.')),
   "dashboardRead": zod.object({
   "oneSentenceRead": zod.string(),
-  "recommendation": zod.enum(['WATCH', 'WAIT', 'AVOID', 'POSSIBLE_LONG_ZONE', 'POSSIBLE_SHORT_ZONE', 'THESIS_VALID', 'THESIS_WEAKENING', 'TRAIL_STOP', 'TAKE_PARTIALS', 'EXIT_WARNING', 'THESIS_INVALIDATED', 'DO_NOT_ADD']),
+  "recommendation": zod.enum(['WATCH', 'WAIT', 'AVOID', 'POSSIBLE_LONG_ZONE', 'THESIS_VALID', 'THESIS_WEAKENING', 'TRAIL_STOP', 'TAKE_PARTIALS', 'EXIT_WARNING', 'THESIS_INVALIDATED', 'DO_NOT_ADD']),
   "confidence": zod.number().describe('Clamped to [0,1]'),
   "whatSupports": zod.array(zod.string()),
   "whatArguesAgainst": zod.array(zod.string()),

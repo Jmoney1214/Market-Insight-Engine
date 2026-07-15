@@ -11,7 +11,8 @@ export const APPROVED_RECOMMENDATIONS = [
   "WAIT",
   "AVOID",
   "POSSIBLE_LONG_ZONE",
-  "POSSIBLE_SHORT_ZONE",
+  // LONG-ONLY: no POSSIBLE_SHORT_ZONE. Bearish structure is inverted into a
+  // long entry (POSSIBLE_LONG_ZONE), never a short recommendation.
   "THESIS_VALID",
   "THESIS_WEAKENING",
   "TRAIL_STOP",
@@ -59,7 +60,6 @@ export const PERMISSIVENESS: Record<Recommendation, number> = {
   TRAIL_STOP: 5,
   TAKE_PARTIALS: 5,
   THESIS_VALID: 6,
-  POSSIBLE_SHORT_ZONE: 7,
   POSSIBLE_LONG_ZONE: 7,
 };
 

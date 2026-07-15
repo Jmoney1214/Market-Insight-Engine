@@ -14,5 +14,4 @@ export type RiskRewardDirection = typeof RiskRewardDirection[keyof typeof RiskRe
 
 export const RiskRewardDirection = {
   LONG: 'LONG',
-  SHORT: 'SHORT',
 } as const;
