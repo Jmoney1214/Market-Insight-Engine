@@ -6,7 +6,7 @@
  * Desk — the gate is code, not a preference.
  */
 import { z } from "zod/v4";
-import { and, desc, eq, gte, isNull, isNotNull, lt, notLike } from "drizzle-orm";
+import { and, desc, eq, gt, gte, isNull, isNotNull, lt, notLike } from "drizzle-orm";
 import { db, kronosForecastsTable } from "@workspace/db";
 import {
   calibrationReport,
@@ -189,10 +189,10 @@ export interface GatedForecastResponse {
 
 /** Latest forecast for a symbol, rendered ONLY behind a passing calibration. */
 export async function getGatedForecast(symbol: string): Promise<GatedForecastResponse> {
-  const calibration = await getCalibration();
-  const base: GatedForecastResponse = { symbol, calibration, forecast: null, gated: !calibration.passed };
-  if (!calibration.passed) return base;
-
+  // Find the latest LIVE, UNEXPIRED forecast FIRST — the gate must judge the
+  // model that would actually be served, not pool every model version. A
+  // forecast whose horizon window has already closed is stale and never served.
+  const now = new Date();
   const rows = await db
     .select()
     .from(kronosForecastsTable)
@@ -202,12 +202,19 @@ export async function getGatedForecast(symbol: string): Promise<GatedForecastRes
         // Backfill rows calibrate the gate but are weeks-old anchors — the
         // Desk's "latest forecast" must always be a live-run forecast.
         notLike(kronosForecastsTable.runId, "backtest\\_%"),
+        // Not expired: the forecast's horizon window must still be open.
+        gt(kronosForecastsTable.windowEndTs, now),
       ),
     )
     .orderBy(desc(kronosForecastsTable.createdAt))
     .limit(1);
   const latest = rows[0];
-  if (!latest) return base;
+
+  // Calibrate on the SERVED model's OWN version — never serve a new, untested
+  // model version behind a retired version's earned calibration.
+  const calibration = await getCalibration(latest?.modelVersion);
+  const base: GatedForecastResponse = { symbol, calibration, forecast: null, gated: !calibration.passed };
+  if (!latest || !calibration.passed) return base;
 
   return {
     ...base,

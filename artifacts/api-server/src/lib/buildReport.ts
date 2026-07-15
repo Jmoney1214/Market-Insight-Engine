@@ -99,6 +99,72 @@ function headlineSentiment(title: string): "Bullish" | "Bearish" | "Neutral" {
   return "Neutral";
 }
 
+export interface CatalystInputs {
+  income: fmp.FmpIncome[] | null;
+  ratios: fmp.FmpRatios | null;
+  /** Raw free cash flow (dollars); null/undefined = unknown, negative = burn. */
+  fcf: number | null | undefined;
+  debtToEquity: number | null;
+  consensus: number | null | undefined;
+  price: number;
+  /** Only meaningful when computed from >= 2 real income statements. */
+  revenueGrowthYoY: number | null;
+  hasRealRevenueGrowth: boolean;
+}
+
+/**
+ * Pure financial-catalyst extraction. EVERY line is gated on the presence of
+ * the REAL source metric and its SIGN — never on a placeholder-defaulted field.
+ * A missing operating margin defaults to 0 and a missing FCF to "—" upstream;
+ * both are truthy/`!= null` and previously emitted fabricated "margin pressure"
+ * / "generates — in FCF" statements for companies whose metric is simply
+ * unknown. Unknown metrics produce NO catalyst in either direction.
+ */
+export function extractFinancialCatalysts(
+  i: CatalystInputs,
+): { positive: string[]; negative: string[] } {
+  const positive: string[] = [];
+  const negative: string[] = [];
+
+  if (i.hasRealRevenueGrowth && i.revenueGrowthYoY != null) {
+    (i.revenueGrowthYoY >= 5 ? positive : negative).push(
+      `Revenue ${i.revenueGrowthYoY >= 0 ? "grew" : "declined"} ${Math.abs(i.revenueGrowthYoY)}% YoY in the latest fiscal year`,
+    );
+  }
+
+  const opMargin = i.ratios?.["operatingProfitMarginTTM"];
+  if (opMargin != null) {
+    const pctMargin = pct(opMargin);
+    (pctMargin >= 20 ? positive : negative).push(
+      `Operating margin of ${pctMargin}% (${pctMargin >= 20 ? "healthy profitability" : "margin pressure"})`,
+    );
+  }
+
+  // FCF: only a REAL number becomes a catalyst; its SIGN sets polarity —
+  // positive FCF is bullish, negative FCF (cash burn) is bearish, unknown/zero
+  // is neither.
+  if (i.fcf != null && Number.isFinite(i.fcf) && i.fcf !== 0) {
+    (i.fcf > 0 ? positive : negative).push(
+      i.fcf > 0
+        ? `Generates ${formatBigUSD(i.fcf)} in free cash flow`
+        : `Burns ${formatBigUSD(Math.abs(i.fcf))} in free cash flow`,
+    );
+  }
+
+  if (i.ratios?.["debtToEquityRatioTTM"] != null && i.debtToEquity != null && i.debtToEquity > 1.5) {
+    negative.push(`Elevated debt-to-equity of ${i.debtToEquity}x`);
+  }
+
+  if (i.consensus && i.price) {
+    const up = round(((i.consensus - i.price) / i.price) * 100);
+    (up >= 0 ? positive : negative).push(
+      `Analyst consensus implies ${Math.abs(up)}% ${up >= 0 ? "upside" : "downside"} to $${round(i.consensus)}`,
+    );
+  }
+
+  return { positive, negative };
+}
+
 /**
  * Build a report for `ticker` from live providers only.
  * @throws NoLiveDataError when no provider key is configured.
@@ -291,28 +357,21 @@ export async function buildReport(ticker: string, id = 0): Promise<Report> {
     };
   }
 
-  // ---- Catalysts (data-driven from real metrics) ---------------------------
+  // ---- Catalysts (data-driven from real metrics, placeholder-safe) ---------
   if (hasFmp && (ratios || income)) {
-    const positive: string[] = [];
-    const negative: string[] = [];
-    if (revenueGrowthYoY != null) {
-      (revenueGrowthYoY >= 5 ? positive : negative).push(
-        `Revenue ${revenueGrowthYoY >= 0 ? "grew" : "declined"} ${Math.abs(revenueGrowthYoY)}% YoY in the latest fiscal year`,
-      );
-    }
-    if (report.financials.operatingMargin != null) {
-      (report.financials.operatingMargin >= 20 ? positive : negative).push(
-        `Operating margin of ${report.financials.operatingMargin}% (${report.financials.operatingMargin >= 20 ? "healthy profitability" : "margin pressure"})`,
-      );
-    }
-    if (report.financials.freeCashFlow) positive.push(`Generates ${report.financials.freeCashFlow} in free cash flow`);
-    if (report.financials.debtToEquity != null && report.financials.debtToEquity > 1.5) {
-      negative.push(`Elevated debt-to-equity of ${report.financials.debtToEquity}x`);
-    }
-    if (consensus && price) {
-      const up = round(((consensus - price) / price) * 100);
-      (up >= 0 ? positive : negative).push(`Analyst consensus implies ${Math.abs(up)}% ${up >= 0 ? "upside" : "downside"} to $${round(consensus)}`);
-    }
+    const { positive, negative } = extractFinancialCatalysts({
+      income,
+      ratios,
+      // Catalyst FCF uses ONLY the unambiguous total-dollar field. The display
+      // `fcf` above also falls back to keyMetrics per-share/ratio figures, which
+      // must never become a "$X in free cash flow" catalyst.
+      fcf: cashFlow?.freeCashFlow ?? null,
+      debtToEquity: report.financials.debtToEquity,
+      consensus,
+      price,
+      revenueGrowthYoY,
+      hasRealRevenueGrowth: !!(income && income.length >= 2 && income[1]?.revenue),
+    });
     report.catalysts = {
       positive: positive.length ? positive : base.catalysts.positive,
       negative: negative.length ? negative : base.catalysts.negative,
