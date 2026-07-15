@@ -209,12 +209,18 @@ export async function getGatedForecast(symbol: string): Promise<GatedForecastRes
     .orderBy(desc(kronosForecastsTable.createdAt))
     .limit(1);
   const latest = rows[0];
+  // No live, unexpired forecast → gated with an empty calibration report. This
+  // avoids the heavy all-version calibration query just to discard it, and it
+  // reports gated:true honestly (nothing to serve) rather than a pooled pass.
+  if (!latest) {
+    return { symbol, calibration: calibrationReport([]), forecast: null, gated: true };
+  }
 
   // Calibrate on the SERVED model's OWN version — never serve a new, untested
   // model version behind a retired version's earned calibration.
-  const calibration = await getCalibration(latest?.modelVersion);
+  const calibration = await getCalibration(latest.modelVersion);
   const base: GatedForecastResponse = { symbol, calibration, forecast: null, gated: !calibration.passed };
-  if (!latest || !calibration.passed) return base;
+  if (!calibration.passed) return base;
 
   return {
     ...base,

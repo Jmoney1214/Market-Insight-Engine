@@ -155,7 +155,9 @@ export function extractFinancialCatalysts(
     negative.push(`Elevated debt-to-equity of ${i.debtToEquity}x`);
   }
 
-  if (i.consensus && i.price) {
+  // Explicit numeric guards: a 0 consensus is skipped as unusable, and price
+  // must be > 0 to avoid a divide-by-zero / nonsense percentage.
+  if (i.consensus != null && i.consensus > 0 && i.price > 0) {
     const up = round(((i.consensus - i.price) / i.price) * 100);
     (up >= 0 ? positive : negative).push(
       `Analyst consensus implies ${Math.abs(up)}% ${up >= 0 ? "upside" : "downside"} to $${round(i.consensus)}`,

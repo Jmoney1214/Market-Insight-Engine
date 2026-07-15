@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { db, newsEventsTable } from "@workspace/db";
-import { gte, desc } from "drizzle-orm";
+import { and, gte, desc, sql } from "drizzle-orm";
 import { EdgarClient, type EdgarFilingRef } from "@workspace/research-adapters";
 import {
   finalize,
@@ -51,6 +51,11 @@ import { logger } from "./logger.js";
 const NEWS_WINDOW_HOURS = 48;
 const PACKET_TTL_HOURS = 8;
 const FILING_TEXT_CAP = 8000;
+/**
+ * A filing older than this can't substantiate a CURRENT catalyst. 90 days
+ * covers a recently-filed quarterly (10-Q) while excluding year-old periodics.
+ */
+const FILING_FRESHNESS_DAYS = 90;
 
 /** Filing forms that can actually substantiate a catalyst / dilution claim. */
 export const MATERIAL_FORMS = new Set([
@@ -58,6 +63,30 @@ export const MATERIAL_FORMS = new Set([
   "424B1", "424B2", "424B3", "424B4", "424B5",
   "S-1", "S-1/A", "S-3", "S-3/A", "F-1", "F-3",
 ]);
+
+/**
+ * Pure: choose the audit filing for a catalyst. A filing can only substantiate
+ * a CURRENT event if it is (a) recent — accepted within FILING_FRESHNESS_DAYS of
+ * `nowIso` — and (b) material (a Form 144 / ownership form can't). Prefers a
+ * fresh material filing, else the freshest fresh filing with a document, else
+ * null (honest: no recent filing to substantiate). Refs are newest-first.
+ */
+export function pickAuditFiling(
+  filingRefs: EdgarFilingRef[],
+  nowIso: string,
+  maxAgeDays = FILING_FRESHNESS_DAYS,
+): EdgarFilingRef | null {
+  const cutoffMs = Date.parse(nowIso) - maxAgeDays * 86_400_000;
+  const fresh = filingRefs.filter((f) => {
+    const t = Date.parse(f.acceptanceDateTime ?? f.filingDate);
+    return Number.isFinite(t) && t >= cutoffMs;
+  });
+  return (
+    fresh.find((f) => f.primaryDocument && MATERIAL_FORMS.has(f.form)) ??
+    fresh.find((f) => f.primaryDocument) ??
+    null
+  );
+}
 
 /** One CORE claim derived from the verified catalyst (audited fail-closed). */
 export function claimFromCatalyst(record: CatalystRecord, now: string): Claim | null {
@@ -107,11 +136,7 @@ async function gatherEvidence(symbol: string, now: string): Promise<GatheredEvid
       cik = await edgar.lookupCik(symbol);
       if (cik) {
         filingRefs = (await edgar.getSubmissions(cik)) ?? [];
-        // Prefer a material filing for the audit document — a Form 144 or
-        // ownership form can't substantiate a catalyst claim.
-        const latest =
-          filingRefs.find((f) => f.primaryDocument && MATERIAL_FORMS.has(f.form)) ??
-          filingRefs.find((f) => f.primaryDocument);
+        const latest = pickAuditFiling(filingRefs, now);
         if (latest) {
           const filing = await edgar.getFiling(latest, { symbols: [symbol], now });
           if (filing) {
@@ -125,24 +150,29 @@ async function gatherEvidence(symbol: string, now: string): Promise<GatheredEvid
     }
   }
 
-  // News clusters from the point-in-time ledger.
+  // News clusters from the point-in-time ledger. The symbol filter is pushed
+  // into SQL (jsonb containment) BEFORE the limit — a newest-500-then-filter
+  // starved the target symbol to zero on busy news days (its rows evicted by
+  // unrelated tickers exactly when the tape was hot).
   const since = new Date(Date.now() - NEWS_WINDOW_HOURS * 3_600_000);
   const rows = await db
     .select({
       clusterKey: newsEventsTable.clusterKey,
       headline: newsEventsTable.headline,
-      symbols: newsEventsTable.symbols,
       firstSeen: newsEventsTable.firstSeen,
       publishedAt: newsEventsTable.publishedAt,
     })
     .from(newsEventsTable)
-    .where(gte(newsEventsTable.firstSeen, since))
+    .where(
+      and(
+        gte(newsEventsTable.firstSeen, since),
+        sql`${newsEventsTable.symbols} @> ${JSON.stringify([symbol])}::jsonb`,
+      ),
+    )
     .orderBy(desc(newsEventsTable.firstSeen))
-    .limit(500);
+    .limit(20);
 
   const newsClusters: NewsClusterEvidence[] = rows
-    .filter((r) => r.symbols.includes(symbol))
-    .slice(0, 20)
     .map((r) => ({
       clusterKey: r.clusterKey,
       headline: r.headline,
