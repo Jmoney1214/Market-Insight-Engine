@@ -11,6 +11,20 @@
   },
   "private": true,
   "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "pnpm": {
+    "supportedArchitectures": {
+      "os": ["darwin", "linux"],
+      "cpu": ["arm64", "x64"]
+    }
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-darwin-arm64": "4.62.2",
+    "lightningcss-darwin-arm64": "1.32.0",
+    "@tailwindcss/oxide-darwin-arm64": "4.3.0"
+  },
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "~5.9.3"
