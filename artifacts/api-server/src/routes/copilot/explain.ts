@@ -19,7 +19,7 @@ import {
   fetchAlpacaIntradayInput,
 } from "../../lib/alpacaData.js";
 import { getSentimentLensInput } from "../../lib/sentimentContext.js";
-import { getDecisionMemory } from "../../lib/memoryStore.js";
+import { decisionMemoryEnabled, getDecisionMemory } from "../../lib/memoryStore.js";
 import { planLenses } from "../../lib/committeePlanner.js";
 
 const router: IRouter = Router();
@@ -68,11 +68,16 @@ router.get("/explain", async (req, res) => {
   // reads ONLY, enforced here: a REPLAY/RESEARCH read of historical bars must
   // never receive present-day context (look-ahead contamination). Fetched in
   // parallel; both are independent of the market-data fetch below.
+  // Wave 0 containment: the committee only receives decision memory when
+  // explicitly re-enabled — until Wave 1's trusted-only retrieval, unvetted
+  // verdicts must not inform a live read. The /memory diagnostic is unaffected.
   const isLiveRead = (mode ?? "LIVE") === "LIVE";
   const [sentiment, decisionMemory] = isLiveRead
     ? await Promise.all([
         getSentimentLensInput(symbolUpper).catch(() => null),
-        getDecisionMemory(symbolUpper).catch(() => [] as string[]),
+        decisionMemoryEnabled()
+          ? getDecisionMemory(symbolUpper).catch(() => [] as string[])
+          : Promise.resolve([] as string[]),
       ])
     : [null, [] as string[]];
 
