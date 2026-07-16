@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node --test tools/research/test/
+      - run: node --test "tools/research/test/**/*.test.mjs"
 
   # Workspace unit tests (vitest across artifacts/*). Build the composite libs first so the
   # api-server tests can resolve @workspace/* at runtime.
