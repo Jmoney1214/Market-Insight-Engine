@@ -46,12 +46,17 @@ export function isRecentIpo(ipoDate: string | null, nowIso: string, windowDays =
 /**
  * Deterministic eligibility gate, ordered so the first failure names the
  * reason. Fail-closed: any unconfirmable gate → ineligible.
+ *
+ * Freshness is checked before security type: a missing quote (no screener
+ * row) leaves the type merely UNKNOWN, and the informative root cause is
+ * STALE_QUOTE, not NON_COMMON. A genuinely non-common security always carries
+ * a fresh price in the pipeline, so it still reports NON_COMMON.
  */
 export function evaluateEligibility(i: EligibilityInput): EligibilityResult {
   const exchangeOk = i.exchange != null && (ALLOWED_EXCHANGES as readonly string[]).includes(i.exchange);
   if (!i.brokerTradable || !exchangeOk) return { eligible: false, reason: "NOT_BROKER_TRADABLE" };
-  if (i.securityType !== "COMMON") return { eligible: false, reason: "NON_COMMON" };
   if (i.price == null || !i.priceIsFresh || !Number.isFinite(i.price)) return { eligible: false, reason: "STALE_QUOTE" };
+  if (i.securityType !== "COMMON") return { eligible: false, reason: "NON_COMMON" };
   if (i.price < PRICE_MIN || i.price > PRICE_MAX) return { eligible: false, reason: "OUT_OF_BAND" };
   return { eligible: true, reason: null };
 }

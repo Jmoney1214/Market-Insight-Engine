@@ -29,3 +29,24 @@ export interface EligibilityResult {
 export const ALLOWED_EXCHANGES = ["NYSE", "NASDAQ", "AMEX"] as const;
 export const PRICE_MIN = 1;
 export const PRICE_MAX = 50;
+
+/** Raw per-symbol inputs from the three bulk sources, pre-joined by symbol. */
+export interface AssembleInput {
+  symbol: string;
+  now: string; // ISO
+  // FMP screener row (in-band, priced) — null if the symbol wasn't in the screener.
+  screener: {
+    name: string; price: number; volume: number; marketCap: number;
+    sector: string | null; industry: string | null; exchange: string | null;
+    isEtf: boolean; isFund: boolean; isAdr: boolean;
+  } | null;
+  // Alpaca asset (broker truth) — null if not a tradable us_equity.
+  asset: {
+    tradable: boolean; status: string; class: string; exchange: string;
+    shortable: boolean; easyToBorrow: boolean; marginable: boolean; fractionable: boolean;
+  } | null;
+  // FMP shares-float — null if unavailable.
+  float: { floatShares: number; sharesOutstanding: number } | null;
+  isRecentIpo: boolean;
+  ipoDate: string | null;
+}
