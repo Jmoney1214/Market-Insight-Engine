@@ -52,3 +52,42 @@ describe("isRecentIpo", () => {
   it("IPO 100 days ago is not recent", () => expect(isRecentIpo("2026-04-09", now)).toBe(false));
   it("IPO exactly 90 days ago is recent (inclusive)", () => expect(isRecentIpo("2026-04-19", now)).toBe(true));
 });
+
+import { evaluateEligibility } from "./eligibility.js";
+import type { EligibilityInput } from "./types.js";
+
+const ok: EligibilityInput = {
+  brokerTradable: true, exchange: "NASDAQ", securityType: "COMMON", price: 4.5, priceIsFresh: true,
+};
+
+describe("evaluateEligibility", () => {
+  it("all gates pass -> eligible", () => {
+    expect(evaluateEligibility(ok)).toEqual({ eligible: true, reason: null });
+  });
+  it("not broker tradable -> NOT_BROKER_TRADABLE", () => {
+    expect(evaluateEligibility({ ...ok, brokerTradable: false })).toEqual({ eligible: false, reason: "NOT_BROKER_TRADABLE" });
+  });
+  it("wrong exchange -> NOT_BROKER_TRADABLE", () => {
+    expect(evaluateEligibility({ ...ok, exchange: "ARCA" })).toEqual({ eligible: false, reason: "NOT_BROKER_TRADABLE" });
+  });
+  it("AMEX is allowed", () => {
+    expect(evaluateEligibility({ ...ok, exchange: "AMEX" }).eligible).toBe(true);
+  });
+  it("non-common -> NON_COMMON", () => {
+    expect(evaluateEligibility({ ...ok, securityType: "WARRANT" })).toEqual({ eligible: false, reason: "NON_COMMON" });
+  });
+  it("below band -> OUT_OF_BAND", () => {
+    expect(evaluateEligibility({ ...ok, price: 0.9 })).toEqual({ eligible: false, reason: "OUT_OF_BAND" });
+  });
+  it("above band -> OUT_OF_BAND", () => {
+    expect(evaluateEligibility({ ...ok, price: 60 })).toEqual({ eligible: false, reason: "OUT_OF_BAND" });
+  });
+  it("band is inclusive at $1 and $50", () => {
+    expect(evaluateEligibility({ ...ok, price: 1 }).eligible).toBe(true);
+    expect(evaluateEligibility({ ...ok, price: 50 }).eligible).toBe(true);
+  });
+  it("null or stale price -> STALE_QUOTE", () => {
+    expect(evaluateEligibility({ ...ok, price: null })).toEqual({ eligible: false, reason: "STALE_QUOTE" });
+    expect(evaluateEligibility({ ...ok, priceIsFresh: false })).toEqual({ eligible: false, reason: "STALE_QUOTE" });
+  });
+});

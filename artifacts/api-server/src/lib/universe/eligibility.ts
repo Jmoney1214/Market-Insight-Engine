@@ -1,4 +1,6 @@
 import type { ClassifyInput, SecurityType, FloatBucket, IneligibleReason } from "./types.js";
+import { ALLOWED_EXCHANGES, PRICE_MIN, PRICE_MAX } from "./types.js";
+import type { EligibilityInput, EligibilityResult } from "./types.js";
 
 /** Suffix after the class separator (".", "-") that marks a non-common form. */
 const NON_COMMON_SUFFIX = /[.\-](WS|WT|W|R|U|RT|P[A-Z]?)$/;
@@ -39,4 +41,17 @@ export function isRecentIpo(ipoDate: string | null, nowIso: string, windowDays =
   if (!Number.isFinite(ipo) || !Number.isFinite(now)) return false;
   const days = Math.floor((now - ipo) / 86_400_000);
   return days >= 0 && days <= windowDays;
+}
+
+/**
+ * Deterministic eligibility gate, ordered so the first failure names the
+ * reason. Fail-closed: any unconfirmable gate → ineligible.
+ */
+export function evaluateEligibility(i: EligibilityInput): EligibilityResult {
+  const exchangeOk = i.exchange != null && (ALLOWED_EXCHANGES as readonly string[]).includes(i.exchange);
+  if (!i.brokerTradable || !exchangeOk) return { eligible: false, reason: "NOT_BROKER_TRADABLE" };
+  if (i.securityType !== "COMMON") return { eligible: false, reason: "NON_COMMON" };
+  if (i.price == null || !i.priceIsFresh || !Number.isFinite(i.price)) return { eligible: false, reason: "STALE_QUOTE" };
+  if (i.price < PRICE_MIN || i.price > PRICE_MAX) return { eligible: false, reason: "OUT_OF_BAND" };
+  return { eligible: true, reason: null };
 }
