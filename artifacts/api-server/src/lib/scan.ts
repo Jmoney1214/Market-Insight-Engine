@@ -18,7 +18,7 @@ import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
 import { atr, rsi, rangeStats } from "./providers/indicators.js";
 import { classifyCandidate, type TradeClass } from "./classify.js";
-import { isFullRebuildWindowET, isPreOpenWindowET } from "./universe/schedule.js";
+import { isFullRebuildWindowET, isPreOpenWindowET, etDateKey } from "./universe/schedule.js";
 import { runFullRebuild, runDailyRefresh } from "./universe/buildUniverse.js";
 import { db, breakoutCandidatesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -104,7 +104,7 @@ let lastUniverseRebuildDay = "";
 let lastUniverseRefreshDay = "";
 
 async function tickUniverse(now: Date): Promise<void> {
-  const day = now.toISOString().slice(0, 10);
+  const day = etDateKey(now);
   if (isFullRebuildWindowET(now) && lastUniverseRebuildDay !== day) {
     lastUniverseRebuildDay = day;
     await runFullRebuild(now).catch((err) => logger.warn({ err: String(err) }, "universe rebuild failed"));

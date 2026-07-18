@@ -15,6 +15,14 @@ function etParts(now: Date): { hour: number; minute: number; weekday: number } {
 
 const isWeekday = (wd: number) => wd >= 1 && wd <= 5;
 
+/** America/New_York calendar date (YYYY-MM-DD) — for once-per-ET-day guards. */
+export function etDateKey(now: Date): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  return fmt.format(now); // en-CA formats as YYYY-MM-DD
+}
+
 /** Nightly EOD rebuild window: weekdays 18:00–20:00 ET. */
 export function isFullRebuildWindowET(now: Date): boolean {
   const { hour, weekday } = etParts(now);
