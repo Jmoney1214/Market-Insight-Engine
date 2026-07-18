@@ -369,3 +369,61 @@ export async function getEconomicCalendar(from: string, to: string): Promise<Fmp
   }
   return out.length > 0 ? out : null;
 }
+
+export type UniverseScreenerRow = {
+  symbol: string; name: string; price: number; volume: number; marketCap: number;
+  sector: string | null; industry: string | null; exchange: string | null;
+  isEtf: boolean; isFund: boolean; isAdr: boolean;
+};
+
+/** Pure: normalize one FMP company-screener row; null if unusable. */
+export function mapScreenerRow(r: Record<string, unknown>): UniverseScreenerRow | null {
+  const symbol = String(r["symbol"] ?? "");
+  const price = Number(r["price"] ?? NaN);
+  if (!symbol || !Number.isFinite(price)) return null;
+  return {
+    symbol,
+    name: String(r["companyName"] ?? ""),
+    price,
+    volume: Number(r["volume"] ?? 0),
+    marketCap: Number(r["marketCap"] ?? 0),
+    sector: (r["sector"] as string) ?? null,
+    industry: (r["industry"] as string) ?? null,
+    exchange: (r["exchangeShortName"] as string) ?? (r["exchange"] as string) ?? null,
+    isEtf: r["isEtf"] === true,
+    isFund: r["isFund"] === true,
+    isAdr: r["isAdr"] === true,
+  };
+}
+
+/** Full in-band universe from the company-screener (one bulk call). */
+export async function getUniverseScreener(
+  minPrice: number, maxPrice: number, exchanges = "NASDAQ,NYSE,AMEX", limit = 8000,
+): Promise<UniverseScreenerRow[] | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("company-screener", {
+    priceMoreThan: minPrice, priceLowerThan: maxPrice,
+    isActivelyTrading: "true", exchange: exchanges, limit,
+  });
+  if (!Array.isArray(rows)) return null;
+  if (rows.length >= limit) logger.warn({ limit, rows: rows.length }, "FMP universe screener hit the safety limit");
+  return rows.map(mapScreenerRow).filter((r): r is UniverseScreenerRow => r !== null);
+}
+
+/** Per-symbol free float / shares outstanding. Null on failure. */
+export async function getSharesFloat(
+  symbol: string,
+): Promise<{ floatShares: number; sharesOutstanding: number } | null> {
+  const row = await fmpGet<Array<Record<string, unknown>>>("shares-float", { symbol }).then(first);
+  if (!row) return null;
+  const floatShares = Number(row["floatShares"] ?? NaN);
+  const sharesOutstanding = Number(row["outstandingShares"] ?? NaN);
+  if (!Number.isFinite(floatShares) || !Number.isFinite(sharesOutstanding)) return null;
+  return { floatShares, sharesOutstanding };
+}
+
+/** Symbols with an IPO in [from, to] (YYYY-MM-DD). Bulk. Null on failure. */
+export async function getRecentIpoSymbols(from: string, to: string): Promise<Set<string> | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("ipos-calendar", { from, to });
+  if (!Array.isArray(rows)) return null;
+  return new Set(rows.map((r) => String(r["symbol"] ?? "")).filter(Boolean));
+}
