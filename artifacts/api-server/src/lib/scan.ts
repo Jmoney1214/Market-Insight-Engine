@@ -18,6 +18,8 @@ import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
 import { atr, rsi, rangeStats } from "./providers/indicators.js";
 import { classifyCandidate, type TradeClass } from "./classify.js";
+import { isFullRebuildWindowET, isPreOpenWindowET } from "./universe/schedule.js";
+import { runFullRebuild, runDailyRefresh } from "./universe/buildUniverse.js";
 import { db, breakoutCandidatesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -93,6 +95,26 @@ function todayNYDate(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 }
 
+// --- Universe Service jobs (idempotent per window/day) ---
+// The nightly EOD rebuild (18:00-20:00 ET) and the pre-open refresh (07:00-07:59
+// ET) each fire at most once per window per day, guarded by a last-run day
+// string. Fire-and-forget from the scan tick — the universe jobs degrade closed
+// on their own (they return {aborted:true} when a provider is unavailable).
+let lastUniverseRebuildDay = "";
+let lastUniverseRefreshDay = "";
+
+async function tickUniverse(now: Date): Promise<void> {
+  const day = now.toISOString().slice(0, 10);
+  if (isFullRebuildWindowET(now) && lastUniverseRebuildDay !== day) {
+    lastUniverseRebuildDay = day;
+    await runFullRebuild(now).catch((err) => logger.warn({ err: String(err) }, "universe rebuild failed"));
+  }
+  if (isPreOpenWindowET(now) && lastUniverseRefreshDay !== day) {
+    lastUniverseRefreshDay = day;
+    await runDailyRefresh(now).catch((err) => logger.warn({ err: String(err) }, "universe refresh failed"));
+  }
+}
+
 /**
  * Proactive hunter + accountability loop, every 5 minutes on weekdays:
  *  - 07:00-16:00 ET: refresh the scan so the dashboard opens pre-researched.
@@ -115,6 +137,9 @@ export function startScanScheduler(): void {
   const tick = async () => {
     const { minutes, isWeekday } = nyClock();
     if (!isWeekday) return;
+    // Universe Service driver — fire-and-forget alongside the scan work. The ET
+    // window predicates gate the two jobs; this never blocks or fails the scan.
+    void tickUniverse(new Date());
     const { recordScanPicks, gradePending } = await import("./scorecard.js");
 
     if (minutes >= WINDOW_START && minutes < WINDOW_END) {
