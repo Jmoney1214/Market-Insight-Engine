@@ -1,12 +1,22 @@
 // artifacts/api-server/src/lib/universe/universeStore.ts
 import { db, symbolsTable, type SymbolRow, type SymbolInsert } from "@workspace/db";
-import { eq, isNull } from "drizzle-orm";
+import { eq, isNull, sql, getTableColumns } from "drizzle-orm";
 import type { EligibilityResult } from "./types.js";
 
 /** Pure: derive the eligibility verdict from a stored row (or its absence). */
 export function isEligibleFromRow(row: SymbolRow | undefined): EligibilityResult {
   if (!row) return { eligible: false, reason: "NOT_BROKER_TRADABLE" };
   return { eligible: row.eligible, reason: (row.ineligibleReason ?? null) as EligibilityResult["reason"] };
+}
+
+/** SET clause overwriting every column except `pk` with the incoming (excluded) value. */
+export function conflictUpdateAllExcept(pk: string): Record<string, ReturnType<typeof sql>> {
+  const cols = getTableColumns(symbolsTable);
+  return Object.fromEntries(
+    Object.entries(cols)
+      .filter(([k]) => k !== pk)
+      .map(([k, col]) => [k, sql`excluded.${sql.identifier(col.name)}`]),
+  );
 }
 
 /** Upsert a batch of assembled rows (conflict on the symbol PK → overwrite). */
@@ -18,9 +28,7 @@ export async function upsertSymbols(rows: SymbolInsert[]): Promise<number> {
     const batch = rows.slice(i, i + CHUNK);
     await db.insert(symbolsTable).values(batch).onConflictDoUpdate({
       target: symbolsTable.symbol,
-      set: Object.fromEntries(
-        Object.keys(batch[0]!).filter((k) => k !== "symbol").map((k) => [k, (symbolsTable as any)[k]]),
-      ),
+      set: conflictUpdateAllExcept("symbol"),
     });
     n += batch.length;
   }
