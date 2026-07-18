@@ -6,7 +6,7 @@ import type { UniverseScreenerRow, FloatBySymbol } from "../providers/fmp.js";
 import { getAssets, type AlpacaAsset } from "../providers/alpacaAssets.js";
 import { assembleSymbol } from "./assemble.js";
 import { floatBucket } from "./eligibility.js";
-import { upsertSymbols, markAllStale } from "./universeStore.js";
+import { upsertSymbols, markAllStale, markDroppedIneligible } from "./universeStore.js";
 import { PRICE_MIN, PRICE_MAX } from "./types.js";
 
 /**
@@ -112,6 +112,10 @@ export async function runFullRebuild(now = new Date()): Promise<{ upserted: numb
     for (const r of rows) if (r.eligible) r.staleSince = now;
     upserted = await upsertSymbols(rows, { preserveCols: FLOAT_COLS });
   }
+  // Reconcile so the universe can SHRINK: symbols not in this rebuild's batch
+  // (dropped out of the screener) are flipped ineligible. The just-upserted rows
+  // carry lastFullRefresh == now, so only PRIOR-rebuild rows are affected.
+  await markDroppedIneligible(now);
   logger.info({ upserted, eligible: rows.filter((r) => r.eligible).length, floatOk }, "Universe full rebuild complete");
   return { upserted, aborted: false };
 }

@@ -4,7 +4,8 @@ export type SecurityType =
 export type FloatBucket = "NANO" | "LOW" | "MID" | "HIGH" | "UNKNOWN";
 
 export type IneligibleReason =
-  | "NOT_BROKER_TRADABLE" | "NON_COMMON" | "OUT_OF_BAND" | "STALE_QUOTE" | null;
+  | "NOT_BROKER_TRADABLE" | "NON_COMMON" | "OUT_OF_BAND" | "STALE_QUOTE"
+  | "DROPPED_FROM_SCREENER" | null;
 
 export interface ClassifyInput {
   symbol: string;

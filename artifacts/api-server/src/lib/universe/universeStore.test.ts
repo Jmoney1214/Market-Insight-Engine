@@ -1,6 +1,6 @@
 // artifacts/api-server/src/lib/universe/universeStore.test.ts
 import { describe, it, expect } from "vitest";
-import { isEligibleFromRow, conflictUpdateAllExcept } from "./universeStore.js";
+import { isEligibleFromRow, conflictUpdateAllExcept, droppedIneligibleQuery } from "./universeStore.js";
 import { db, symbolsTable, type SymbolRow } from "@workspace/db";
 
 const row = (over: Partial<SymbolRow>): SymbolRow => ({
@@ -58,5 +58,31 @@ describe("upsert conflict set", () => {
     expect(text).not.toContain('"float_shares" ='); // preserved: never re-assigned on conflict
     expect(text).not.toContain('"float_bucket" =');
     expect(text).toContain('"eligible" =');         // non-preserved: overwritten
+  });
+});
+
+// BUG 003 — the universe never shrinks: a symbol that drops out of the screener
+// (rips above the band, delists, stops trading) was never revisited and kept
+// eligible=true forever. After a successful rebuild we reconcile: flip every
+// still-eligible row from a PRIOR rebuild to DROPPED_FROM_SCREENER.
+describe("droppedIneligibleQuery (reconcile dropped symbols)", () => {
+  it("sets eligible=false + DROPPED_FROM_SCREENER, scoped to prior-rebuild eligible rows", () => {
+    const at = new Date("2026-07-18T23:00:00Z");
+    const { sql: text, params } = droppedIneligibleQuery(at).toSQL();
+
+    // SET clause: eligible -> false, reason stamped, stale marked.
+    expect(text).toContain('set "eligible" =');
+    expect(text).toContain('"ineligible_reason" =');
+    expect(text).toContain('"stale_since" =');
+    expect(params).toContain(false);                    // eligible = false
+    expect(params).toContain("DROPPED_FROM_SCREENER");  // ineligible_reason
+
+    // WHERE clause: only currently-eligible rows whose last_full_refresh is
+    // missing or older than this rebuild (the just-upserted batch is == at, so
+    // it is untouched).
+    expect(text).toContain('"symbols"."eligible" =');            // eligible = true guard
+    expect(text).toContain('"symbols"."last_full_refresh" is null');
+    expect(text).toContain('"symbols"."last_full_refresh" <');   // strictly older than this rebuild
+    expect(params).toContain(true);                              // WHERE eligible = true
   });
 });

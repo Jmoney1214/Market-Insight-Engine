@@ -1,6 +1,6 @@
 // artifacts/api-server/src/lib/universe/universeStore.ts
 import { db, symbolsTable, type SymbolRow, type SymbolInsert } from "@workspace/db";
-import { eq, isNull, sql, getTableColumns } from "drizzle-orm";
+import { and, or, eq, isNull, lt, sql, getTableColumns } from "drizzle-orm";
 import type { EligibilityResult } from "./types.js";
 
 /** Pure: derive the eligibility verdict from a stored row (or its absence). */
@@ -72,4 +72,33 @@ export async function isEligible(symbol: string): Promise<EligibilityResult> {
 /** Mark every row stale (used when a refresh can't confirm freshness). */
 export async function markAllStale(at: Date): Promise<void> {
   await db.update(symbolsTable).set({ staleSince: at }).where(isNull(symbolsTable.staleSince));
+}
+
+/**
+ * Reconcile-after-rebuild query: flip every still-eligible row that this
+ * rebuild did NOT just upsert to ineligible. The just-upserted batch carries
+ * `lastFullRefresh == refreshedAt`, so the `< refreshedAt` (or NULL) guard skips
+ * it and only rows left over from a PRIOR rebuild are dropped. Factored out so
+ * its shape is `.toSQL()`-testable without a live DB.
+ */
+export function droppedIneligibleQuery(refreshedAt: Date) {
+  return db
+    .update(symbolsTable)
+    .set({ eligible: false, ineligibleReason: "DROPPED_FROM_SCREENER", staleSince: refreshedAt })
+    .where(
+      and(
+        eq(symbolsTable.eligible, true),
+        or(isNull(symbolsTable.lastFullRefresh), lt(symbolsTable.lastFullRefresh, refreshedAt)),
+      ),
+    );
+}
+
+/**
+ * Mark symbols that dropped out of the screener ineligible. Run after a
+ * successful rebuild's upsert so the universe can actually SHRINK: a symbol that
+ * ripped above the band, delisted, or stopped trading no longer appears in the
+ * upserted batch and is flipped here instead of staying eligible=true forever.
+ */
+export async function markDroppedIneligible(refreshedAt: Date): Promise<void> {
+  await droppedIneligibleQuery(refreshedAt);
 }
