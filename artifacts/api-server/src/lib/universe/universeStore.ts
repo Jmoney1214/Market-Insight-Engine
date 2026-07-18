@@ -9,26 +9,44 @@ export function isEligibleFromRow(row: SymbolRow | undefined): EligibilityResult
   return { eligible: row.eligible, reason: (row.ineligibleReason ?? null) as EligibilityResult["reason"] };
 }
 
-/** SET clause overwriting every column except `pk` with the incoming (excluded) value. */
-export function conflictUpdateAllExcept(pk: string): Record<string, ReturnType<typeof sql>> {
+/**
+ * SET clause overwriting every column except `pk` with the incoming (excluded)
+ * value. Any JS key in `preserve` is ALSO excluded from the SET, so on conflict
+ * those columns keep their existing DB value (fail-closed: never wipe last-good
+ * on a partial refresh).
+ */
+export function conflictUpdateAllExcept(
+  pk: string,
+  preserve: string[] = [],
+): Record<string, ReturnType<typeof sql>> {
+  const skip = new Set([pk, ...preserve]);
   const cols = getTableColumns(symbolsTable);
   return Object.fromEntries(
     Object.entries(cols)
-      .filter(([k]) => k !== pk)
+      .filter(([k]) => !skip.has(k))
       .map(([k, col]) => [k, sql`excluded.${sql.identifier(col.name)}`]),
   );
 }
 
-/** Upsert a batch of assembled rows (conflict on the symbol PK → overwrite). */
-export async function upsertSymbols(rows: SymbolInsert[]): Promise<number> {
+/**
+ * Upsert a batch of assembled rows (conflict on the symbol PK → overwrite).
+ * `opts.preserveCols` names JS columns whose existing DB value must survive the
+ * conflict update (e.g. keep last-good float during a provider outage). New
+ * symbols still INSERT their incoming value — preserve only affects ON CONFLICT.
+ */
+export async function upsertSymbols(
+  rows: SymbolInsert[],
+  opts?: { preserveCols?: string[] },
+): Promise<number> {
   if (rows.length === 0) return 0;
+  const set = conflictUpdateAllExcept("symbol", opts?.preserveCols ?? []);
   const CHUNK = 500;
   let n = 0;
   for (let i = 0; i < rows.length; i += CHUNK) {
     const batch = rows.slice(i, i + CHUNK);
     await db.insert(symbolsTable).values(batch).onConflictDoUpdate({
       target: symbolsTable.symbol,
-      set: conflictUpdateAllExcept("symbol"),
+      set,
     });
     n += batch.length;
   }

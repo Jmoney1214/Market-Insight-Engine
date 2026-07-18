@@ -42,9 +42,9 @@ export function joinRows(
  * per-symbol calls, so 4k individual lookups leave most rows UNKNOWN). Missing
  * float stays UNKNOWN — it is metadata, never a gate.
  */
-async function enrichFloat(rows: SymbolInsert[]): Promise<void> {
+async function enrichFloat(rows: SymbolInsert[]): Promise<boolean> {
   const floatMap = await fmp.getAllSharesFloat();
-  if (!floatMap) return; // bulk float unavailable → leave UNKNOWN (metadataIncomplete already set)
+  if (!floatMap) return false; // bulk float unavailable → caller preserves last-good float
   for (const r of rows) {
     if (!r.eligible) continue;
     const f = floatMap.get(r.symbol);
@@ -57,7 +57,15 @@ async function enrichFloat(rows: SymbolInsert[]): Promise<void> {
       r.metadataIncomplete = false; // float resolved; every row here came from a screener row
     }
   }
+  return true;
 }
+
+/**
+ * Float columns preserved on conflict when the bulk float feed is unavailable,
+ * so a provider outage during a refresh keeps last-good float instead of the
+ * SET-all upsert wiping it to null.
+ */
+const FLOAT_COLS = ["floatShares", "sharesOutstanding", "floatPct", "floatBucket", "lowFloat", "metadataIncomplete"];
 
 /** Nightly full rebuild (~6–8 PM ET). Fail-closed: never wipe on a source outage. */
 export async function runFullRebuild(now = new Date()): Promise<{ upserted: number; aborted: boolean }> {
@@ -76,9 +84,17 @@ export async function runFullRebuild(now = new Date()): Promise<{ upserted: numb
   }
 
   const rows = joinRows(screener!, assets!, recentIpo ?? new Set(), nowIso);
-  await enrichFloat(rows);
-  const upserted = await upsertSymbols(rows);
-  logger.info({ upserted, eligible: rows.filter((r) => r.eligible).length }, "Universe full rebuild complete");
+  const floatOk = await enrichFloat(rows);
+  let upserted: number;
+  if (floatOk) {
+    upserted = await upsertSymbols(rows);
+  } else {
+    // Bulk float outage: keep last-good float (never wipe) and stamp stale.
+    logger.warn("Universe rebuild: bulk float unavailable; preserving last-good float and marking stale");
+    for (const r of rows) if (r.eligible) r.staleSince = now;
+    upserted = await upsertSymbols(rows, { preserveCols: FLOAT_COLS });
+  }
+  logger.info({ upserted, eligible: rows.filter((r) => r.eligible).length, floatOk }, "Universe full rebuild complete");
   return { upserted, aborted: false };
 }
 

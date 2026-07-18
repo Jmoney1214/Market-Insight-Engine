@@ -41,4 +41,22 @@ describe("upsert conflict set", () => {
     expect(text).toContain("excluded");                 // writes the new value
     expect(text).not.toMatch(/"float_shares"\s*=\s*"symbols"/); // NOT self-assignment
   });
+
+  it("preserves listed columns: they are excluded from the SET so ON CONFLICT keeps last-good", () => {
+    const set = conflictUpdateAllExcept("symbol", ["floatShares", "floatBucket"]);
+    const keys = Object.keys(set);
+    expect(keys).not.toContain("symbol");
+    expect(keys).not.toContain("floatShares");
+    expect(keys).not.toContain("floatBucket");
+    expect(keys).toContain("eligible"); // non-preserved columns are still overwritten
+
+    const q = db
+      .insert(symbolsTable)
+      .values([{ symbol: "RUNR", eligible: true } as any])
+      .onConflictDoUpdate({ target: symbolsTable.symbol, set });
+    const { sql: text } = q.toSQL();
+    expect(text).not.toContain('"float_shares" ='); // preserved: never re-assigned on conflict
+    expect(text).not.toContain('"float_bucket" =');
+    expect(text).toContain('"eligible" =');         // non-preserved: overwritten
+  });
 });
