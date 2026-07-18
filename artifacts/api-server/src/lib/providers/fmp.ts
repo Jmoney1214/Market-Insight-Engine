@@ -396,16 +396,24 @@ export function mapScreenerRow(r: Record<string, unknown>): UniverseScreenerRow 
   };
 }
 
-/** Full in-band universe from the company-screener (one bulk call). */
+/**
+ * Full in-band universe from the company-screener (one bulk call).
+ * ETFs/funds are excluded at the API (`isEtf`/`isFund` = false) — they are
+ * dropped downstream anyway, and filtering here frees the result budget so the
+ * small-cap tail (FMP orders by market cap DESC) isn't silently truncated —
+ * that tail is exactly the low-float names the desk trades.
+ */
 export async function getUniverseScreener(
-  minPrice: number, maxPrice: number, exchanges = "NASDAQ,NYSE,AMEX", limit = 8000,
+  minPrice: number, maxPrice: number, exchanges = "NASDAQ,NYSE,AMEX", limit = 15000,
 ): Promise<UniverseScreenerRow[] | null> {
   const rows = await fmpGet<Array<Record<string, unknown>>>("company-screener", {
     priceMoreThan: minPrice, priceLowerThan: maxPrice,
+    isEtf: "false", isFund: "false",
     isActivelyTrading: "true", exchange: exchanges, limit,
   });
   if (!Array.isArray(rows)) return null;
-  if (rows.length >= limit) logger.warn({ limit, rows: rows.length }, "FMP universe screener hit the safety limit");
+  if (rows.length >= limit)
+    logger.warn({ limit, rows: rows.length }, "FMP universe screener hit the safety limit — small-caps may be truncated, raise it");
   return rows.map(mapScreenerRow).filter((r): r is UniverseScreenerRow => r !== null);
 }
 
@@ -419,6 +427,31 @@ export async function getSharesFloat(
   const sharesOutstanding = Number(row["outstandingShares"] ?? NaN);
   if (!Number.isFinite(floatShares) || !Number.isFinite(sharesOutstanding)) return null;
   return { floatShares, sharesOutstanding };
+}
+
+export type FloatBySymbol = Map<string, { floatShares: number; sharesOutstanding: number }>;
+
+/**
+ * Whole-market free float / shares outstanding in one paginated pass — used to
+ * enrich the universe without firing thousands of per-symbol calls (which FMP
+ * rate-limits). Returns a symbol→float map, or null if not a single page loaded.
+ */
+export async function getAllSharesFloat(pageSize = 1000, maxPages = 60): Promise<FloatBySymbol | null> {
+  const out: FloatBySymbol = new Map();
+  for (let page = 0; page < maxPages; page++) {
+    const rows = await fmpGet<Array<Record<string, unknown>>>("shares-float-all", { page, limit: pageSize });
+    if (!Array.isArray(rows)) break; // failure or no more pages
+    for (const r of rows) {
+      const symbol = String(r["symbol"] ?? "");
+      const floatShares = Number(r["floatShares"] ?? NaN);
+      const sharesOutstanding = Number(r["outstandingShares"] ?? NaN);
+      if (symbol && Number.isFinite(floatShares) && Number.isFinite(sharesOutstanding)) {
+        out.set(symbol, { floatShares, sharesOutstanding });
+      }
+    }
+    if (rows.length < pageSize) break; // last page
+  }
+  return out.size > 0 ? out : null;
 }
 
 /** Symbols with an IPO in [from, to] (YYYY-MM-DD). Bulk. Null on failure. */

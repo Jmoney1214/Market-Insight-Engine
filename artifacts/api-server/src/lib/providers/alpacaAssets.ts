@@ -7,7 +7,10 @@
 import { alpacaKeyId, alpacaSecretKey, hasAlpaca } from "./config.js";
 import { logger } from "../logger.js";
 
-const TRADING_BASE = process.env["ALPACA_TRADING_BASE"] ?? "https://api.alpaca.markets";
+// The /v2/assets reference list is identical on the paper and live hosts, so we
+// default to the paper host (the desk runs on paper keys; live keys 401 the
+// paper host and vice-versa). Override with ALPACA_TRADING_BASE for live keys.
+const TRADING_BASE = process.env["ALPACA_TRADING_BASE"] ?? "https://paper-api.alpaca.markets";
 const TIMEOUT_MS = 20000;
 
 export interface AlpacaAsset {

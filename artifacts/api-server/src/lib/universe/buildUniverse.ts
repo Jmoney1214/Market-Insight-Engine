@@ -37,25 +37,25 @@ export function joinRows(
   );
 }
 
-/** Enrich the eligible subset with per-symbol float (bounded, concurrency-limited). */
+/**
+ * Enrich the eligible subset with float from ONE bulk pass (FMP rate-limits
+ * per-symbol calls, so 4k individual lookups leave most rows UNKNOWN). Missing
+ * float stays UNKNOWN — it is metadata, never a gate.
+ */
 async function enrichFloat(rows: SymbolInsert[]): Promise<void> {
-  const eligible = rows.filter((r) => r.eligible);
-  const LIMIT = 8;
-  for (let i = 0; i < eligible.length; i += LIMIT) {
-    const batch = eligible.slice(i, i + LIMIT);
-    await Promise.all(
-      batch.map(async (r) => {
-        const f = await fmp.getSharesFloat(r.symbol);
-        if (f) {
-          r.floatShares = f.floatShares;
-          r.sharesOutstanding = f.sharesOutstanding;
-          r.floatPct = f.sharesOutstanding ? f.floatShares / f.sharesOutstanding : null;
-          r.floatBucket = floatBucket(f.floatShares);
-          r.lowFloat = f.floatShares < 20_000_000;
-          r.metadataIncomplete = false; // float resolved; every row here came from a screener row
-        }
-      }),
-    );
+  const floatMap = await fmp.getAllSharesFloat();
+  if (!floatMap) return; // bulk float unavailable → leave UNKNOWN (metadataIncomplete already set)
+  for (const r of rows) {
+    if (!r.eligible) continue;
+    const f = floatMap.get(r.symbol);
+    if (f) {
+      r.floatShares = f.floatShares;
+      r.sharesOutstanding = f.sharesOutstanding;
+      r.floatPct = f.sharesOutstanding ? f.floatShares / f.sharesOutstanding : null;
+      r.floatBucket = floatBucket(f.floatShares);
+      r.lowFloat = f.floatShares < 20_000_000;
+      r.metadataIncomplete = false; // float resolved; every row here came from a screener row
+    }
   }
 }
 
