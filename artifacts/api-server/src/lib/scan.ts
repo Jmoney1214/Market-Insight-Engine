@@ -105,13 +105,24 @@ let lastUniverseRefreshDay = "";
 
 async function tickUniverse(now: Date): Promise<void> {
   const day = etDateKey(now);
+  // Mark the once-per-day guard only after a COMPLETED (non-aborted) run.
+  // runFullRebuild/runDailyRefresh return {aborted:true} (they do NOT throw) on a
+  // provider outage, so guarding before the await would let a single transient
+  // hiccup at 18:03 ET burn the whole 18:00-20:00 retry window (and likewise the
+  // 07:00 pre-open window). Retrying next tick is safe — both jobs are idempotent.
   if (isFullRebuildWindowET(now) && lastUniverseRebuildDay !== day) {
-    lastUniverseRebuildDay = day;
-    await runFullRebuild(now).catch((err) => logger.warn({ err: String(err) }, "universe rebuild failed"));
+    const result = await runFullRebuild(now).catch((err) => {
+      logger.warn({ err: String(err) }, "universe rebuild failed");
+      return { upserted: 0, aborted: true };
+    });
+    if (!result.aborted) lastUniverseRebuildDay = day;
   }
   if (isPreOpenWindowET(now) && lastUniverseRefreshDay !== day) {
-    lastUniverseRefreshDay = day;
-    await runDailyRefresh(now).catch((err) => logger.warn({ err: String(err) }, "universe refresh failed"));
+    const result = await runDailyRefresh(now).catch((err) => {
+      logger.warn({ err: String(err) }, "universe refresh failed");
+      return { upserted: 0, aborted: true };
+    });
+    if (!result.aborted) lastUniverseRefreshDay = day;
   }
 }
 
