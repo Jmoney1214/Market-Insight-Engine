@@ -432,15 +432,23 @@ export async function getSharesFloat(
 export type FloatBySymbol = Map<string, { floatShares: number; sharesOutstanding: number }>;
 
 /**
- * Whole-market free float / shares outstanding in one paginated pass — used to
- * enrich the universe without firing thousands of per-symbol calls (which FMP
- * rate-limits). Returns a symbol→float map, or null if not a single page loaded.
+ * Pure, injectable pagination accumulator for the whole-market float feed.
+ *
+ * `fetchPage` returns a page of rows, or `null` on FAILURE (rate limit, non-2xx,
+ * `Error Message` payload, fetch/JSON error — every failure class `fmpGet`
+ * collapses to null). A real end-of-data is a short/empty ARRAY, never null.
+ * So a mid-pagination null must fail closed — returning the partial map would
+ * silently drop the small-cap (low-float) tail while looking like success.
  */
-export async function getAllSharesFloat(pageSize = 1000, maxPages = 60): Promise<FloatBySymbol | null> {
+export async function accumulateFloatPages(
+  fetchPage: (page: number) => Promise<Array<Record<string, unknown>> | null>,
+  pageSize = 1000,
+  maxPages = 60,
+): Promise<FloatBySymbol | null> {
   const out: FloatBySymbol = new Map();
   for (let page = 0; page < maxPages; page++) {
-    const rows = await fmpGet<Array<Record<string, unknown>>>("shares-float-all", { page, limit: pageSize });
-    if (!Array.isArray(rows)) break; // failure or no more pages
+    const rows = await fetchPage(page);
+    if (rows === null) return null; // FAILURE → fail closed (discard partial)
     for (const r of rows) {
       const symbol = String(r["symbol"] ?? "");
       const floatShares = Number(r["floatShares"] ?? NaN);
@@ -449,9 +457,23 @@ export async function getAllSharesFloat(pageSize = 1000, maxPages = 60): Promise
         out.set(symbol, { floatShares, sharesOutstanding });
       }
     }
-    if (rows.length < pageSize) break; // last page
+    if (rows.length < pageSize) break; // real end-of-data (short/empty page)
   }
   return out.size > 0 ? out : null;
+}
+
+/**
+ * Whole-market free float / shares outstanding in one paginated pass — used to
+ * enrich the universe without firing thousands of per-symbol calls (which FMP
+ * rate-limits). Returns a symbol→float map, or null if any page failed (fail
+ * closed) or not a single row loaded.
+ */
+export function getAllSharesFloat(pageSize = 1000, maxPages = 60): Promise<FloatBySymbol | null> {
+  return accumulateFloatPages(
+    (page) => fmpGet<Array<Record<string, unknown>>>("shares-float-all", { page, limit: pageSize }),
+    pageSize,
+    maxPages,
+  );
 }
 
 /** Symbols with an IPO in [from, to] (YYYY-MM-DD). Bulk. Null on failure. */
