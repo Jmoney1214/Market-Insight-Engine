@@ -2,7 +2,7 @@
 import type { SymbolInsert } from "@workspace/db";
 import { logger } from "../logger.js";
 import * as fmp from "../providers/fmp.js";
-import type { UniverseScreenerRow } from "../providers/fmp.js";
+import type { UniverseScreenerRow, FloatBySymbol } from "../providers/fmp.js";
 import { getAssets, type AlpacaAsset } from "../providers/alpacaAssets.js";
 import { assembleSymbol } from "./assemble.js";
 import { floatBucket } from "./eligibility.js";
@@ -19,35 +19,43 @@ export function shouldAbortRebuild(
   return screener == null || assets == null || assets.length === 0;
 }
 
+/**
+ * Dual-class symbol skew: FMP's screener emits share classes as "BF-B" (dash),
+ * Alpaca's /v2/assets emits "BF.B" (dot). We canonicalize on the broker (dot)
+ * form so the two feeds join and the persisted symbol matches what the broker
+ * (and every downstream quote/order path) expects.
+ */
+export const toBrokerSym = (s: string) => s.replace(/-/g, ".");
+export const toFmpSym = (s: string) => s.replace(/\./g, "-");
+
 /** Pure join: drive off the in-band screener set, attach the broker asset + IPO flag. */
 export function joinRows(
   screener: UniverseScreenerRow[], assets: AlpacaAsset[], recentIpo: Set<string>, now: string,
 ): SymbolInsert[] {
   const assetBySymbol = new Map(assets.map((a) => [a.symbol, a]));
-  return screener.map((s) =>
-    assembleSymbol({
-      symbol: s.symbol,
+  return screener.map((s) => {
+    const brokerSym = toBrokerSym(s.symbol);
+    return assembleSymbol({
+      symbol: brokerSym, // persist the broker (dot) form
       now,
       screener: { name: s.name, price: s.price, volume: s.volume, marketCap: s.marketCap, sector: s.sector, industry: s.industry, exchange: s.exchange, isEtf: s.isEtf, isFund: s.isFund, isAdr: s.isAdr },
-      asset: assetBySymbol.get(s.symbol) ?? null,
+      asset: assetBySymbol.get(brokerSym) ?? null,
       float: null, // enriched below for the eligible subset
-      isRecentIpo: recentIpo.has(s.symbol),
+      isRecentIpo: recentIpo.has(s.symbol), // IPO set is FMP-keyed — use the original form
       ipoDate: null,
-    }),
-  );
+    });
+  });
 }
 
 /**
- * Enrich the eligible subset with float from ONE bulk pass (FMP rate-limits
- * per-symbol calls, so 4k individual lookups leave most rows UNKNOWN). Missing
- * float stays UNKNOWN — it is metadata, never a gate.
+ * Pure: apply bulk float to the eligible subset in place. Rows carry the broker
+ * (dot) form after joinRows, but the float map is FMP-keyed (dash), so look up
+ * by the FMP form. Missing float stays UNKNOWN — it is metadata, never a gate.
  */
-async function enrichFloat(rows: SymbolInsert[]): Promise<boolean> {
-  const floatMap = await fmp.getAllSharesFloat();
-  if (!floatMap) return false; // bulk float unavailable → caller preserves last-good float
+export function applyFloat(rows: SymbolInsert[], floatMap: FloatBySymbol): void {
   for (const r of rows) {
     if (!r.eligible) continue;
-    const f = floatMap.get(r.symbol);
+    const f = floatMap.get(toFmpSym(r.symbol));
     if (f) {
       r.floatShares = f.floatShares;
       r.sharesOutstanding = f.sharesOutstanding;
@@ -57,6 +65,16 @@ async function enrichFloat(rows: SymbolInsert[]): Promise<boolean> {
       r.metadataIncomplete = false; // float resolved; every row here came from a screener row
     }
   }
+}
+
+/**
+ * Enrich the eligible subset with float from ONE bulk pass (FMP rate-limits
+ * per-symbol calls, so 4k individual lookups leave most rows UNKNOWN).
+ */
+async function enrichFloat(rows: SymbolInsert[]): Promise<boolean> {
+  const floatMap = await fmp.getAllSharesFloat();
+  if (!floatMap) return false; // bulk float unavailable → caller preserves last-good float
+  applyFloat(rows, floatMap);
   return true;
 }
 
