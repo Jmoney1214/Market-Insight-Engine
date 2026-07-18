@@ -21,3 +21,22 @@ export function classifySecurityType(input: ClassifyInput): SecurityType {
   if (input.fmpIsAdr) return "ADR";
   return "COMMON";
 }
+
+/** Float buckets tuned to low-float momentum trading. */
+export function floatBucket(floatShares: number | null): FloatBucket {
+  if (floatShares == null || !Number.isFinite(floatShares)) return "UNKNOWN";
+  if (floatShares < 5_000_000) return "NANO";
+  if (floatShares < 20_000_000) return "LOW";
+  if (floatShares < 75_000_000) return "MID";
+  return "HIGH";
+}
+
+/** True when the IPO date is within `windowDays` (inclusive) of `nowIso`. */
+export function isRecentIpo(ipoDate: string | null, nowIso: string, windowDays = 90): boolean {
+  if (!ipoDate) return false;
+  const ipo = Date.parse(ipoDate);
+  const now = Date.parse(nowIso);
+  if (!Number.isFinite(ipo) || !Number.isFinite(now)) return false;
+  const days = Math.floor((now - ipo) / 86_400_000);
+  return days >= 0 && days <= windowDays;
+}

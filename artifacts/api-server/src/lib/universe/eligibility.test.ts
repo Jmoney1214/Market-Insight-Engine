@@ -32,3 +32,23 @@ describe("classifySecurityType", () => {
     expect(classifySecurityType({ symbol: "BABA", ...base, fmpIsAdr: true })).toBe("ADR");
   });
 });
+
+import { floatBucket, isRecentIpo } from "./eligibility.js";
+
+describe("floatBucket", () => {
+  it("null float is UNKNOWN", () => expect(floatBucket(null)).toBe("UNKNOWN"));
+  it("3M is NANO", () => expect(floatBucket(3_000_000)).toBe("NANO"));
+  it("5M is LOW (boundary, not NANO)", () => expect(floatBucket(5_000_000)).toBe("LOW"));
+  it("19M is LOW", () => expect(floatBucket(19_000_000)).toBe("LOW"));
+  it("20M is MID (boundary)", () => expect(floatBucket(20_000_000)).toBe("MID"));
+  it("74M is MID", () => expect(floatBucket(74_000_000)).toBe("MID"));
+  it("75M is HIGH (boundary)", () => expect(floatBucket(75_000_000)).toBe("HIGH"));
+});
+
+describe("isRecentIpo", () => {
+  const now = "2026-07-18T12:00:00Z";
+  it("null ipoDate is false", () => expect(isRecentIpo(null, now)).toBe(false));
+  it("IPO 10 days ago is recent", () => expect(isRecentIpo("2026-07-08", now)).toBe(true));
+  it("IPO 100 days ago is not recent", () => expect(isRecentIpo("2026-04-09", now)).toBe(false));
+  it("IPO exactly 90 days ago is recent (inclusive)", () => expect(isRecentIpo("2026-04-19", now)).toBe(true));
+});
