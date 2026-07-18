@@ -5,14 +5,26 @@ import type { UniverseScreenerRow } from "../providers/fmp.js";
 import type { AlpacaAsset } from "../providers/alpacaAssets.js";
 
 describe("shouldAbortRebuild", () => {
+  const screenerRow: UniverseScreenerRow = {
+    symbol: "RUNR", name: "Runner Inc", price: 4.25, volume: 8_000_000, marketCap: 1.2e8,
+    sector: "Healthcare", industry: "Biotech", exchange: "NASDAQ", isEtf: false, isFund: false, isAdr: false,
+  };
+  const assetObj: AlpacaAsset = {
+    symbol: "RUNR", name: "Runner", exchange: "NASDAQ", class: "us_equity", status: "active",
+    tradable: true, shortable: false, easyToBorrow: false, marginable: true, fractionable: true,
+  };
   it("aborts when the broker asset list is missing (can't confirm tradability)", () => {
     expect(shouldAbortRebuild(null, [])).toBe(true);
   });
   it("aborts when the screener is missing (no prices)", () => {
     expect(shouldAbortRebuild([], null)).toBe(true);
   });
-  it("proceeds when both sources are present (even if empty arrays)", () => {
-    expect(shouldAbortRebuild([], [])).toBe(false);
+  it("aborts when the broker asset list is empty (broken feed would wipe every eligible row)", () => {
+    expect(shouldAbortRebuild([screenerRow], [])).toBe(true);
+    expect(shouldAbortRebuild([], [])).toBe(true);
+  });
+  it("proceeds when assets are present even if the screener is empty (harmless no-op)", () => {
+    expect(shouldAbortRebuild([], [assetObj])).toBe(false);
   });
 });
 

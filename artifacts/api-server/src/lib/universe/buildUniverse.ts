@@ -16,7 +16,7 @@ import { PRICE_MIN, PRICE_MAX } from "./types.js";
 export function shouldAbortRebuild(
   screener: UniverseScreenerRow[] | null, assets: AlpacaAsset[] | null,
 ): boolean {
-  return screener == null || assets == null;
+  return screener == null || assets == null || assets.length === 0;
 }
 
 /** Pure join: drive off the in-band screener set, attach the broker asset + IPO flag. */
