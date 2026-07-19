@@ -18,6 +18,8 @@ import * as fmp from "./providers/fmp.js";
 import * as alpaca from "./providers/alpaca.js";
 import { atr, rsi, rangeStats } from "./providers/indicators.js";
 import { classifyCandidate, type TradeClass } from "./classify.js";
+import { isFullRebuildWindowET, isPreOpenWindowET, etDateKey } from "./universe/schedule.js";
+import { runFullRebuild, runDailyRefresh } from "./universe/buildUniverse.js";
 import { db, breakoutCandidatesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
@@ -93,6 +95,37 @@ function todayNYDate(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 }
 
+// --- Universe Service jobs (idempotent per window/day) ---
+// The nightly EOD rebuild (18:00-20:00 ET) and the pre-open refresh (07:00-07:59
+// ET) each fire at most once per window per day, guarded by a last-run day
+// string. Fire-and-forget from the scan tick — the universe jobs degrade closed
+// on their own (they return {aborted:true} when a provider is unavailable).
+let lastUniverseRebuildDay = "";
+let lastUniverseRefreshDay = "";
+
+async function tickUniverse(now: Date): Promise<void> {
+  const day = etDateKey(now);
+  // Mark the once-per-day guard only after a COMPLETED (non-aborted) run.
+  // runFullRebuild/runDailyRefresh return {aborted:true} (they do NOT throw) on a
+  // provider outage, so guarding before the await would let a single transient
+  // hiccup at 18:03 ET burn the whole 18:00-20:00 retry window (and likewise the
+  // 07:00 pre-open window). Retrying next tick is safe — both jobs are idempotent.
+  if (isFullRebuildWindowET(now) && lastUniverseRebuildDay !== day) {
+    const result = await runFullRebuild(now).catch((err) => {
+      logger.warn({ err: String(err) }, "universe rebuild failed");
+      return { upserted: 0, aborted: true };
+    });
+    if (!result.aborted) lastUniverseRebuildDay = day;
+  }
+  if (isPreOpenWindowET(now) && lastUniverseRefreshDay !== day) {
+    const result = await runDailyRefresh(now).catch((err) => {
+      logger.warn({ err: String(err) }, "universe refresh failed");
+      return { upserted: 0, aborted: true };
+    });
+    if (!result.aborted) lastUniverseRefreshDay = day;
+  }
+}
+
 /**
  * Proactive hunter + accountability loop, every 5 minutes on weekdays:
  *  - 07:00-16:00 ET: refresh the scan so the dashboard opens pre-researched.
@@ -115,6 +148,9 @@ export function startScanScheduler(): void {
   const tick = async () => {
     const { minutes, isWeekday } = nyClock();
     if (!isWeekday) return;
+    // Universe Service driver — fire-and-forget alongside the scan work. The ET
+    // window predicates gate the two jobs; this never blocks or fails the scan.
+    void tickUniverse(new Date());
     const { recordScanPicks, gradePending } = await import("./scorecard.js");
 
     if (minutes >= WINDOW_START && minutes < WINDOW_END) {
