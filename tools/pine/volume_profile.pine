@@ -46,7 +46,7 @@ vaPct = vaInput / 100.0
 
 // ---- Session bar counter (RTH), reset at each new regular session ------------
 inMkt  = session.ismarket
-newSes = inMkt and not inMkt[1]
+newSes = inMkt and not nz(inMkt[1], false)
 var int cnt = 0
 if profMode == "Lookback bars"
     cnt := lookbackN
@@ -67,15 +67,17 @@ var box[]   boxes = array.new_box()
 var line[]  lines = array.new_line()
 var label[] labs  = array.new_label()
 
+// for...in is empty-safe; `for i = 0 to size-1` on an empty array becomes
+// `for 0 to -1`, which Pine runs DOWNWARD (i=0) and throws OOB on the first render.
 clearDrawings() =>
-    for i = 0 to array.size(boxes) - 1
-        box.delete(array.get(boxes, i))
+    for b in boxes
+        box.delete(b)
     array.clear(boxes)
-    for i = 0 to array.size(lines) - 1
-        line.delete(array.get(lines, i))
+    for ln in lines
+        line.delete(ln)
     array.clear(lines)
-    for i = 0 to array.size(labs) - 1
-        label.delete(array.get(labs, i))
+    for lb in labs
+        label.delete(lb)
     array.clear(labs)
 
 if barstate.islast and cnt > 1
@@ -83,10 +85,16 @@ if barstate.islast and cnt > 1
     for r = 0 to rows - 1
         array.set(vol, r, 0.0)
 
+    // Bound the window to bars that actually exist: on a short-history chart cnt
+    // can exceed available bars, and high[i]/low[i] past history return na, which
+    // poisons hi/lo and blocks the entire render. (Session mode self-bounds; this
+    // matters most for Lookback mode on a freshly loaded symbol.)
+    int actualCnt = math.min(cnt, bar_index + 1)
+
     // pass 1 — session hi/lo over the profiled window
     float hi = high
     float lo = low
-    for i = 0 to cnt - 1
+    for i = 0 to actualCnt - 1
         hi := math.max(hi, high[i])
         lo := math.min(lo, low[i])
 
@@ -95,7 +103,7 @@ if barstate.islast and cnt > 1
         float rowSz = rng / rows
 
         // pass 2 — distribute each bar's volume across the rows its range spans
-        for i = 0 to cnt - 1
+        for i = 0 to actualCnt - 1
             float bh = high[i]
             float bl = low[i]
             float bv = nz(volume[i])
@@ -145,7 +153,7 @@ if barstate.islast and cnt > 1
 
         // ---- draw ----------------------------------------------------------
         clearDrawings()
-        int profBars = math.max(8, int(cnt * widthPct / 100.0))
+        int profBars = math.max(8, int(actualCnt * widthPct / 100.0))
         int xLeft = bar_index + offsetBar
         for r = 0 to rows - 1
             float v = array.get(vol, r)
@@ -159,17 +167,17 @@ if barstate.islast and cnt > 1
 
         // value-area shading behind the profile
         if showVA
-            array.push(boxes, box.new(bar_index - cnt + 1, g_vah, xLeft, g_val,
+            array.push(boxes, box.new(bar_index - actualCnt + 1, g_vah, xLeft, g_val,
                  border_color = color.new(color.gray, 60), border_width = 1,
                  bgcolor = vaFill))
 
         // POC / VAH / VAL rays + labels
         int xEnd = xLeft + profBars + 2
-        l_poc = line.new(bar_index - cnt + 1, g_poc, xEnd, g_poc, color = pocCol,
+        l_poc = line.new(bar_index - actualCnt + 1, g_poc, xEnd, g_poc, color = pocCol,
              width = 2, extend = extend.none)
-        l_vah = line.new(bar_index - cnt + 1, g_vah, xEnd, g_vah,
+        l_vah = line.new(bar_index - actualCnt + 1, g_vah, xEnd, g_vah,
              color = color.new(color.gray, 20), style = line.style_dashed)
-        l_val = line.new(bar_index - cnt + 1, g_val, xEnd, g_val,
+        l_val = line.new(bar_index - actualCnt + 1, g_val, xEnd, g_val,
              color = color.new(color.gray, 20), style = line.style_dashed)
         array.push(lines, l_poc)
         array.push(lines, l_vah)
@@ -188,7 +196,7 @@ zoneCol = zone == "EXPENSIVE" ? color.new(#ef5350, 0) : zone == "CHEAP" ? color.
 // ---- Zone table (top-right) --------------------------------------------------
 var table t = table.new(position.top_right, 2, 5, border_width = 1,
      border_color = color.new(color.gray, 70), bgcolor = color.new(color.black, 20))
-f(v) => str.tostring(v, format.mintick)
+f(v) => na(v) ? "N/A" : str.tostring(v, format.mintick)
 if showTable and barstate.islast
     table.cell(t, 0, 0, "Volume Profile", text_color = color.new(color.aqua, 0), text_size = size.small)
     table.cell(t, 1, 0, profMode == "Session" ? "session" : str.tostring(cnt) + " bars", text_color = color.gray, text_size = size.small)
@@ -202,11 +210,13 @@ if showTable and barstate.islast
     table.cell(t, 1, 4, f(g_val), text_color = color.white, text_size = size.small)
 
 // ---- Alerts (notify only — never place orders) ------------------------------
-// Fire on the bar where price transitions between zones, computed off the last
-// committed profile so the levels are stable within the bar.
-enterCheap = not na(g_val) and close < g_val and not (close[1] < g_val)
-backToFair = not na(g_val) and not na(g_vah) and close >= g_val and close <= g_vah and (close[1] < g_val or close[1] > g_vah)
-enterExp   = not na(g_vah) and close > g_vah and not (close[1] > g_vah)
+// Fire on the bar where price transitions between zones. The profile levels are
+// recomputed on every realtime tick, so alerts are gated to bar close
+// (barstate.isconfirmed) — one shot per closed bar against the settled level,
+// not a flickering intrabar cross.
+enterCheap = barstate.isconfirmed and not na(g_val) and close < g_val and not (close[1] < g_val)
+backToFair = barstate.isconfirmed and not na(g_val) and not na(g_vah) and close >= g_val and close <= g_vah and (close[1] < g_val or close[1] > g_vah)
+enterExp   = barstate.isconfirmed and not na(g_vah) and close > g_vah and not (close[1] > g_vah)
 
 alertcondition(enterCheap, "VP: price entered CHEAP (below Value Area)",
      "Price dropped below VAL — CHEAP relative to session value")
