@@ -1,14 +1,20 @@
 // Generates a self-contained replay-grader dashboard Artifact from pipeline_results.json.
-// Regenerate whenever the replay is re-run: node build_dashboard.mjs <results.json> <out.html>
+// node build_dashboard.mjs [results.json] [out.html]
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { money, pct, bigD, clsN, dLabel, pickPnl, statusInfo, esc, badgeClass, safeJson, NOTE } from "./lib/reportlib.mjs";
 
 // Paths resolve relative to this script (tools/research/), so the tool is portable:
 // pipeline_results.json sits alongside it; the dashboard lands in research/reports/.
 const SRC = process.argv[2] || fileURLToPath(new URL("./pipeline_results.json", import.meta.url));
-
 const raw = JSON.parse(readFileSync(SRC, "utf8"));
-const OUT = process.argv[3] || fileURLToPath(new URL(`../../research/reports/${(raw.meta.dateRange || "replay").replace("..", "_")}_dashboard.html`, import.meta.url));
+const M = raw.meta || {};
+const results = Array.isArray(raw.results) ? raw.results : [];
+if (!results.length) {
+  console.error(`No results in ${SRC} — run pipeline.mjs first.`);
+  process.exit(1);
+}
+const OUT = process.argv[3] || fileURLToPath(new URL(`../../research/reports/${(M.dateRange || "replay").replace("..", "_")}_dashboard.html`, import.meta.url));
 
 const slimMover = (m) => ({
   sym: m.sym, cls: m.cls, ride: m.ride, maxUp: m.maxUp, maxDn: m.maxDn,
@@ -17,12 +23,12 @@ const slimMover = (m) => ({
 
 const data = {
   meta: {
-    gitSha: raw.meta.gitSha, configHash: raw.meta.configHash, generatedAt: raw.meta.generatedAt,
-    dataProvider: raw.meta.dataProvider, feed: raw.meta.feed, adjustment: raw.meta.adjustment,
-    sessionTemplate: raw.meta.sessionTemplate, dateRange: raw.meta.dateRange, fillMode: raw.meta.fillMode,
-    barTimeframe: raw.meta.barTimeframe, timezone: raw.meta.timezone, caveats: raw.meta.caveats || [],
+    gitSha: M.gitSha, configHash: M.configHash, generatedAt: M.generatedAt,
+    dataProvider: M.dataProvider, feed: M.feed, adjustment: M.adjustment,
+    sessionTemplate: M.sessionTemplate, dateRange: M.dateRange, fillMode: M.fillMode,
+    barTimeframe: M.barTimeframe, timezone: M.timezone, caveats: M.caveats || [],
   },
-  days: raw.results.map((d) => ({
+  days: results.map((d) => ({
     day: d.day,
     universeSize: d.universeSize,
     dayPnl: d.dayPnl,
@@ -32,8 +38,6 @@ const data = {
     movers: (d.attribution?.movers || []).map(slimMover),
   })),
 };
-
-const DATA_JSON = JSON.stringify(data);
 
 const STYLE = `
 :root{
@@ -189,30 +193,33 @@ a{color:var(--accent);}
 
 @media (max-width:820px){
   .kpis{grid-template-columns:repeat(2,1fr);} .nav{grid-template-columns:repeat(2,1fr);}
-  .brow{grid-template-columns:1.5fr .95fr .8fr 1.05fr 20px;}
+  .brow{grid-template-columns:1.4fr .8fr .6fr 1fr .7fr 18px;}
   .brow .col-pm,.brow .col-range,.brow .col-score{display:none;}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;scroll-behavior:auto!important;}}
 `;
 
+// Canonical helpers injected into the browser APP verbatim from reportlib.mjs, so
+// the dashboard and the Markdown report format every number identically (no drift).
+const HELPERS = `
+const NOTE = ${safeJson(NOTE)};
+const noteFor = (cls) => NOTE[cls] || NOTE._unknown;
+const fmtMoney = ${money};
+const pct = ${pct};
+const bigD = ${bigD};
+const clsN = ${clsN};
+const dLabel = ${dLabel};
+const pickPnl = ${pickPnl};
+const STATUS = ${statusInfo};
+const esc = ${esc};
+const badgeClass = ${badgeClass};
+const num2 = (x) => Number.isFinite(Number(x)) ? Number(x).toFixed(2) : "—";
+const cap = (v) => v == null ? "n/a" : v + "%";
+`;
+
 const APP = String.raw`
 const D = DATA;
 const $ = (t,c,txt)=>{const e=document.createElement(t); if(c)e.className=c; if(txt!=null)e.textContent=txt; return e;};
-const fmtMoney=(n,dp=2)=>{const s=n<0?"−":n>0?"+":""; return s+"$"+Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp});};
-const clsN=(n)=> n>0?"up":n<0?"down":"flat";
-const pct=(n,dp=1)=> (n==null?"—":n.toFixed(dp)+"%");
-const bigD=(n)=>{ if(n==null)return "—"; const a=Math.abs(n); if(a>=1e9)return "$"+(n/1e9).toFixed(1)+"B"; if(a>=1e6)return "$"+(n/1e6).toFixed(0)+"M"; return "$"+Math.round(n).toLocaleString();};
-const WD=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const dLabel=(iso)=>{const [y,m,d]=iso.split("-").map(Number);const wd=WD[new Date(Date.UTC(y,m-1,d)).getUTCDay()];return {wd,short:m+"/"+d,iso};};
-const NOTE={rider:"Hyper-volatile mover — avg daily range ≥6.5% AND price ≥$20. Jump-Day Rider class: ride the day, no fixed target.",
-  scalper:"Liquid large cap — ≥$8B traded/day. Take-profit scalper class: 1.5R targets.",
-  caution:"Mid-range or sub-$20 mover — the rider edge decays / failed validation. No reliable long edge.",
-  avoid:"Quiet tape — no validated intraday edge for any engine."};
-const STATUS=(s)=>{ s=s||""; if(s.startsWith("traded"))return{k:"s-traded",label:"Traded",why:"A trigger fired and the badge-matched engine took the trade."};
-  if(s.includes("no trigger"))return{k:"s-notrig",label:"No trigger",why:"Qualified for the board, but the engine's entry condition never fired intraday — no trade taken."};
-  if(s.startsWith("declined"))return{k:"s-declined",label:"Declined",why:"Filtered out before entry ("+s.replace("declined:","").trim()+") — the day-filter judged it un-tradeable."};
-  return{k:"s-declined",label:s||"—",why:""}; };
-const pickPnl=(p)=> (p.trades||[]).reduce((a,t)=>a+(t.pnl||0),0);
 const moverFor=(day,sym)=> (day.movers||[]).find(m=>m.sym===sym);
 const root=document.getElementById("app");
 
@@ -222,11 +229,11 @@ hl.appendChild($("div","eyebrow","Morning-Scan Replay · Point-in-time Post-mort
 const h1=$("h1"); const L0=dLabel(D.days[0].day); h1.textContent="Replay-Grader — Week of "+L0.wd+" "+L0.short; hl.appendChild(h1);
 hl.appendChild($("div","sub","Every eligible pick badged at the 08:30 ET cutoff, run through the badge-matched engine, and graded against what the tape actually did. Click any row for the full decision chain."));
 const prov=$("div","prov");
-const mk=(k,v)=>{const c=$("span","chip");c.innerHTML="<span>"+k+"</span> <b>"+v+"</b>";return c;};
+const mk=(k,v)=>{const c=$("span","chip");c.innerHTML="<span>"+esc(k)+"</span> <b>"+esc(v)+"</b>";return c;};
 prov.appendChild(mk("range",D.meta.dateRange));
 prov.appendChild(mk("git",D.meta.gitSha));
 prov.appendChild(mk("config",D.meta.configHash));
-prov.appendChild(mk("feed",D.meta.feed+" · "+D.meta.adjustment+"-adj"));
+prov.appendChild(mk("feed",(D.meta.feed||"")+" · "+(D.meta.adjustment||"")+"-adj"));
 prov.appendChild(mk("fill",D.meta.fillMode));
 hl.appendChild(prov);
 head.appendChild(hl);
@@ -247,7 +254,7 @@ kpis.appendChild(kpi("Week net P&L",fmtMoney(net,0),"$25k / pick · "+D.days.len
 kpis.appendChild(kpi("Days traded",tradedDays+" / "+D.days.length,"sessions that took a trade"));
 kpis.appendChild(kpi("Avg board-catch",avgCatch.toFixed(1)+"%","of the day's real movers"));
 kpis.appendChild(kpi("Opportunity captured",(opp>0?(capd/opp*100):0).toFixed(1)+"%","P&L vs. tradeable $ on tape"));
-kpis.appendChild(kpi("Universe",D.days[0].universeSize.toLocaleString(),"screened at 08:30 cutoff"));
+kpis.appendChild(kpi("Universe",(D.days[0].universeSize||0).toLocaleString(),"screened at 08:30 cutoff"));
 root.appendChild(kpis);
 
 const navLabel=$("div","sec-label"); navLabel.appendChild($("h2",null,"Sessions")); navLabel.appendChild($("div","rule")); root.appendChild(navLabel);
@@ -276,27 +283,27 @@ function step(n,title,bodyNode){
 function buildChain(day,p,st){
   const wrap=$("div"); const chain=$("div","chain");
   const kv=$("div","kvs");
-  kv.innerHTML="score <b>"+p.score+"</b> · gap <b>"+pct(p.gap)+"</b> · PM $vol <b>"+bigD(p.pmDollar)+"</b> · avg range <b>"+pct(p.avgRange)+"</b> · move-to-date <b>"+pct(p.mtd)+"</b>";
-  const sel=$("div"); sel.innerHTML="<span class='mut'>"+(p.companyName||p.sym)+" cleared the 08:30 screen and ranked into the eligible board on these point-in-time stats:</span>"; sel.appendChild(kv);
+  kv.innerHTML="score <b>"+esc(p.score)+"</b> · gap <b>"+pct(p.gap)+"</b> · PM $vol <b>"+bigD(p.pmDollar)+"</b> · avg range <b>"+pct(p.avgRange)+"</b> · move-to-date <b>"+pct(p.mtd)+"</b>";
+  const sel=$("div"); sel.innerHTML="<span class='mut'>"+esc(p.companyName||p.sym)+" cleared the 08:30 screen and ranked into the eligible board on these point-in-time stats:</span>"; sel.appendChild(kv);
   chain.appendChild(step("01","Selected — why it made the board",sel));
-  const bd=$("div"); bd.innerHTML="<span class='badge b-"+p.cls+"'>"+p.cls+"</span> &nbsp;<span class='mut'>"+NOTE[p.cls]+"</span>";
+  const bd=$("div"); bd.innerHTML="<span class='badge b-"+badgeClass(p.cls)+"'>"+esc(p.cls||"—")+"</span> &nbsp;<span class='mut'>"+esc(noteFor(p.cls))+"</span>";
   chain.appendChild(step("02","Badged — which engine (if any) has an edge",bd));
-  chain.appendChild(step("03","Decision — what the engine did","<b>"+st.label+".</b> <span class='mut'>"+st.why+"</span>"));
+  chain.appendChild(step("03","Decision — what the engine did","<b>"+esc(st.label)+".</b> <span class='mut'>"+esc(st.why)+"</span>"));
   if(p.trades&&p.trades.length){
     const tb=document.createElement("table"); tb.className="trades";
     tb.innerHTML="<thead><tr><th>In</th><th>Out</th><th>Entry</th><th>Exit</th><th>Qty</th><th>P&L</th><th>Exit</th></tr></thead>";
     const tbody=document.createElement("tbody");
-    p.trades.forEach(t=>{const tr=document.createElement("tr"); const rc=(t.reason||"").toLowerCase();
-      tr.innerHTML="<td>"+t.entryHm+"</td><td>"+t.exitHm+"</td><td>"+t.entry.toFixed(2)+"</td><td>"+t.exit.toFixed(2)+"</td><td>"+t.qty+"</td><td class='"+clsN(t.pnl)+"'>"+fmtMoney(t.pnl)+"</td><td><span class='rsn "+rc+"'>"+t.reason+"</span></td>";
+    p.trades.forEach(t=>{const tr=document.createElement("tr"); const rc=(t.reason||"").toLowerCase().replace(/[^a-z]/g,"");
+      tr.innerHTML="<td>"+esc(t.entryHm)+"</td><td>"+esc(t.exitHm)+"</td><td>"+num2(t.entry)+"</td><td>"+num2(t.exit)+"</td><td>"+esc(t.qty==null?"—":t.qty)+"</td><td class='"+clsN(t.pnl)+"'>"+fmtMoney(t.pnl)+"</td><td><span class='rsn "+rc+"'>"+esc(t.reason||"—")+"</span></td>";
       tbody.appendChild(tr);});
     tb.appendChild(tbody);
     const tot=pickPnl(p);
     const wrap2=$("div"); wrap2.appendChild(tb);
-    wrap2.appendChild($("div","kvs")).innerHTML="net on "+p.sym+" <b class='"+clsN(tot)+"'>"+fmtMoney(tot)+"</b> across "+p.trades.length+" trade"+(p.trades.length>1?"s":"");
+    wrap2.appendChild($("div","kvs")).innerHTML="net on "+esc(p.sym)+" <b class='"+clsN(tot)+"'>"+fmtMoney(tot)+"</b> across "+p.trades.length+" trade"+(p.trades.length>1?"s":"");
     chain.appendChild(step("04","Execution — the actual fills",wrap2));
   } else {
     const mv=moverFor(day,p.sym); let html;
-    if(mv){ html="<span class='mut'>No fill. What "+p.sym+" actually did 09:40→15:50:</span><div class='kvs'>ride <b class='"+clsN(mv.ride)+"'>"+pct(mv.ride)+"</b> · max up <b class='up'>"+pct(mv.maxUp)+"</b> · max down <b class='down'>"+pct(mv.maxDn)+"</b> · code <b>"+(mv.code||"—")+"</b></div><div class='verdict'>"+(mv.detail||"")+"</div>";
+    if(mv){ html="<span class='mut'>No fill. What "+esc(p.sym)+" actually did 09:40→15:50:</span><div class='kvs'>ride <b class='"+clsN(mv.ride)+"'>"+pct(mv.ride)+"</b> · max up <b class='up'>"+pct(mv.maxUp)+"</b> · max down <b class='down'>"+pct(mv.maxDn)+"</b> · code <b>"+esc(mv.code||"—")+"</b></div><div class='verdict'>"+esc(mv.detail||"")+"</div>";
     } else { html="<span class='mut'>No fill, and not among the day's graded movers — a quiet name; sitting out was costless.</span>"; }
     chain.appendChild(step("04","Counterfactual — what sitting out cost (or saved)",html));
   }
@@ -311,16 +318,16 @@ function buildMovers(day){
   const counts={}; day.movers.forEach(m=>{counts[m.code||"—"]=(counts[m.code||"—"]||0)+1;});
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]); const mx=Math.max(1,...entries.map(e=>e[1]));
   const codes=$("div","codes");
-  entries.forEach(([c,n])=>{const el=$("div","code"); el.innerHTML="<div class='cn'><span>"+c+"</span><b>"+n+"</b></div><div class='cbar'><i style='width:"+(n/mx*100)+"%'></i></div>"; codes.appendChild(el);});
+  entries.forEach(([c,n])=>{const el=$("div","code"); el.innerHTML="<div class='cn'><span>"+esc(c)+"</span><b>"+n+"</b></div><div class='cbar'><i style='width:"+(n/mx*100)+"%'></i></div>"; codes.appendChild(el);});
   body.appendChild(codes);
-  const sorted=[...day.movers].sort((a,b)=>Math.abs(b.ride||0)-Math.abs(a.ride||0));
+  const sorted=[...day.movers].sort((a,b)=>(b.ride||0)-(a.ride||0));
   const scroll=$("div","mvscroll");
   const tb=document.createElement("table"); tb.className="mvtbl";
   tb.innerHTML="<thead><tr><th>Sym</th><th>Badge</th><th>Ride</th><th>Max↑</th><th>Max↓</th><th>Gap@0830</th><th>Reason not traded</th></tr></thead>";
   const tbody=document.createElement("tbody"); tb.appendChild(tbody);
   let shown=0; const CAP=15;
   const render=(limit)=>{tbody.innerHTML=""; sorted.slice(0,limit).forEach(m=>{const tr=document.createElement("tr");
-    tr.innerHTML="<td><span class='sym'>"+m.sym+"</span></td><td><span class='badge b-"+(m.cls||"avoid")+"'>"+(m.cls||"—")+"</span></td><td class='"+clsN(m.ride)+"'>"+pct(m.ride)+"</td><td class='up'>"+pct(m.maxUp)+"</td><td class='down'>"+pct(m.maxDn)+"</td><td>"+pct(m.gapAt0830)+"</td><td style='text-align:left'>"+(m.detail||m.code||"")+"</td>";
+    tr.innerHTML="<td><span class='sym'>"+esc(m.sym)+"</span></td><td><span class='badge b-"+badgeClass(m.cls)+"'>"+esc(m.cls||"—")+"</span></td><td class='"+clsN(m.ride)+"'>"+pct(m.ride)+"</td><td class='up'>"+pct(m.maxUp)+"</td><td class='down'>"+pct(m.maxDn)+"</td><td>"+pct(m.gapAt0830)+"</td><td style='text-align:left'>"+esc(m.detail||m.code||"")+"</td>";
     tbody.appendChild(tr);}); shown=Math.min(limit,sorted.length);};
   render(CAP); scroll.appendChild(tb); body.appendChild(scroll);
   if(sorted.length>CAP){const more=$("button","morebtn");more.type="button";more.textContent="Show all "+sorted.length+" movers";
@@ -335,13 +342,13 @@ D.days.forEach((d,i)=>{
   const sec=$("section","day"); sec.id="day-"+i;
   const L=dLabel(d.day);
   const dh=$("div","day-h");
-  const dt=$("div","dt"); dt.innerHTML=L.wd+", "+L.iso+" <small>"+d.picks.length+" eligible · board "+d.boardCounts.top+"↑/"+d.boardCounts.fall+"↓</small>";
+  const dt=$("div","dt"); dt.innerHTML=esc(L.wd)+", "+esc(L.iso)+" <small>"+d.picks.length+" eligible · board "+d.boardCounts.top+"↑/"+d.boardCounts.fall+"↓</small>";
   dh.appendChild(dt);
   const pnl=$("div","pnl "+clsN(d.dayPnl)); pnl.textContent=fmtMoney(d.dayPnl); dh.appendChild(pnl);
   sec.appendChild(dh);
   const cr=d.catchRates;
   const ds=$("div","dstats");
-  ds.innerHTML="Real movers <b>"+(cr.movers??"—")+"</b> · Board caught <b>"+(cr.boardCatch??"—")+"%</b> · Tradeable caught <b>"+(cr.tradeableCatch??"—")+"</b> · Traded <b>"+(cr.tradedCatch??"—")+"</b> · Opportunity <b>"+bigD(cr.opportunity)+"</b> · Capture <b>"+(cr.captureRatio??"—")+"%</b>";
+  ds.innerHTML="Real movers <b>"+(cr.movers??"—")+"</b> · Board caught <b>"+(cr.boardCatch??"—")+"%</b> · Tradeable caught <b>"+cap(cr.tradeableCatch)+"</b> · Traded <b>"+cap(cr.tradedCatch)+"</b> · Opportunity <b>"+bigD(cr.opportunity)+"</b> · Capture <b>"+cap(cr.captureRatio)+"</b>";
   sec.appendChild(ds);
   const board=$("div","board");
   const hdr=$("div","brow hdr");
@@ -349,12 +356,12 @@ D.days.forEach((d,i)=>{
   board.appendChild(hdr);
   d.picks.forEach((p)=>{
     const row=$("div","brow pick"); row.tabIndex=0; row.setAttribute("role","button"); row.setAttribute("aria-expanded","false");
-    const symc=$("div"); symc.innerHTML="<div class='sym'>"+p.sym+"</div><div class='co'>"+(p.companyName||"")+"</div>"; row.appendChild(symc);
-    const bc=$("div"); const bd=$("span","badge b-"+p.cls); bd.textContent=p.cls; bc.appendChild(bd); row.appendChild(bc);
+    const symc=$("div"); symc.innerHTML="<div class='sym'>"+esc(p.sym)+"</div><div class='co'>"+esc(p.companyName||"")+"</div>"; row.appendChild(symc);
+    const bc=$("div"); const bd=$("span","badge b-"+badgeClass(p.cls)); bd.textContent=p.cls||"—"; bc.appendChild(bd); row.appendChild(bc);
     row.appendChild($("div","num")).textContent=pct(p.gap);
     row.appendChild($("div","num col-pm")).textContent=bigD(p.pmDollar);
     row.appendChild($("div","num col-range")).textContent=pct(p.avgRange);
-    row.appendChild($("div","num col-score")).textContent=p.score;
+    row.appendChild($("div","num col-score")).textContent=p.score==null?"—":p.score;
     const st=STATUS(p.status); const stc=$("div"); const sp=$("span","stat "+st.k); sp.textContent=st.label; stc.appendChild(sp); row.appendChild(stc);
     const pl=pickPnl(p); const plc=$("div","num "+clsN(pl)); plc.textContent=(p.trades&&p.trades.length)?fmtMoney(pl):"—"; row.appendChild(plc);
     row.appendChild($("div","caret")).textContent="▸";
@@ -373,23 +380,25 @@ const foot=$("div","foot");
 foot.appendChild($("div","eyebrow","Methodology & honest limits"));
 const ul=document.createElement("ul");
 (D.meta.caveats||[]).concat([
- "Point-in-time: daily stats from sessions before each date; pre-market bars 04:00–08:30 only. Session: "+D.meta.sessionTemplate+".",
+ "Point-in-time: daily stats from sessions before each date; pre-market bars 04:00–08:30 only. Session: "+(D.meta.sessionTemplate||"—")+".",
  "A single week is an anecdote, not a statistic — no edge is claimed. Badges mark which engine was validated in prior study, not a guarantee.",
  "Grading is three separate layers: selection (did the board contain the movers), day-filter (were declines right), execution (P&L vs. tape)."
 ]).forEach(c=>{const li=document.createElement("li");li.textContent=c;ul.appendChild(li);});
 foot.appendChild(ul);
 const mg=$("div","meta-grid");
-[["provider",D.meta.dataProvider],["bars",D.meta.barTimeframe],["tz",D.meta.timezone],["generated",new Date(D.meta.generatedAt).toISOString().slice(0,16).replace("T"," ")+" UTC"]]
- .forEach(([k,v])=>{const c=$("span","chip");c.innerHTML="<span>"+k+"</span> <b>"+v+"</b>";mg.appendChild(c);});
+const gRaw=D.meta.generatedAt; const gd=(gRaw&&!isNaN(new Date(gRaw).getTime()))?new Date(gRaw).toISOString().slice(0,16).replace("T"," ")+" UTC":(gRaw||"—");
+[["provider",D.meta.dataProvider],["bars",D.meta.barTimeframe],["tz",D.meta.timezone],["generated",gd]]
+ .forEach(([k,v])=>{const c=$("span","chip");c.innerHTML="<span>"+esc(k)+"</span> <b>"+esc(v)+"</b>";mg.appendChild(c);});
 foot.appendChild(mg);
 root.appendChild(foot);
 `;
 
-const html = `<title>Replay-Grader · Week of ${data.days[0].day}</title>
+const html = `<title>Replay-Grader · Week of ${esc(data.days[0].day)}</title>
 <div class="wrap"><div id="app"></div></div>
 <style>${STYLE}</style>
-<script>const DATA=${DATA_JSON};</script>
-<script>${APP}</script>`;
+<script>const DATA=${safeJson(data)};</script>
+<script>${HELPERS}
+${APP}</script>`;
 
 writeFileSync(OUT, html);
-console.log("wrote", OUT, "(" + html.length + " bytes) days=" + data.days.length + " picks=" + data.days.reduce((a,d)=>a+d.picks.length,0) + " movers=" + data.days.reduce((a,d)=>a+d.movers.length,0));
+console.log("wrote", OUT, "(" + html.length + " bytes) days=" + data.days.length + " picks=" + data.days.reduce((a, d) => a + d.picks.length, 0) + " movers=" + data.days.reduce((a, d) => a + d.movers.length, 0));
