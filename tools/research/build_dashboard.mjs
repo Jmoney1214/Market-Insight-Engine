@@ -9,7 +9,7 @@ import { money, pct, bigD, clsN, dLabel, pickPnl, statusInfo, esc, badgeClass, s
 const SRC = process.argv[2] || fileURLToPath(new URL("./pipeline_results.json", import.meta.url));
 const raw = JSON.parse(readFileSync(SRC, "utf8"));
 const M = raw.meta || {};
-const results = Array.isArray(raw.results) ? raw.results : [];
+const results = (Array.isArray(raw.results) ? raw.results : []).filter((d) => !d.noSession);
 if (!results.length) {
   console.error(`No results in ${SRC} — run pipeline.mjs first.`);
   process.exit(1);
@@ -291,7 +291,7 @@ function buildChain(day,p,st){
   chain.appendChild(step("03","Decision — what the engine did","<b>"+esc(st.label)+".</b> <span class='mut'>"+esc(st.why)+"</span>"));
   if(p.trades&&p.trades.length){
     const tb=document.createElement("table"); tb.className="trades";
-    tb.innerHTML="<thead><tr><th>In</th><th>Out</th><th>Entry</th><th>Exit</th><th>Qty</th><th>P&L</th><th>Exit</th></tr></thead>";
+    tb.innerHTML="<thead><tr><th>In</th><th>Out</th><th>Entry</th><th>Exit</th><th>Qty</th><th>P&L</th><th>Reason</th></tr></thead>";
     const tbody=document.createElement("tbody");
     p.trades.forEach(t=>{const tr=document.createElement("tr"); const rc=(t.reason||"").toLowerCase().replace(/[^a-z]/g,"");
       tr.innerHTML="<td>"+esc(t.entryHm)+"</td><td>"+esc(t.exitHm)+"</td><td>"+num2(t.entry)+"</td><td>"+num2(t.exit)+"</td><td>"+esc(t.qty==null?"—":t.qty)+"</td><td class='"+clsN(t.pnl)+"'>"+fmtMoney(t.pnl)+"</td><td><span class='rsn "+rc+"'>"+esc(t.reason||"—")+"</span></td>";
@@ -315,7 +315,9 @@ function buildMovers(day){
   head.innerHTML="<div class='eyebrow'>Selection reality check — the day's real movers &amp; why the board missed them</div><div class='chip'><b>"+day.movers.length+"</b> movers ▾</div>";
   box.appendChild(head);
   const body=$("div"); body.style.display="none";
-  const counts={}; day.movers.forEach(m=>{counts[m.code||"—"]=(counts[m.code||"—"]||0)+1;});
+  const boardSyms=new Set((day.picks||[]).map(p=>p.sym));
+  const stOf=(sym)=>{const p=(day.picks||[]).find(x=>x.sym===sym);return p?(p.status||""):"";};
+  const counts={}; day.movers.forEach(m=>{ if((m.code||"")==="TRADED")return; counts[m.code||"—"]=(counts[m.code||"—"]||0)+1;});
   const entries=Object.entries(counts).sort((a,b)=>b[1]-a[1]); const mx=Math.max(1,...entries.map(e=>e[1]));
   const codes=$("div","codes");
   entries.forEach(([c,n])=>{const el=$("div","code"); el.innerHTML="<div class='cn'><span>"+esc(c)+"</span><b>"+n+"</b></div><div class='cbar'><i style='width:"+(n/mx*100)+"%'></i></div>"; codes.appendChild(el);});
@@ -327,7 +329,9 @@ function buildMovers(day){
   const tbody=document.createElement("tbody"); tb.appendChild(tbody);
   let shown=0; const CAP=15;
   const render=(limit)=>{tbody.innerHTML=""; sorted.slice(0,limit).forEach(m=>{const tr=document.createElement("tr");
-    tr.innerHTML="<td><span class='sym'>"+esc(m.sym)+"</span></td><td><span class='badge b-"+badgeClass(m.cls)+"'>"+esc(m.cls||"—")+"</span></td><td class='"+clsN(m.ride)+"'>"+pct(m.ride)+"</td><td class='up'>"+pct(m.maxUp)+"</td><td class='down'>"+pct(m.maxDn)+"</td><td>"+pct(m.gapAt0830)+"</td><td style='text-align:left'>"+esc(m.detail||m.code||"")+"</td>";
+    const onB=boardSyms.has(m.sym);
+    const why=onB?("on board — "+esc(stOf(m.sym)||"—")):esc(m.detail||m.code||"");
+    tr.innerHTML="<td><span class='sym'>"+esc(m.sym)+"</span>"+(onB?" ✅":"")+"</td><td><span class='badge b-"+badgeClass(m.cls)+"'>"+esc(m.cls||"—")+"</span></td><td class='"+clsN(m.ride)+"'>"+pct(m.ride)+"</td><td class='up'>"+pct(m.maxUp)+"</td><td class='down'>"+pct(m.maxDn)+"</td><td>"+pct(m.gapAt0830)+"</td><td style='text-align:left'>"+why+"</td>";
     tbody.appendChild(tr);}); shown=Math.min(limit,sorted.length);};
   render(CAP); scroll.appendChild(tb); body.appendChild(scroll);
   if(sorted.length>CAP){const more=$("button","morebtn");more.type="button";more.textContent="Show all "+sorted.length+" movers";

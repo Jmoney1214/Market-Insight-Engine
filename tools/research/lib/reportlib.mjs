@@ -21,14 +21,16 @@ export function pct(n, dp) {
   if (dp == null) dp = 1;
   if (n == null || isNaN(Number(n))) return "—";
   n = Number(n);
-  return (n >= 0 ? "+" : "−") + Math.abs(n).toFixed(dp) + "%";
+  const mag = Math.abs(n).toFixed(dp);
+  if (parseFloat(mag) === 0) return mag + "%"; // avoid a signed "−0.0%"
+  return (n >= 0 ? "+" : "−") + mag + "%";
 }
 export function bigD(n) {
   if (n == null || isNaN(Number(n))) return "—";
   n = Number(n); const a = Math.abs(n);
   if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
   if (a >= 1e6) return "$" + (n / 1e6).toFixed(0) + "M";
-  return "$" + Math.round(n).toLocaleString();
+  return "$" + Math.round(n).toLocaleString("en-US"); // pin locale (injected into the browser too)
 }
 export function clsN(n) { return n > 0 ? "up" : n < 0 ? "down" : "flat"; }
 export function pickPnl(p) { return (((p && p.trades) || [])).reduce(function (a, t) { return a + (Number(t && t.pnl) || 0); }, 0); }
@@ -58,6 +60,9 @@ export const CODEDESC = {
   GATED_PMVOL: "below the pre-market dollar-volume floor",
   GATED_HISTORY: "insufficient price history to badge",
   DECLINED: "on the board but declined by the day-filter",
+  GATED_MTD: "below the minimum move-to-date gate",
+  NOT_IN_UNIVERSE: "not in the screener universe at the 08:30 cutoff",
+  UNKNOWN: "uncategorized",
   TRADED: "traded",
 };
 export const noteFor = (cls) => NOTE[cls] || NOTE._unknown;

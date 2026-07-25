@@ -9,7 +9,7 @@ import { money, pct, bigD, dLabel, pickPnl, statusInfo, noteFor, CODEDESC, esc }
 const SRC = process.argv[2] || fileURLToPath(new URL("./pipeline_results.json", import.meta.url));
 const raw = JSON.parse(readFileSync(SRC, "utf8"));
 const M = raw.meta || {};
-const days = Array.isArray(raw.results) ? raw.results : [];
+const days = (Array.isArray(raw.results) ? raw.results : []).filter((d) => !d.noSession);
 if (!days.length) {
   console.error(`No results in ${SRC} — run pipeline.mjs first.`);
   process.exit(1);
@@ -22,6 +22,7 @@ const moversOf = (d) => (d.attribution && d.attribution.movers) || [];
 const picksOf = (d) => d.picks || [];
 const statusMd = (s) => { const i = statusInfo(s); return `**${i.label}**${i.why ? " — " + i.why : ""}`; };
 const capPct = (v) => (v != null ? `${v}%` : "n/a");
+const mdCell = (s) => String(s == null ? "" : s).replace(/\|/g, "\\|"); // markdown table-cell safe
 
 let out = "";
 const w = (s = "") => { out += s + "\n"; };
@@ -32,7 +33,11 @@ days.forEach((d) => moversOf(d).forEach((m) => { const c = m.code || "—"; if (
 const share = (ks) => (totUntraded ? ((ks.reduce((a, c) => a + (agg[c] || 0), 0) / totUntraded) * 100).toFixed(0) : "0");
 const validated = days.flatMap(moversOf).filter((m) => m.cls === "rider" || m.cls === "scalper");
 const exOf = (codes) => {
-  const a = validated.filter((m) => codes.includes(m.code)).sort((x, y) => (y.ride || 0) - (x.ride || 0)).slice(0, 3);
+  const seen = new Set();
+  const a = validated.filter((m) => codes.includes(m.code))
+    .sort((x, y) => (y.ride || 0) - (x.ride || 0))
+    .filter((m) => (seen.has(m.sym) ? false : (seen.add(m.sym), true)))
+    .slice(0, 3);
   return a.length ? a.map((m) => `${m.sym} (${pct(m.ride)})`).join(", ") : "none this week";
 };
 const rankCutEx = exOf(["RANK_CUT", "TOP5_CUT"]);
@@ -87,7 +92,7 @@ for (const d of days) {
   w(`|--:|---|---|--:|--:|--:|--:|---|--:|`);
   picks.forEach((p, i) => {
     const pl = pickPnl(p);
-    w(`| ${i + 1} | **${p.sym}**${p.companyName ? ` <sub>${esc(p.companyName)}</sub>` : ""} | \`${p.cls || "—"}\` | ${pct(p.gap)} | ${bigD(p.pmDollar)} | ${pct(p.avgRange)} | ${p.score ?? "—"} | ${(p.status || "").split(":")[0]} | ${p.trades && p.trades.length ? money(pl) : "—"} |`);
+    w(`| ${i + 1} | **${p.sym}**${p.companyName ? ` <sub>${mdCell(esc(p.companyName))}</sub>` : ""} | \`${p.cls || "—"}\` | ${pct(p.gap)} | ${bigD(p.pmDollar)} | ${pct(p.avgRange)} | ${p.score ?? "—"} | ${(p.status || "").split(":")[0]} | ${p.trades && p.trades.length ? money(pl) : "—"} |`);
   });
   w();
   picks.forEach((p) => {
@@ -114,8 +119,9 @@ for (const d of days) {
   w(`| Ticker | Day move | Gapped by 08:30 | Intraday ride | Badge | On board? |`);
   w(`|---|--:|--:|--:|---|:--:|`);
   gainers.forEach((m) => {
-    const ovnRaw = m.cc ? ((m.gapAt0830 || 0) / m.cc) * 100 : 0;
-    const ovn = ovnRaw < 0 ? "counter to the move" : `${Math.min(100, ovnRaw).toFixed(0)}% of move`;
+    const g = m.gapAt0830 || 0;
+    const sameDir = m.cc ? (g === 0 || (g > 0) === (m.cc > 0)) : false;
+    const ovn = !m.cc ? "—" : sameDir ? `${Math.min(100, Math.abs(g / m.cc) * 100).toFixed(0)}% of move` : "gapped counter to the move";
     w(`| **${m.sym}** | ${pct(m.cc)} | ${pct(m.gapAt0830)} (${ovn}) | ${pct(m.ride)} | \`${m.cls || "—"}\` | ${ourSyms.has(m.sym) ? "✅" : "—"} |`);
   });
   w();
@@ -126,7 +132,7 @@ for (const d of days) {
   tradeable.forEach((m) => {
     const onBoard = ourSyms.has(m.sym);
     const why = onBoard ? "on board — " + ((picks.find((p) => p.sym === m.sym) || {}).status || "") : (m.detail || m.code || "");
-    w(`| **${m.sym}** | ${pct(m.ride)} | ${pct(m.maxUp)} | ${pct(m.maxDn)} | ${pct(m.gapAt0830)} | \`${m.cls || "—"}\` | ${onBoard ? "✅" : "—"} | ${why} |`);
+    w(`| **${m.sym}** | ${pct(m.ride)} | ${pct(m.maxUp)} | ${pct(m.maxDn)} | ${pct(m.gapAt0830)} | \`${m.cls || "—"}\` | ${onBoard ? "✅" : "—"} | ${mdCell(why)} |`);
   });
   w();
 
@@ -175,6 +181,7 @@ w();
 w(`1. **Invisible at 08:30 (~${share(["INVISIBLE_AT_0830"])}%) — structural.** The largest bucket by far: names that *weren't gapping at the 08:30 snapshot* and only ignited after the open. A pre-market-only scan cannot see these by construction. Recovering them needs an **intraday re-scan**, not a threshold change — this, not the sub-$20 rule, is the real ceiling on catch rate.`);
 w(`2. **Rank / board-size cut (~${share(["RANK_CUT", "TOP5_CUT"])}%) — tunable.** Names that *were* visible but ranked below the board's cut (prelim top-30 → final top-5). This bucket includes **validated \`rider\`-class movers that missed by a handful of ranks** (e.g. ${rankCutEx}). Widening the board or improving the score recovers these directly.`);
 w(`3. **Deliberate class + hard gates (~${share(["BADGE_CUT", "GATED_PRICE_CAP", "GATED_PMVOL", "GATED_HISTORY"])}%).** The \`caution\`/\`avoid\` badge cut (sub-$20, failed validation — *correctly* skipped) **plus two hard gates**: the **$150 price ceiling**, which cut validated riders (${priceCapEx}), and the pre-market dollar-volume floor. The price cap in particular is discarding validated-class opportunity.`);
+w(`4. **On-board holds (~${share(["DECLINED", "NO_TRIGGER"])}%).** The small tail — \`DECLINED\` / \`NO_TRIGGER\` — names that reached the board but the day-filter or an unfired trigger held them back.`);
 w();
 w(`**Correction to the intuitive story:** the low catch rate is *not* mainly the sub-$20 exclusion — \`BADGE_CUT\` is only ~${share(["BADGE_CUT"])}% of movers. It is dominated by **invisible-at-0830** (can't be tuned away without an intraday pass) and **rank / price-cap cuts of validated names** (which can). Spend enhancement effort on the tunable buckets.`);
 w();
