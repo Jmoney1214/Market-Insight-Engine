@@ -32,6 +32,35 @@ function rmaSeries(a, len) {
   return out;
 }
 
+// Wilder RSI (Connors RSI2 proxy) — RS = RMA(gains,len)/RMA(losses,len), seeded
+// with a simple average of the first `len` gain/loss values then recursed with
+// alpha=1/len. Byte-identical to validate.mjs's computeRSI (same seeding, same
+// recursion) so the live router signal matches the Phase-4 validated backtest.
+function rsiSeries(a, len) {
+  const n = a.length;
+  const rsi = new Array(n).fill(null);
+  const gains = new Array(n).fill(0), losses = new Array(n).fill(0);
+  for (let i = 1; i < n; i++) {
+    const chg = a[i] - a[i - 1];
+    gains[i] = chg > 0 ? chg : 0;
+    losses[i] = chg < 0 ? -chg : 0;
+  }
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i < n; i++) {
+    if (i < len) continue; // not enough seed data yet
+    if (i === len) {
+      let sg = 0, sl = 0;
+      for (let k = 1; k <= len; k++) { sg += gains[k]; sl += losses[k]; }
+      avgGain = sg / len; avgLoss = sl / len;
+    } else {
+      avgGain = (avgGain * (len - 1) + gains[i]) / len;
+      avgLoss = (avgLoss * (len - 1) + losses[i]) / len;
+    }
+    rsi[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return rsi;
+}
+
 // Wilder ADX (standard: DM/TR smoothed, DX, then ADX = Wilder-avg of DX)
 function adxSeries(h, l, c, len) {
   const n = h.length, tr = new Array(n), pdm = new Array(n), mdm = new Array(n);
@@ -71,7 +100,7 @@ export function metricPack(rawBars) {
   const bars = [...rawBars].sort((a, b) => (a.t < b.t ? -1 : 1));
   const h = bars.map((b) => b.h), l = bars.map((b) => b.l), c = bars.map((b) => b.c), v = bars.map((b) => b.v);
   const L = bars.length - 1;
-  const { donchN, emaTrend, smaRegime, momN, hi52N, atrN, adxN, volN } = THRESH;
+  const { donchN, emaTrend, smaRegime, momN, hi52N, atrN, adxN, volN, mrRsiPeriod } = THRESH;
   const priorHigh = (arr, n) => { if (L - n < 0) return null; let mx = -Infinity; for (let k = L - n; k <= L - 1; k++) mx = Math.max(mx, arr[k]); return mx; };
   const close = c[L];
   const donHigh = priorHigh(h, donchN);
@@ -88,6 +117,7 @@ export function metricPack(rawBars) {
     sma200: sma(c, smaRegime, L),
     atrPct: atr != null ? atr / close * 100 : null,
     adx: adxSeries(h, l, c, adxN)[L],
+    rsi2: rsiSeries(c, mrRsiPeriod)[L],
     mom3m: L - momN >= 0 ? (close - c[L - momN]) / c[L - momN] * 100 : null,
     pctVs52: hi52 != null ? (close - hi52) / hi52 * 100 : null,
     avgVol20,
@@ -100,8 +130,8 @@ const r0 = (v) => (v == null ? "–" : Math.round(v));
 const r1 = (v) => (v == null ? "–" : v.toFixed(1));
 const fmtM = (v) => (v == null ? "–" : Math.round(v).toLocaleString());
 
-export function route(p) {
-  const { minDollarVolM, minPrice, coilBandPct, adxRange } = THRESH;
+export function route(p, spyRegimeOK = true) {
+  const { minDollarVolM, minPrice, coilBandPct, mrRsiEntry } = THRESH;
   const lane = (name, signal, reason) => ({ strategy: name, code: LANES[name].code, status: LANES[name].status, signal, reason });
 
   if (p.dollarVolM == null || p.dollarVolM < minDollarVolM || p.close < minPrice)
@@ -115,8 +145,8 @@ export function route(p) {
     return lane("TrendRider", "breakout", `new 20d high +${p.pctVs20dHigh.toFixed(2)}% · ADX ${r0(p.adx)} · ATR ${r1(p.atrPct)}%`);
   if (trendUp && regimeUp && p.pctVs20dHigh != null && p.pctVs20dHigh >= -coilBandPct)
     return lane("TrendRider", "coil", `${p.pctVs20dHigh.toFixed(2)}% from 20d high · uptrend · ADX ${r0(p.adx)}`);
-  if (p.adx != null && p.adx < adxRange && regimeUp)
-    return lane("MeanRev", "range", `low ADX ${r0(p.adx)} + above 200SMA — chop/range candidate, UNVALIDATED`);
+  if (p.rsi2 != null && p.rsi2 < mrRsiEntry && regimeUp && spyRegimeOK)
+    return lane("MeanRev", "dip", `RSI2 ${r0(p.rsi2)} oversold · above 200SMA · SPY-regime ok — UNVALIDATED(paper)`);
 
   const why = trendUp
     ? `uptrend but ${p.pctVs20dHigh != null ? p.pctVs20dHigh.toFixed(1) + "% off high" : "far"}`

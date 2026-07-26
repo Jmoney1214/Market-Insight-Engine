@@ -29,6 +29,7 @@ export const THRESH = {
   mrExitSma: 5,        // exit when close reverts back above SMA(mrExitSma)
   mrMaxHold: 10,       // time-stop, trading days, if the SMA exit never fires
   mrRegimeSMA: 200,     // broad-market (SPY) SMA length for the regime filter — dip-buy only when SPY.close > SPY.SMA(mrRegimeSMA)
+  mrMaxConcurrent: 10,  // position cap — at most this many MeanRev names in-cap per scan, ranked by RSI2 ascending (most oversold first)
 };
 
 // character -> strategy -> validation status. `pine` names the exact twin to run.

@@ -1,0 +1,60 @@
+//@version=6
+strategy("MeanRev RSI2 Dip-Buy (SPY Regime)", overlay=true, initial_capital=100000, pyramiding=0, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.02, slippage=2, calc_on_every_tick=false)
+// LONG-ONLY daily mean-reversion dip-buy — the Phase-4 VALIDATED router rule
+// (validate.mjs --lane=meanrev, OUT t=3.85, PROMOTE), kept PAPER on the router
+// (tools/router/classify.mjs route()) until a live-capital decision is made.
+// Entry: Connors RSI2 < 10 while price is above its own 200SMA AND the broad
+// market (SPY) is above its own 200SMA (regime filter — buy pullbacks WITHIN
+// an uptrend, don't catch falling knives in a market downtrend).
+// Exit: close reverts back above SMA5, or a 10-bar time-stop.
+// Close-based signal -> next-open fill (no repaint, matches strategy.entry()'s
+// default next-bar-open execution).
+grp = "MeanRev RSI2"
+rsiLen     = input.int(2, "RSI length (Connors RSI2)", minval=1, group=grp)
+rsiEntry   = input.float(10.0, "RSI oversold entry threshold", minval=0.0, maxval=100.0, group=grp)
+regimeLen  = input.int(200, "Own SMA regime length", minval=1, group=grp)
+exitSmaLen = input.int(5, "Exit SMA length", minval=1, group=grp)
+maxHold    = input.int(10, "Max hold (bars), time-stop", minval=1, group=grp)
+spySymbol  = input.symbol("AMEX:SPY", "Market regime symbol", group=grp)
+spyLen     = input.int(200, "SPY regime SMA length", minval=1, group=grp)
+
+rsi2        = ta.rsi(close, rsiLen)
+ownSma      = ta.sma(close, regimeLen)
+exitSma     = ta.sma(close, exitSmaLen)
+ownRegimeUp = close > ownSma
+
+// SPY's own 200SMA regime, read from a DAILY security request regardless of the
+// chart's timeframe — lookahead_off means it only ever sees SPY's last CLOSED
+// daily bar, same leak-free convention as the router's spyRegimeOK in scan.mjs.
+spyRegimeUp = request.security(spySymbol, "1D", close > ta.sma(close, spyLen), lookahead=barmerge.lookahead_off)
+
+longCondition = rsi2 < rsiEntry and ownRegimeUp and spyRegimeUp
+
+var int barsInTrade = na
+inPos       = strategy.position_size != 0
+justEntered = inPos and strategy.position_size[1] == 0
+if inPos
+    barsInTrade := justEntered ? 0 : nz(barsInTrade) + 1
+else
+    barsInTrade := na
+
+if strategy.position_size == 0 and longCondition
+    strategy.entry("L", strategy.long)
+
+exitSignal = inPos and (close > exitSma or barsInTrade >= maxHold)
+if exitSignal
+    strategy.close("L")
+
+justExited = strategy.position_size == 0 and strategy.position_size[1] != 0
+
+plot(ownSma, "Own 200SMA", color=color.new(color.teal, 0), linewidth=1)
+plot(exitSma, "Exit SMA5", color=color.new(color.orange, 0), linewidth=1)
+plotshape(justEntered, title="Entry fill", location=location.belowbar, color=color.new(color.purple, 0), style=shape.triangleup, size=size.tiny)
+plotshape(justExited,  title="Exit fill",  location=location.abovebar, color=color.new(color.red, 0),    style=shape.triangledown, size=size.tiny)
+
+// TradingView-native chart alerts — the alert rail. Set a TV alert on this strategy
+// ("Any alert() function call") and it pushes the buy/sell on the chart / phone.
+if justEntered
+    alert("🟣 MEANREV BUY " + syminfo.ticker + " — RSI2 " + str.tostring(rsi2, format.mintick) + " dip @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
+if justExited
+    alert("🔴 MEANREV SELL " + syminfo.ticker + " — exit @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
