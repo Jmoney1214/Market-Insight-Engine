@@ -23,6 +23,11 @@ export const THRESH = {
   gapMomentum: 3,      // gap% >= this -> Momentum lane (long continuation)
   gapJump: 5,          // |gap%| >= this -> JumpDay lane
   volSurgeMin: 1.2,    // day volume / 20d avg -> conviction flag
+  // mean-reversion validation (Phase 4 validate --lane=meanrev, Connors RSI2 proxy)
+  mrRsiEntry: 10,      // RSI(mrRsiPeriod) < this -> oversold entry trigger
+  mrRsiPeriod: 2,      // Wilder RSI length (classic Connors RSI2)
+  mrExitSma: 5,        // exit when close reverts back above SMA(mrExitSma)
+  mrMaxHold: 10,       // time-stop, trading days, if the SMA exit never fires
 };
 
 // character -> strategy -> validation status. `pine` names the exact twin to run.
