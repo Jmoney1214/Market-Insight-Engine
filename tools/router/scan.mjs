@@ -9,7 +9,6 @@ import { UNIVERSE } from "./config.mjs";
 import { metricPack, route, routePremarket } from "./classify.mjs";
 import { snapshots } from "./sources.mjs";
 import { writeScan, pushSupabase } from "./store.mjs";
-import { sendSlack } from "./notify.mjs";
 
 // The router only ever talks to Alpaca (bars + snapshots) — data.mjs's requireCreds()
 // also hard-requires FMP_API_KEY, which this tool never uses. Router-local check.
@@ -124,9 +123,5 @@ console.log(`\nsaved → ${writeScan(scan)}`);
 if (process.argv.includes("--db")) {
   try { console.log(`DB    → upserted ${await pushSupabase(scan)} rows to router_scan`); }
   catch (e) { console.error(`DB push failed: ${e.message}`); }
-}
-if (process.argv.includes("--slack")) {
-  try { console.log(`Slack → sent "${await sendSlack(scan)}"`); }
-  catch (e) { console.error(`Slack ping failed: ${e.message}`); }
 }
 console.log("");
