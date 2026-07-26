@@ -1,0 +1,54 @@
+//@version=6
+strategy("Trend Rider (Donchian + Trail)", overlay=true, initial_capital=100000, pyramiding=0, commission_type=strategy.commission.percent, commission_value=0.02, slippage=2, calc_on_every_tick=false)
+// LONG-ONLY daily/swing trend-follower (validated: Donchian-20 breakout + wide trail).
+// Entry: close > prior N-bar high. Exit: toggleable wide trailing stop (chandelier ATR or Donchian low).
+// Sizing: risk % of equity / per-share stop distance. Close-based signal -> next-open fill (no repaint).
+grp = "Trend Rider"
+entryN     = input.int(20, "Entry Donchian length (N)", minval=1, group=grp)
+exitMode   = input.string("Chandelier ATR", "Exit mode", options=["Chandelier ATR", "Donchian low"], group=grp)
+atrLen     = input.int(22, "ATR length (Chandelier)", minval=1, group=grp)
+chandMult  = input.float(3.5, "Chandelier ATR multiple", minval=0.0, step=0.1, group=grp)
+donchExitN = input.int(50, "Exit Donchian length (M)", minval=1, group=grp)
+riskPct    = input.float(1.0, "Risk % of equity per trade", minval=0.0, step=0.1, group=grp) / 100.0
+
+// Donchian bands use [1] so they compare to PRIOR completed bars (no look-ahead)
+entryBand    = ta.highest(high, entryN)[1]
+donchExitLow = ta.lowest(low, donchExitN)[1]
+atrVal       = ta.atr(atrLen)
+
+var float trailStop = na
+var float hhSince    = na
+inPos       = strategy.position_size != 0
+justEntered = inPos and strategy.position_size[1] == 0
+if inPos
+    hhSince := justEntered ? high : math.max(nz(hhSince, high), high)
+    chandStop = hhSince - chandMult * atrVal
+    trailStop := math.max(nz(trailStop, -1e18), chandStop)
+else
+    hhSince   := na
+    trailStop := na
+curStop = exitMode == "Chandelier ATR" ? trailStop : donchExitLow
+
+breakout = close > entryBand
+initStop = exitMode == "Chandelier ATR" ? (close - chandMult * atrVal) : donchExitLow
+initRisk = close - initStop
+qty      = initRisk > 0 ? math.floor(strategy.equity * riskPct / initRisk) : 0
+if strategy.position_size == 0 and breakout and qty >= 1
+    strategy.entry("L", strategy.long, qty=qty)
+
+if inPos and not na(curStop) and close < curStop
+    strategy.close("L")
+
+plot(entryBand, "Entry Donchian High", color=color.new(color.teal, 0), linewidth=1)
+plotStop = inPos ? curStop : na
+plot(plotStop, "Trailing Stop", color=color.new(color.red, 0), style=plot.style_linebr, linewidth=2)
+justExited = strategy.position_size == 0 and strategy.position_size[1] != 0
+plotshape(justEntered, title="Entry fill", location=location.belowbar, color=color.new(color.green, 0), style=shape.triangleup, size=size.tiny)
+plotshape(justExited,  title="Exit fill",  location=location.abovebar, color=color.new(color.red, 0),   style=shape.triangledown, size=size.tiny)
+
+// TradingView-native chart alerts — the alert rail. Set a TV alert on this strategy
+// ("Any alert() function call") and it pushes the buy/sell on the chart / phone.
+if justEntered
+    alert("🟢 BUY " + syminfo.ticker + " — Trend Rider breakout @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
+if justExited
+    alert("🔴 SELL " + syminfo.ticker + " — Trend Rider exit @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
