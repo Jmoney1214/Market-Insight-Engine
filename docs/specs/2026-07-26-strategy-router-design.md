@@ -47,11 +47,11 @@ Reuse `tools/research/` infra (cached SIP fetch, DB, holdout harness) rather tha
 2. **Supabase (Phase 2):** Drizzle `router_scan(date, symbol, strategy, status, signal, metrics jsonb, created_at)` for desk MCP / JARVIS HUD.
 
 ## Output
-Console table: LIVE breakouts → LIVE coils → PAPER flags → CASH count. Slack ping in Phase 2.
+Console table: LIVE breakouts → LIVE coils → PAPER flags → CASH count.
 
 ## Phasing
 1. **Phase 1 (now):** swing mode = TrendRider (LIVE) + Cash, daily bars, JSON, console. Parity-checked vs the live Pine Screener (JPM breakout, BAC/AAPL coils).
-2. Phase 2: Supabase sink + Slack ping.
+2. Phase 2: Supabase sink.
 3. Phase 3: premarket mode → snapshots + RVOL → Momentum/JumpDay (PAPER).
 4. Phase 4: MeanRev lane + wire holdout harness to auto-promote.
 
