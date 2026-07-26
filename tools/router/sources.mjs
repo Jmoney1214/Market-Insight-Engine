@@ -3,6 +3,10 @@
 // surge. NOT cached: premarket state is live. Chunked at 100.
 const AH = { "APCA-API-KEY-ID": process.env.ALPACA_API_KEY_ID, "APCA-API-SECRET-KEY": process.env.ALPACA_API_SECRET_KEY };
 
+// Returns { snaps, missing }. `missing` are symbols Alpaca's response omitted
+// entirely (contra data.mjs's partial-data discipline for bars, this endpoint is
+// allowed to drop names — premarket omissions are normal — but the caller needs to
+// know the count rather than have them silently vanish from the board).
 export async function snapshots(symbols) {
   const out = new Map();
   for (let i = 0; i < symbols.length; i += 100) {
@@ -29,5 +33,9 @@ export async function snapshots(symbols) {
       });
     }
   }
-  return out;
+  const missing = [];
+  for (const sym of symbols) {
+    if (!out.has(sym)) { out.set(sym, null); missing.push(sym); }
+  }
+  return { snaps: out, missing };
 }

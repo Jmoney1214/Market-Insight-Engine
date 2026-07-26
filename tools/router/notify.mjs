@@ -14,11 +14,23 @@ export async function sendSlack(scan) {
   const coils = ok.filter((r) => r.strategy === "TrendRider" && r.signal === "coil").sort(byProx).slice(0, 6)
     .map((r) => `${r.sym} ${r.metrics.pctVs20dHigh.toFixed(1)}% (ADX ${Math.round(r.metrics.adx)})`);
 
-  const text = [
+  const lines = [
     buys.length ? `🟢 LIVE BUY: ${buys.join(", ")}` : "🟢 No LIVE breakout today",
     `🟡 Coiling (watch): ${coils.join(" · ") || "—"}`,
     `Lanes → ${c.breakout} breakout · ${c.coil} coil · ${c.paper} paper · ${c.cash} cash`,
-  ].join("\n");
+  ];
+
+  // Premarket/both mode is the whole point of a gapper run — without this line the
+  // gappers (the reason for running that mode) never show up in Slack.
+  if (scan.mode === "premarket" || scan.mode === "both") {
+    const gapByProx = (a, b) => (b.premarket.gapPct ?? -1e9) - (a.premarket.gapPct ?? -1e9);
+    const gappers = ok.filter((r) => r.premarket && (r.premarket.lane === "Momentum" || r.premarket.lane === "JumpDay"))
+      .sort(gapByProx)
+      .map((r) => `${r.sym} ${r.premarket.lane} ${r.premarket.gapPct >= 0 ? "+" : ""}${r.premarket.gapPct.toFixed(1)}%`);
+    if (gappers.length) lines.push(`🔵 Premarket gappers: ${gappers.join(", ")}`);
+  }
+
+  const text = lines.join("\n");
 
   const payload = {
     text,

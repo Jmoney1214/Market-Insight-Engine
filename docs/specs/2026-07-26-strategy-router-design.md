@@ -31,7 +31,10 @@ Reuse `tools/research/` infra (cached SIP fetch, DB, holdout harness) rather tha
 ## Lanes (character → strategy → status)
 | Code | Lane | Character | Pine file | Status |
 |---|---|---|---|---|
-| 1 | TrendRider | uptrend, breaking/near 20d high, ADX≥25 | `Trend_Rider.pine` | **LIVE** (holdout-validated) |
+| 1 | TrendRider | uptrend, breaking/near 20d high; ADX = **conviction read, not a gate** | `Trend_Rider.pine` | **LIVE** (holdout-validated) |
+
+> **ADX note:** the LIVE breakout entry is exactly the holdout-validated Donchian breakout that matches the TradingView Pine Screener to the decimal (`trendUp && regimeUp && close > prior-20d-high`) — it is deliberately **not** gated on ADX. ADX is computed and reported as a *conviction* signal only (e.g. JPM's breakout at ADX 17 is flagged weak). Gating the LIVE lane on ADX≥25 would drop validated signals, break parity, and turn the lane into an unvalidated variant — violating the "real money only to validated lanes" rule.
+
 | 2 | MeanRev | range-bound, ADX<20, hugs MA | `morning_scan_largecap_scalper.pine` | PAPER |
 | 3 | Momentum | gap≥3% + RVOL≥1.5 (premarket) | ORB / `morning_scan_strategy.pine` | PAPER |
 | 4 | JumpDay | overnight move ≥5% | `morning_scan_jumpday_long.pine` | PAPER |

@@ -127,15 +127,24 @@ export function route(p) {
 // Premarket overlay (Phase 3). Runs alongside the swing route — a name can be both a
 // swing coil AND a premarket gapper. gap% = (price - prior close)/prior close.
 // Momentum/JumpDay are PAPER (unvalidated) until class_backtest.mjs promotes them.
-export function routePremarket(pm, swingPack) {
+// `etDate` (the ET trading date this run targets) guards against a stale snapshot —
+// e.g. over a weekend/holiday Alpaca's dailyBar is still the last real session's, so
+// its gap would otherwise be mislabeled as an overnight gap for "today".
+export function routePremarket(pm, swingPack, etDate) {
   const { minPrice, minDollarVolM, gapMomentum, gapJump, volSurgeMin } = THRESH;
   if (!pm) return { lane: "—", gapPct: null, note: "no snapshot" };
+  if (etDate && pm.dayDate && pm.dayDate !== etDate)
+    return { lane: "—", gapPct: pm.gapPct, note: `stale gap (last session ${pm.dayDate})` };
   const g = pm.gapPct;
   if (pm.price < minPrice || (swingPack?.dollarVolM ?? 1e9) < minDollarVolM)
     return { lane: "—", gapPct: g, note: "illiquid" };
   const surge = pm.volSurge != null && pm.volSurge >= volSurgeMin ? ` · volx ${pm.volSurge.toFixed(1)}` : "";
-  if (Math.abs(g) >= gapJump)
+  // Directional: only a big gap-UP goes to JumpDay (its Pine twin is long-only).
+  // A big gap-DOWN has no long twin to route to, so it stays unrouted.
+  if (g >= gapJump)
     return { lane: "JumpDay", code: LANES.JumpDay.code, status: "PAPER", gapPct: g, note: `jump ${g.toFixed(1)}%${surge}` };
+  if (g <= -gapJump)
+    return { lane: "—", gapPct: g, note: `gap-down ${g.toFixed(1)}% (no long twin)` };
   if (g >= gapMomentum)
     return { lane: "Momentum", code: LANES.Momentum.code, status: "PAPER", gapPct: g, note: `gap +${g.toFixed(1)}%${surge}` };
   return { lane: "—", gapPct: g, note: `gap ${g.toFixed(1)}%` };
