@@ -28,6 +28,7 @@ export const THRESH = {
   mrRsiPeriod: 2,      // Wilder RSI length (classic Connors RSI2)
   mrExitSma: 5,        // exit when close reverts back above SMA(mrExitSma)
   mrMaxHold: 10,       // time-stop, trading days, if the SMA exit never fires
+  mrRegimeSMA: 200,     // broad-market (SPY) SMA length for the regime filter — dip-buy only when SPY.close > SPY.SMA(mrRegimeSMA)
 };
 
 // character -> strategy -> validation status. `pine` names the exact twin to run.

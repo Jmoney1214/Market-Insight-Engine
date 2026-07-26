@@ -106,6 +106,12 @@ const bars = await alpacaBars(UNIVERSE, "1Day", start, end, `validate_${lane}`, 
 // ---- the backtest — LEAK-FREE by construction ---------------------------------
 const COST = 0.0004; // 2bps round-trip (entry + exit)
 const trades = [];
+// meanrev-only market-regime filter state — declared here (not inside the meanrev
+// branch below) so the console/JSON report sections after the backtest can read
+// it too. Stays false/empty for the gap lanes (momentum/jumpday), which never
+// touch it.
+let useRegime = false;
+let regimeOK = new Map(); // "YYYY-MM-DD" -> boolean
 
 if (lane === "meanrev") {
   // Thesis under test: classic Connors RSI2 mean-reversion dip-buy — buy an
@@ -167,6 +173,32 @@ if (lane === "meanrev") {
     return sma;
   };
 
+  // ---- market-regime filter (Phase 4c) ----------------------------------------
+  // stress.mjs's regime split found this dip-buy breaks in the 2022 bear (2022
+  // mean -0.50%, t=-2.53, statistically significant loss): buying an oversold dip
+  // is a different bet when the BROAD MARKET is itself trending down vs up. Fix:
+  // only take the dip-buy when SPY is above its own SMA(mrRegimeSMA) at the
+  // signal's close — i.e. buy pullbacks WITHIN a market uptrend, don't catch
+  // falling knives in a market downtrend. SPY.SMA(mrRegimeSMA)[i] is built from
+  // SPY closes[0..i] only — known the instant SPY's own bar i closes, same
+  // leak-free convention as every other gate in this file. ON by default for the
+  // meanrev lane; pass --no-regime to disable for an A/B comparison.
+  useRegime = !process.argv.includes("--no-regime");
+  if (useRegime) {
+    const spyBars = await alpacaBars(["SPY"], "1Day", start, end, "regime_spy", 24);
+    const spyRaw = spyBars.get("SPY") ?? [];
+    const spy = [...spyRaw].sort((x, y) => (x.t < y.t ? -1 : 1));
+    const spyCloses = spy.map((x) => x.c);
+    const spySma = computeSMA(spyCloses, THRESH.mrRegimeSMA);
+    for (let i = 0; i < spy.length; i++) {
+      if (spySma[i] == null) continue; // not warmed up yet
+      regimeOK.set(spy[i].t.slice(0, 10), spyCloses[i] > spySma[i]);
+    }
+    console.log(`regime filter: ON — SPY close > SPY SMA(${THRESH.mrRegimeSMA}) required on the signal day (${regimeOK.size} SPY dates with a known regime flag)`);
+  } else {
+    console.log(`regime filter: OFF (--no-regime)`);
+  }
+
   for (const sym of UNIVERSE) {
     const raw = bars.get(sym);
     // need THRESH.smaRegime (200) prior closes for SMA200 to warm up, plus the
@@ -201,6 +233,7 @@ if (lane === "meanrev") {
       if (rsi2[i] == null || sma200[i] == null) continue; // not warmed up yet
       if (!(rsi2[i] < THRESH.mrRsiEntry)) continue;
       if (!(closes[i] > sma200[i])) continue;
+      if (useRegime && regimeOK.get(b[i].t.slice(0, 10)) !== true) continue; // market itself not in an uptrend on the signal day (also skips if SPY has no bar for that date)
       if (i < 20) continue; // need 20 prior completed days for the liquidity floor
       let dvSum = 0; // avg $-volume over i-20..i-1 — completed bars only, no leak
       for (let k = i - 20; k <= i - 1; k++) dvSum += b[k].c * b[k].v;
@@ -296,7 +329,9 @@ const line = (r) =>
   `   PF=${pfStr(r.pf).padStart(6)}   t=${tStr(r.t).padStart(7)}   trimmed=${r.trimmedMeanPct.toFixed(3).padStart(8)}%`;
 
 if (lane === "meanrev") {
-  console.log(`gate: RSI(${THRESH.mrRsiPeriod})[d] < ${THRESH.mrRsiEntry}  ·  close[d] > SMA${THRESH.smaRegime}[d]  ·  avgDollarVol(d-20..d-1) >= $${THRESH.minDollarVolM}M  ·  close[d] >= $${THRESH.minPrice}  ·  exit close[e] > SMA${THRESH.mrExitSma}[e] or hold>=${THRESH.mrMaxHold}d  ·  cost ${(COST * 100).toFixed(2)}% round-trip`);
+  console.log(`gate: RSI(${THRESH.mrRsiPeriod})[d] < ${THRESH.mrRsiEntry}  ·  close[d] > SMA${THRESH.smaRegime}[d]  ·  avgDollarVol(d-20..d-1) >= $${THRESH.minDollarVolM}M  ·  close[d] >= $${THRESH.minPrice}` +
+    (useRegime ? `  ·  SPY.close[d] > SPY.SMA${THRESH.mrRegimeSMA}[d]` : `  ·  regime filter OFF (--no-regime)`) +
+    `  ·  exit close[e] > SMA${THRESH.mrExitSma}[e] or hold>=${THRESH.mrMaxHold}d  ·  cost ${(COST * 100).toFixed(2)}% round-trip`);
 } else {
   console.log(`gate: gapPct[d] >= ${gateThresh}%  ·  close[d-1] >= $${THRESH.minPrice}  ·  avgDollarVol(d-20..d-1) >= $${THRESH.minDollarVolM}M  ·  cost ${(COST * 100).toFixed(2)}% round-trip`);
 }
@@ -338,6 +373,9 @@ const report = {
     minPrice: THRESH.minPrice,
     minDollarVolM: THRESH.minDollarVolM,
     costRoundTrip: COST,
+    regimeFilterEnabled: useRegime,
+    mrRegimeSMA: THRESH.mrRegimeSMA,
+    regimeFilterSymbol: "SPY",
   } : {
     [gateThreshKey]: gateThresh,
     minPrice: THRESH.minPrice,
@@ -350,6 +388,9 @@ const report = {
     "entry FILLS at open[d+1] — the bar after the signal fires, never the signal bar's own close",
     "exit signal = close[e] > SMA(mrExitSma)[e] OR (e-entryIndex) >= mrMaxHold, known at close[e]; exit FILLS at open[e+1] — symmetric with entry, never a same-bar fill",
     "one position per symbol at a time — new entry signals are ignored while a position is already open (no pyramiding)",
+    useRegime
+      ? "REGIME FILTER (default ON, --no-regime to disable): entry additionally requires SPY.close[d] > SPY.SMA(mrRegimeSMA)[d] — SPY's own SMA is built from SPY closes[0..d] only, known the instant SPY's bar d closes; dates with no SPY bar are treated as regime-NOT-ok (entry skipped) — no look-ahead, added to neutralize the 2022 bear-market fragility found in stress.mjs"
+      : "REGIME FILTER: disabled via --no-regime for this run — entries are NOT gated on SPY's trend (A/B comparison mode)",
     "SCOPE: this validates the daily-bar Connors RSI2 mean-reversion proxy only. The production MeanRev lane currently routes on a crude ADX<20/above-200SMA flag, and the true Super-1 thesis is intraday VWAP+RSI2 — a PROMOTE here validates the mean-reversion THESIS, not the router's current entry rule. Wiring the router's MeanRev entry to this exact rule is a separate follow-up.",
   ] : [
     "gate = gapPct[d] = (open[d]-close[d-1])/close[d-1], known at open[d] — the only day-d field used for entry",
