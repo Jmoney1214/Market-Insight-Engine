@@ -173,6 +173,38 @@ export function reinforcementDelta(grade: { score: number | null; eventSignifica
 }
 
 /**
+ * Wave 0 emergency containment: EPISODIC→SEMANTIC promotion is frozen until the
+ * outcome/holdout promotion lab exists. Default OFF (frozen) — a low or
+ * arbitrary grade reference must never mint permanent "trusted" truth. Thaws
+ * only on the exact opt-in ENABLE_SEMANTIC_PROMOTION="true".
+ */
+export function semanticPromotionFrozen(): boolean {
+  return process.env["ENABLE_SEMANTIC_PROMOTION"] !== "true";
+}
+
+/**
+ * Pure per-row outcome of one reinforcement pass, and the SINGLE source of
+ * truth for both effects:
+ *   - importance is ALWAYS reinforced — never gated by the freeze (gating it
+ *     would silently kill the Outcome Reinforcer for the episodic tier);
+ *   - promote (the SEMANTIC layer flip) is the ONLY thing the freeze gates, and
+ *     only for an eligible EPISODIC row.
+ * `canPromoteAllowed` is the caller's precomputed canPromote() verdict.
+ */
+export function reinforcementDecision(input: {
+  currentImportance: number;
+  requestedDelta: number;
+  layer: MemoryLayer;
+  canPromoteAllowed: boolean;
+  frozen: boolean;
+}): { importance: number; promote: boolean } {
+  return {
+    importance: reinforceImportance(input.currentImportance, input.requestedDelta),
+    promote: !input.frozen && input.layer === "EPISODIC" && input.canPromoteAllowed,
+  };
+}
+
+/**
  * Outcome Reinforcer sweep: recent grades (outcome OR event-study) adjust the
  * importance of memories derived from those findings — bounded per event,
  * idempotent per grade ref, batched (one memory query per sweep, not per
@@ -208,6 +240,8 @@ export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
       .where(inArray(memoryItemsTable.sourceRef, [...byRef.keys()]))
       .limit(500);
 
+    // Freeze state is constant for the whole sweep — read once, not per row.
+    const frozen = semanticPromotionFrozen();
     let adjusted = 0;
     for (const row of rows) {
       const g = row.sourceRef ? byRef.get(row.sourceRef) : undefined;
@@ -218,9 +252,25 @@ export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
       const log = (row.reinforcements as Array<{ gradeRef: string }>) ?? [];
       const gradeRef = `finding_grades:${g.id}`;
       if (log.some((entry) => entry.gradeRef === gradeRef)) continue; // idempotent
-      const importance = reinforceImportance(row.importance, requestedDelta);
 
-      const promotion = canPromote({ ...rowToItem(row), independentGradeRef: gradeRef }, "SEMANTIC");
+      // canPromote() is meaningful only for EPISODIC rows (the sole promotable
+      // tier); compute it there and let reinforcementDecision own the freeze
+      // gate. A grade is only actionable within the 48h reinforcement window,
+      // so a promotion the freeze skips is NOT deferred for a later thaw — it is
+      // forgone by design. That is acceptable: Wave 1+ rebuilds promotion from
+      // the durable finding_grades ledger, not from these memory rows.
+      const canPromoteAllowed =
+        row.layer === "EPISODIC"
+          ? canPromote({ ...rowToItem(row), independentGradeRef: gradeRef }, "SEMANTIC").allowed
+          : false;
+      const { importance, promote } = reinforcementDecision({
+        currentImportance: row.importance,
+        requestedDelta,
+        layer: row.layer as MemoryLayer,
+        canPromoteAllowed,
+        frozen,
+      });
+
       await db
         .update(memoryItemsTable)
         .set({
@@ -235,7 +285,7 @@ export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
               gradeRef,
             },
           ],
-          ...(promotion.allowed && row.layer === "EPISODIC"
+          ...(promote
             ? { layer: "SEMANTIC" as const, promotedFrom: row.layer, promotedAt: new Date(), expiresAt: null }
             : {}),
         })
@@ -250,9 +300,26 @@ export async function reinforceFromGrades(lookbackHours = 48): Promise<number> {
   }
 }
 
+/**
+ * Wave 0 emergency containment: which research outcomes may enter episodic
+ * memory at all. BLOCKED / failed runs carry no admitted research and are pure
+ * noise — they must never accumulate as the desk's diary. (This is a floor, not
+ * the quality gate; the deterministic tiered gate arrives in Wave 1.)
+ */
+export function episodeEligibleForMemory(researchOutcome: string): boolean {
+  return researchOutcome === "COMPLETE" || researchOutcome === "PARTIAL";
+}
+
 /** Episodic memory of a completed research run — the desk's research diary. */
 export async function recordResearchEpisode(result: LeadRunResult): Promise<void> {
   const packet = result.packet;
+  if (!episodeEligibleForMemory(packet.researchOutcome)) {
+    logger.info(
+      { symbol: packet.symbol, outcome: packet.researchOutcome },
+      "Research episode not memory-eligible (Wave 0 containment) — skipped",
+    );
+    return;
+  }
   const catalyst = result.catalystRecords[0];
   const content = [
     `Research ${packet.researchMode} on ${packet.symbol}: ${packet.researchOutcome}.`,
@@ -274,7 +341,24 @@ export async function recordResearchEpisode(result: LeadRunResult): Promise<void
   });
 }
 
-/** Decision memory: last N research verdicts on a ticker, outcome-joined. */
+/**
+ * Wave 0 emergency containment gate for the COMMITTEE-facing decision-memory
+ * feed. Suppressed by default — until Wave 1 gives episodes an explicit
+ * trusted-only `retrieval_status`, "eligible-only" means an empty eligible set,
+ * so no unvetted, possibly-fabricated verdict may reach the committee. Enforced
+ * at the committee injection point (routes/copilot/explain.ts), NOT inside
+ * getDecisionMemory — the read-only /memory/:symbol diagnostic must still show
+ * the operator the real stored history. Re-enables only on ENABLE_DECISION_MEMORY="true".
+ */
+export function decisionMemoryEnabled(): boolean {
+  return process.env["ENABLE_DECISION_MEMORY"] === "true";
+}
+
+/**
+ * Decision memory: last N research verdicts on a ticker, outcome-joined.
+ * Read-only and unfiltered by design — the operator diagnostic route relies on
+ * it. Committee-facing suppression lives at the caller (see decisionMemoryEnabled).
+ */
 export async function getDecisionMemory(symbol: string, limit = 5): Promise<string[]> {
   try {
     const packets = await db
