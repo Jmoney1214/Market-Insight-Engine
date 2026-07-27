@@ -256,7 +256,10 @@ for (let ti = 0; ti < timeline.length; ti++) {
       else if (r.strategy === "MeanRev")
         cands.push({ sym, lane: "MeanRev", sector: SECTOR[sym] ?? "Unknown", rankVal: m.rsi2 ?? 1e9, atrVal: bd.atr14[idx], closePx: m.close });
     }
-    const trendCands = cands.filter((c) => c.lane === "TrendRider").sort((a, b) => b.rankVal - a.rankVal);
+    // FRESH-first: smallest %-above-band (just cleared the 20d high) wins the slot over the
+    // most-extended breakout (which tends to mean-revert). Flipped from desc after the June
+    // post-mortem — the old desc ranking took MDB/DDOG/ORCL (reverted) and skipped MRVL (+0.5% -> ran +13.9%).
+    const trendCands = cands.filter((c) => c.lane === "TrendRider").sort((a, b) => a.rankVal - b.rankVal);
     const mrCands = cands.filter((c) => c.lane === "MeanRev").sort((a, b) => a.rankVal - b.rankVal);
     const ranked = [...trendCands, ...mrCands];
 
