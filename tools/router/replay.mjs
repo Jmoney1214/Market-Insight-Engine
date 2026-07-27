@@ -1,7 +1,7 @@
 // Replay the router AS-OF a past date using the exact live classify.mjs logic, then
 // show how each signal actually played out. Run:
 //   node --env-file=.env tools/router/replay.mjs --date=2026-07-20
-import { alpacaBars } from "../research/lib/data.mjs";
+import { alpacaBars, fmpEarnings } from "../research/lib/data.mjs";
 import { daysBefore } from "../research/lib/dates.mjs";
 import { UNIVERSE, THRESH } from "./config.mjs";
 import { metricPack, route } from "./classify.mjs";
@@ -23,6 +23,15 @@ const spyPack = metricPack(spyB.slice(0, spyIdx + 1));
 const spyRegimeOK = spyPack.sma200 != null && spyPack.close > spyPack.sma200;
 const actualAsof = spyB[spyIdx].t.slice(0, 10);
 
+// earnings-blackout as-of the replay date (same rule the live router applies):
+// names reporting within mrEarningsBlackoutDays get their dip-buy suppressed.
+let blackoutSet = new Set();
+try {
+  const earn = await fmpEarnings(actualAsof, daysBefore(actualAsof, -THRESH.mrEarningsBlackoutDays));
+  const uni = new Set(UNIVERSE);
+  for (const rec of earn) { const s = rec.slice(rec.lastIndexOf("|") + 1); if (uni.has(s)) blackoutSet.add(s); }
+} catch (e) { console.error(`earnings blackout fetch failed (${e.message}) — none applied`); }
+
 // classify every name using the same slice-to-asof trick (metricPack treats the last bar as "today")
 const rows = [];
 for (const sym of UNIVERSE) {
@@ -31,7 +40,7 @@ for (const sym of UNIVERSE) {
   const ai = idxAsof(b);
   if (ai < 253) continue;
   const m = metricPack(b.slice(0, ai + 1));
-  rows.push({ sym, ...route(m, spyRegimeOK), metrics: m, b, ai });
+  rows.push({ sym, ...route(m, spyRegimeOK, blackoutSet.has(sym)), metrics: m, b, ai });
 }
 
 const lastDate = spyB[spyB.length - 1].t.slice(0, 10);

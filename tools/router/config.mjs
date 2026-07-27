@@ -41,3 +41,43 @@ export const LANES = {
   JumpDay:    { code: 4, pine: "morning_scan_jumpday_long.pine",      status: "PAPER" },
   Cash:       { code: 0, pine: null,                                  status: "LIVE"  },
 };
+
+// Portfolio engine (tools/router/portfolio.mjs) — institutional risk-based sizing,
+// concurrent/sector/exposure caps, for the multi-position book simulation. Distinct
+// from THRESH's mrMaxConcurrent (a MeanRev-lane-only cap used by scan.mjs's board) —
+// maxConcurrent here caps the WHOLE portfolio across every lane at once.
+export const PORTFOLIO = {
+  startEquity: 100000,      // $ starting capital
+  riskPctPerTrade: 0.01,    // 1% of current equity risked per trade (stop-distance based)
+  maxConcurrent: 10,        // max open positions, all lanes combined
+  maxPerSector: 3,          // max open positions sharing one SECTOR bucket
+  maxNotionalPct: 0.25,     // no single position > 25% of equity notional
+  maxGrossExposure: 1.0,    // sum of open notional <= 100% of equity (no leverage)
+  trendStopAtr: 22, trendStopMult: 3.5,   // TrendRider: chandelier stopDist = 3.5 * ATR(22) — sizing AND the daily trailing stop
+  meanrevStopAtr: 14, meanrevStopMult: 2.5, // MeanRev: sizing stop AND fixed hard stop = 2.5 * ATR(14), set once at entry (not trailing)
+};
+
+// Static sector map for every UNIVERSE name — hand-classified, used only for
+// PORTFOLIO.maxPerSector concentration caps. Not a GICS feed; grouped for
+// correlation (e.g. COIN/MSTR/MARA/RIOT bucketed together as "Crypto" since all
+// four move with BTC regardless of official industry classification).
+export const SECTOR = {
+  NVDA: "Semis", AMD: "Semis", SMCI: "Hardware", INTC: "Semis", MU: "Semis",
+  MRVL: "Semis", AVGO: "Semis", TSM: "Semis", QCOM: "Semis", TXN: "Semis",
+  AMAT: "SemiEquip", LRCX: "SemiEquip", KLAC: "SemiEquip", ON: "Semis",
+  DELL: "Hardware", ANET: "Networking", MCHP: "Semis", ADI: "Semis",
+  ASML: "SemiEquip", NXPI: "Semis", MPWR: "Semis", WDC: "Storage", STX: "Storage",
+  AAPL: "Hardware", MSFT: "Software", GOOGL: "Internet", AMZN: "Internet", META: "Internet",
+  NFLX: "Media", ORCL: "Software", ADBE: "Software", CRM: "Software", CSCO: "Networking",
+  IBM: "ITServices", INTU: "Software", NOW: "Software", PLTR: "Software", NET: "Software",
+  DDOG: "Software", SNOW: "Software", CRWD: "Software", PANW: "Software",
+  ZS: "Software", MDB: "Software", ROKU: "Media", SHOP: "Internet", PYPL: "Fintech",
+  AFRM: "Fintech", UPST: "Fintech", SOFI: "Fintech", COIN: "Crypto", DKNG: "Gaming",
+  MSTR: "Crypto", MARA: "Crypto", RIOT: "Crypto", TSLA: "Auto",
+  GM: "Auto", F: "Auto", BABA: "Internet", PDD: "Internet", JD: "Internet",
+  MRNA: "Health", PFE: "Health", LLY: "Health", UBER: "Internet", ABNB: "Internet",
+  CVNA: "Auto", LULU: "Consumer", NKE: "Consumer", SBUX: "Consumer", CMG: "Consumer",
+  DIS: "Media", GME: "Consumer", SNAP: "Internet", OXY: "Energy", CCJ: "Materials",
+  FSLR: "Energy", ENPH: "Energy", DAL: "Airline", AAL: "Airline", CCL: "Travel",
+  JPM: "Bank", BAC: "Bank", GS: "Bank", MS: "Bank", C: "Bank", SCHW: "Bank",
+};
