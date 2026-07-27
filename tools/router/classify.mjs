@@ -130,7 +130,7 @@ const r0 = (v) => (v == null ? "–" : Math.round(v));
 const r1 = (v) => (v == null ? "–" : v.toFixed(1));
 const fmtM = (v) => (v == null ? "–" : Math.round(v).toLocaleString());
 
-export function route(p, spyRegimeOK = true) {
+export function route(p, spyRegimeOK = true, inEarningsBlackout = false) {
   const { minDollarVolM, minPrice, coilBandPct, mrRsiEntry } = THRESH;
   const lane = (name, signal, reason) => ({ strategy: name, code: LANES[name].code, status: LANES[name].status, signal, reason });
 
@@ -145,7 +145,7 @@ export function route(p, spyRegimeOK = true) {
     return lane("TrendRider", "breakout", `new 20d high +${p.pctVs20dHigh.toFixed(2)}% · ADX ${r0(p.adx)} · ATR ${r1(p.atrPct)}%`);
   if (trendUp && regimeUp && p.pctVs20dHigh != null && p.pctVs20dHigh >= -coilBandPct)
     return lane("TrendRider", "coil", `${p.pctVs20dHigh.toFixed(2)}% from 20d high · uptrend · ADX ${r0(p.adx)}`);
-  if (p.rsi2 != null && p.rsi2 < mrRsiEntry && regimeUp && spyRegimeOK)
+  if (p.rsi2 != null && p.rsi2 < mrRsiEntry && regimeUp && spyRegimeOK && !inEarningsBlackout)
     return lane("MeanRev", "dip", `RSI2 ${r0(p.rsi2)} oversold · above 200SMA · SPY-regime ok — UNVALIDATED(paper)`);
 
   const why = trendUp

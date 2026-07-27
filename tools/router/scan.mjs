@@ -3,7 +3,7 @@
 // character, route to a lane (LIVE TrendRider vs Cash; range flagged PAPER),
 // print a ranked table, and persist JSON. Run:
 //   node --env-file=.env tools/router/scan.mjs
-import { alpacaBars, gitSha } from "../research/lib/data.mjs";
+import { alpacaBars, fmpEarnings, gitSha } from "../research/lib/data.mjs";
 import { daysBefore } from "../research/lib/dates.mjs";
 import { UNIVERSE, THRESH } from "./config.mjs";
 import { metricPack, route, routePremarket } from "./classify.mjs";
@@ -52,6 +52,26 @@ if (spyBars && spyBars.length >= 253) {
 }
 console.log(`SPY regime: close $${spyClose != null ? spyClose.toFixed(2) : "–"} vs SMA200 $${spySma200 != null ? spySma200.toFixed(2) : "–"} → ${spyRegimeOK ? "ON (above 200SMA)" : "OFF (below/at 200SMA)"}\n`);
 
+// Earnings-blackout gate for the MeanRev dip-buy (Phase-4e validated rule, same
+// as validate.mjs/stress.mjs): skip a dip-buy if the name reports earnings within
+// THRESH.mrEarningsBlackoutDays of today. Forward-only window off the scan date
+// (no chunking needed — 7 days is far below FMP's per-request cap). A transient
+// FMP failure must not abort the run — the swing board still has value without it.
+const blackoutTo = daysBefore(end, -THRESH.mrEarningsBlackoutDays); // daysBefore(day, -n) == n days AFTER day
+let blackoutSet = new Set();
+try {
+  const earn = await fmpEarnings(end, blackoutTo);
+  const uniSet = new Set(UNIVERSE);
+  for (const rec of earn) {
+    const i = rec.lastIndexOf("|");
+    const sym = rec.slice(i + 1);
+    if (uniSet.has(sym)) blackoutSet.add(sym);
+  }
+  console.log(`earnings blackout: ${blackoutSet.size} universe name(s) reporting ${end}..${blackoutTo} (≤${THRESH.mrEarningsBlackoutDays}d)${blackoutSet.size ? ": " + [...blackoutSet].sort().join(", ") : ""}`);
+} catch (e) {
+  console.error(`earnings blackout fetch failed (${e.message}) — treating blackoutSet as empty this run, MeanRev dip-buy not earnings-filtered`);
+}
+
 const rows = [];
 for (const sym of UNIVERSE) {
   const b = bars.get(sym);
@@ -59,7 +79,7 @@ for (const sym of UNIVERSE) {
   // or pctVs52 silently goes null for names sitting just under the old 210 floor.
   if (!b || b.length < 253) { rows.push({ sym, error: `insufficient bars (${b ? b.length : 0})` }); continue; }
   const m = metricPack(b);
-  rows.push({ sym, ...route(m, spyRegimeOK), metrics: m });
+  rows.push({ sym, ...route(m, spyRegimeOK, blackoutSet.has(sym)), metrics: m });
 }
 
 if (doPremarket) {
@@ -114,6 +134,14 @@ meanRev.forEach((r, i) => {
 const meanRevInCap = meanRev.filter((r) => r.capStatus === "in-cap");
 const meanRevOverCap = meanRev.filter((r) => r.capStatus === "waitlist");
 
+// Names that would have routed to MeanRev (RSI2-oversold, above 200SMA) but were
+// diverted to Cash purely by the earnings-blackout gate — visibility into what
+// the filter actually removed today.
+const suppressed = ok.filter((r) =>
+  r.metrics.rsi2 != null && r.metrics.rsi2 < THRESH.mrRsiEntry &&
+  r.metrics.sma200 != null && r.metrics.close > r.metrics.sma200 &&
+  blackoutSet.has(r.sym));
+
 const line = (r) => `  ${r.sym.padEnd(6)} ${String(r.metrics.pctVs20dHigh?.toFixed(2)).padStart(7)}%  ${r.reason}`;
 const r0 = (v) => (v == null ? "–" : Math.round(v));
 console.log(`🟢 LIVE · TrendRider BREAKOUT (buy) — ${breakout.length}`);
@@ -123,6 +151,7 @@ coil.forEach((r) => console.log(line(r)));
 console.log(`\n🟣 PAPER · MeanRev DIP-BUY (validated rule, paper-trade) — ${meanRevInCap.length}`);
 meanRevInCap.forEach((r) => console.log(`  ${r.sym.padEnd(6)} RSI2 ${String(r0(r.metrics.rsi2)).padStart(3)}  ${r.reason}`));
 if (meanRevOverCap.length) console.log(`  (+${meanRevOverCap.length} over cap — waitlist)`);
+console.log(`  (${suppressed.length} dip candidate${suppressed.length === 1 ? "" : "s"} suppressed by earnings blackout ≤${THRESH.mrEarningsBlackoutDays}d: ${suppressed.length ? suppressed.map((r) => r.sym).join(", ") : "none"})`);
 if (doPremarket) {
   console.log(`\n🔵 PAPER · PREMARKET GAP LANES — ${gappers.length}`);
   gappers.forEach((r) => console.log(`  ${r.sym.padEnd(6)} ${r.premarket.lane.padEnd(9)} ${r.premarket.note}${r.premarket.price ? " · $" + r.premarket.price.toFixed(2) : ""}`));
