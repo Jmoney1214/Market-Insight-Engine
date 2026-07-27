@@ -22,7 +22,7 @@
 //   node --env-file=.env tools/router/stress.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { alpacaBars, fmpUniverse, gitSha } from "../research/lib/data.mjs";
+import { alpacaBars, fmpUniverse, gitSha, fmpEarningsChunked, earningsMapForUniverse } from "../research/lib/data.mjs";
 import { daysBefore } from "../research/lib/dates.mjs";
 import { THRESH } from "./config.mjs";
 
@@ -183,6 +183,51 @@ if (useRegime) {
   console.log(`regime filter: OFF (--no-regime)\n`);
 }
 
+// ---- earnings-blackout filter (meanrev only, matches validate.mjs's default-ON
+// rule) ----------------------------------------------------------------------
+// Same motivation/leak-avoidance writeup as validate.mjs: skip a dip-buy entry
+// if the symbol has ANY scheduled earnings date E with entryDate <= E <=
+// entryDate + mrEarningsBlackoutDays. Earnings report DATES are public weeks
+// ahead of the report, so this is not look-ahead. ON by default; --no-blackout
+// disables it for an A/B comparison, same flag name as validate.mjs. Coverage is
+// reported against BROAD (the full stress universe), not just the hand-picked
+// UNIVERSE — a much larger, less curated set, so symbol-coverage gaps here are
+// expected and reported honestly rather than assumed away.
+const useBlackout = !process.argv.includes("--no-blackout");
+const earningsBySymbol = new Map(); // symbol -> sorted "YYYY-MM-DD"[]
+let earningsCoverage = null;
+if (useBlackout) {
+  const earnTo = daysBefore(end, -THRESH.mrEarningsBlackoutDays); // daysBefore(day, -n) == n days AFTER day
+  const { set: earnRows, chunkLog } = await fmpEarningsChunked(start, earnTo);
+  const built = earningsMapForUniverse(earnRows, BROAD);
+  for (const [sym, dates] of built.bySymbol) earningsBySymbol.set(sym, dates);
+  earningsCoverage = built.coverage;
+  const bisected = chunkLog.filter((c) => c.error || c.capGuardHit).length;
+  const errored = chunkLog.filter((c) => c.error);
+  console.log(`earnings blackout: ON — skip entry if any earnings date falls in [entryDate, entryDate+${THRESH.mrEarningsBlackoutDays}d]`);
+  console.log(`  earnings fetch: ${start}..${earnTo}, ${chunkLog.length} leaf request(s) (${bisected} needed cap/error bisection)`);
+  console.log(`  coverage: ${earningsCoverage.coveredSymbolCount}/${earningsCoverage.universeSize} BROAD names have >=1 earnings date on file` +
+    (earningsCoverage.earliestDate ? `, spanning ${earningsCoverage.earliestDate}..${earningsCoverage.latestDate} (${earningsCoverage.totalEarningsRows} rows)` : " (NO earnings rows at all — blackout is a no-op)"));
+  if (errored.length) {
+    console.log(`  ${errored.length} leaf request(s) FAILED outright (plan/date-range limit) — gaps: ${errored.map((c) => `${c.from}..${c.to}`).join(", ")}`);
+  }
+  console.log("");
+} else {
+  console.log(`earnings blackout: OFF (--no-blackout)\n`);
+}
+function inEarningsBlackout(sym, entryDateStr) {
+  const dates = earningsBySymbol.get(sym);
+  if (!dates || dates.length === 0) return false;
+  const entryMs = Date.parse(`${entryDateStr}T00:00:00Z`);
+  const windowEndMs = entryMs + THRESH.mrEarningsBlackoutDays * 86_400_000;
+  for (const e of dates) {
+    const eMs = Date.parse(`${e}T00:00:00Z`);
+    if (eMs > windowEndMs) break; // sorted ascending — no later date can match either
+    if (eMs >= entryMs) return true;
+  }
+  return false;
+}
+
 // ---- per-symbol precompute -------------------------------------------------------
 const symData = new Map(); // symbol -> { b, closes, opens, vols, dates, rsi2, sma200, sma5 }
 for (const sym of BROAD) {
@@ -200,8 +245,9 @@ console.log(`usable symbols (>= ${THRESH.smaRegime + 21} bars): ${symData.size} 
 
 // Entry gate — identical predicate to validate.mjs's inline meanrev entry check.
 // i is the SIGNAL index ("d"); everything read is closes[0..i] + vols[i-20..i-1] —
-// no look-ahead. Caller still must confirm b[i+1] exists before using i as a fill.
-function passesEntryGate(d, i) {
+// no look-ahead. Caller still must confirm b[i+1] exists before using i as a fill
+// (the blackout check below reads d.dates[i+1], the FILL date, for the same reason).
+function passesEntryGate(sym, d, i) {
   if (d.rsi2[i] == null || d.sma200[i] == null) return false;
   if (!(d.rsi2[i] < THRESH.mrRsiEntry)) return false;
   if (!(d.closes[i] > d.sma200[i])) return false;
@@ -212,6 +258,9 @@ function passesEntryGate(d, i) {
   const avgDollarVolM = (dvSum / 20) / 1e6;
   if (avgDollarVolM < THRESH.minDollarVolM) return false;
   if (!(d.closes[i] >= THRESH.minPrice)) return false;
+  // EARNINGS BLACKOUT — applied last, after every other gate has passed and the
+  // entry (fill) date is known. See the fetch/leak-free writeup above.
+  if (useBlackout && inEarningsBlackout(sym, d.dates[i + 1])) return false;
   return true;
 }
 
@@ -239,7 +288,7 @@ function independentTrades(cost) {
         }
         continue;
       }
-      if (!passesEntryGate(d, i)) continue;
+      if (!passesEntryGate(sym, d, i)) continue;
       const entryOpen = b[i + 1].o;
       if (!(entryOpen > 0)) continue;
       inPosition = true;
@@ -279,6 +328,7 @@ console.log("STRESS 1 — BROADER UNIVERSE (curation de-bias)");
 console.log("=".repeat(90));
 console.log(`gate: RSI(${THRESH.mrRsiPeriod})[d] < ${THRESH.mrRsiEntry} · close[d] > SMA${THRESH.smaRegime}[d]` +
   (useRegime ? ` · SPY.close[d] > SPY.SMA${THRESH.mrRegimeSMA}[d]` : ` · regime filter OFF (--no-regime)`) +
+  (useBlackout ? ` · no earnings in [entryDate, entryDate+${THRESH.mrEarningsBlackoutDays}d]` : ` · earnings blackout OFF (--no-blackout)`) +
   ` · avgDollarVol(d-20..d-1) >= $${THRESH.minDollarVolM}M · close[d] >= $${THRESH.minPrice} · exit close[e] > SMA${THRESH.mrExitSma}[e] or hold>=${THRESH.mrMaxHold}d · cost ${(COST_BASE * 100).toFixed(2)}% round-trip`);
 console.log(`universe: ${symData.size} usable names (of ${BROAD.length} broad, capped from ${rawUniverse.length})  ·  split at midDate=${midDateBroad ?? "-"}\n`);
 console.log(line(rowsBroad.ALL));
@@ -286,6 +336,9 @@ console.log(line(rowsBroad.IN));
 console.log(line(rowsBroad.OUT));
 console.log(`\nsame PROMOTE gate as validate.mjs on this universe: ${wouldPromoteBroad ? "WOULD PROMOTE" : "WOULD HOLD"}`);
 if (gateReasons.length) gateReasons.forEach((r) => console.log(`  - ${r}`));
+const txnBroadEntries = tradesBroad.filter((t) => t.sym === "TXN" && t.date >= "2026-07-14" && t.date <= "2026-07-28");
+console.log(`\nsanity check — TXN entries 2026-07-14..2026-07-28 in the broad-universe trade log (blackout ${useBlackout ? "ON" : "OFF (--no-blackout)"}): ` +
+  (txnBroadEntries.length ? txnBroadEntries.map((t) => `${t.date} (ret=${(t.ret * 100).toFixed(2)}%)`).join(", ") : "(none)"));
 console.log(`\nHONEST CAVEAT: this removes CURATION bias (the hand-picked 87) but NOT full`);
 console.log(`survivorship bias — FMP's screener returns TODAY's active listings, so any name`);
 console.log(`that delisted, went bankrupt, or got acquired during 2021-2026 is absent from this`);
@@ -344,7 +397,7 @@ const candidatesByDate = new Map();
 for (const [sym, d] of symData) {
   const b = d.b;
   for (let i = 20; i < b.length - 1; i++) {
-    if (!passesEntryGate(d, i)) continue;
+    if (!passesEntryGate(sym, d, i)) continue;
     const entryFillIdx = i + 1;
     const trade = buildTrade(d, entryFillIdx, COST_BASE);
     if (!trade) continue;
@@ -514,6 +567,8 @@ const report = {
     minDollarVolM: THRESH.minDollarVolM, costRoundTripBase: COST_BASE, maxConcurrent: MAX_CONCURRENT,
     weightPerSlot: WEIGHT_PER_SLOT, regimeFilterEnabled: useRegime, mrRegimeSMA: THRESH.mrRegimeSMA,
     regimeFilterSymbol: "SPY",
+    earningsBlackoutEnabled: useBlackout, mrEarningsBlackoutDays: THRESH.mrEarningsBlackoutDays,
+    earningsCoverage,
   },
   caveats: [
     "STRESS 1/2/3 use the FMP screener's CURRENT constituents — this removes hand-picked-87 CURATION bias but not full survivorship bias: delisted/bankrupt/acquired names during 2021-2026 are absent from this universe too.",
@@ -523,6 +578,9 @@ const report = {
     useRegime
       ? "REGIME FILTER (default ON, --no-regime to disable): all four stresses below (1/2/3/4) run WITH the SPY.close>SPY.SMA(mrRegimeSMA) entry gate applied — they show the AFTER picture relative to the pre-regime-filter baseline referenced above."
       : "REGIME FILTER: disabled via --no-regime for this run — all four stresses below show the BEFORE picture (no SPY trend gate on entries).",
+    useBlackout
+      ? "EARNINGS BLACKOUT (default ON, --no-blackout to disable): all four stresses below run WITH the no-scheduled-earnings-within-N-days entry gate applied. Coverage is against BROAD (up to 500 names), not just the hand-picked 87 — see earningsCoverage above for how many BROAD names actually have earnings rows on file; symbols with zero rows cannot be protected by this filter."
+      : "EARNINGS BLACKOUT: disabled via --no-blackout for this run — all four stresses below show the picture with no earnings-date gate on entries.",
   ],
   stress1_broaderUniverse: {
     rawScreenerCount: rawUniverse.length, cappedTo: capped ? BROAD_CAP : rawUniverse.length,

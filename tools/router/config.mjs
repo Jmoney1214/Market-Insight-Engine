@@ -30,6 +30,7 @@ export const THRESH = {
   mrMaxHold: 10,       // time-stop, trading days, if the SMA exit never fires
   mrRegimeSMA: 200,     // broad-market (SPY) SMA length for the regime filter — dip-buy only when SPY.close > SPY.SMA(mrRegimeSMA)
   mrMaxConcurrent: 10,  // position cap — at most this many MeanRev names in-cap per scan, ranked by RSI2 ascending (most oversold first)
+  mrEarningsBlackoutDays: 7, // skip a dip-buy entry if the symbol reports earnings within this many calendar days of the entry date (entryDate <= E <= entryDate+N) — motivated by the 2026-07-20 week TXN loss (bought 7/21 oversold, reported 7/22, gapped -5.7%)
 };
 
 // character -> strategy -> validation status. `pine` names the exact twin to run.

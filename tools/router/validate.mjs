@@ -11,17 +11,19 @@
 // dip-buy (see the backtest section below for the full leak-avoidance writeup).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { alpacaBars, gitSha } from "../research/lib/data.mjs";
+import { alpacaBars, gitSha, fmpEarningsChunked, earningsMapForUniverse } from "../research/lib/data.mjs";
 import { daysBefore } from "../research/lib/dates.mjs";
 import { UNIVERSE, THRESH, LANES } from "./config.mjs";
 
 // The router only ever talks to Alpaca (bars) — data.mjs's requireCreds() also
-// hard-requires FMP_API_KEY, which this harness never uses. Router-local check
-// (same pattern as scan.mjs).
-function requireRouterCreds() {
+// hard-requires FMP_API_KEY, which this harness never uses, UNLESS lane=meanrev
+// with the earnings blackout filter enabled (default ON), which needs FMP for
+// the earnings calendar. Router-local check (same pattern as scan.mjs).
+function requireRouterCreds(needFMP) {
   const missing = [
     !process.env.ALPACA_API_KEY_ID && "ALPACA_API_KEY_ID",
     !process.env.ALPACA_API_SECRET_KEY && "ALPACA_API_SECRET_KEY",
+    needFMP && !process.env.FMP_API_KEY && "FMP_API_KEY",
   ].filter(Boolean);
   if (missing.length) throw new Error(`missing env credentials: ${missing.join(", ")}`);
 }
@@ -92,12 +94,14 @@ const doPromote = process.argv.includes("--promote");
 const laneKey = LANE_KEY[lane]; // "Momentum" | "JumpDay" | "MeanRev"
 const gateThreshKey = GATE_THRESH_KEY[lane]; // "gapMomentum" | "gapJump" | undefined (meanrev)
 const gateThresh = gateThreshKey ? THRESH[gateThreshKey] : undefined;
+// earnings-blackout filter (meanrev only) — ON by default, --no-blackout disables for an A/B, same pattern as --no-regime.
+const useBlackout = lane === "meanrev" && !process.argv.includes("--no-blackout");
 
 // ---- window ------------------------------------------------------------------
 const end = etToday();
 const start = daysBefore(end, 1825); // ~5y
 
-requireRouterCreds();
+requireRouterCreds(useBlackout);
 console.log(`\nStrategy Router — VALIDATE ${laneKey} (currently ${LANES[laneKey].status})  ${start}..${end}  (${UNIVERSE.length} names)\n`);
 
 // Daily cache, 24h TTL: reruns same trading day are free; next day picks up the new bar.
@@ -112,6 +116,11 @@ const trades = [];
 // touch it.
 let useRegime = false;
 let regimeOK = new Map(); // "YYYY-MM-DD" -> boolean
+// meanrev-only earnings-blackout state — same "declared outside the branch"
+// convention as useRegime/regimeOK above, so the report sections can read it
+// even though it's never touched for the gap lanes.
+let earningsBySymbol = new Map(); // symbol -> sorted "YYYY-MM-DD"[]
+let earningsCoverage = null;
 
 if (lane === "meanrev") {
   // Thesis under test: classic Connors RSI2 mean-reversion dip-buy — buy an
@@ -199,6 +208,61 @@ if (lane === "meanrev") {
     console.log(`regime filter: OFF (--no-regime)`);
   }
 
+  // ---- earnings-blackout filter (Phase 4e) ------------------------------------
+  // Motivated by a forensic finding: MeanRev lost -3.46% the week of 2026-07-20
+  // because it dip-bought oversold semis right before their Q2 earnings (TXN:
+  // entered 2026-07-21, reported 2026-07-22, gapped -5.7%). Fix: skip a dip-buy
+  // if the symbol has ANY scheduled earnings date E with entryDate <= E <=
+  // entryDate + mrEarningsBlackoutDays.
+  //
+  // LEAK-FREE: earnings report dates are announced weeks ahead of the actual
+  // report — the date itself (not the result) is public information on the
+  // entry date. Using "TXN reports on 2026-07-22" to skip a 2026-07-21 entry is
+  // not look-ahead; it's the harness modeling knowledge a live trader would
+  // actually have (an earnings calendar). ON by default; --no-blackout disables
+  // it for an A/B comparison, same pattern as --no-regime.
+  //
+  // Fetch window extends mrEarningsBlackoutDays PAST `end`: an entry dated at
+  // the very tail of the backtest window (e.g. "today") still needs to know
+  // about earnings reports scheduled up to N days into the future — which are
+  // knowable today, just not yet inside [start,end] without this margin.
+  if (useBlackout) {
+    const earnTo = daysBefore(end, -THRESH.mrEarningsBlackoutDays); // daysBefore(day, -n) == n days AFTER day
+    const { set: earnRows, chunkLog } = await fmpEarningsChunked(start, earnTo);
+    const built = earningsMapForUniverse(earnRows, UNIVERSE);
+    earningsBySymbol = built.bySymbol;
+    earningsCoverage = built.coverage;
+    const bisected = chunkLog.filter((c) => c.error || c.capGuardHit).length;
+    const errored = chunkLog.filter((c) => c.error);
+    console.log(`earnings blackout: ON — skip entry if any earnings date falls in [entryDate, entryDate+${THRESH.mrEarningsBlackoutDays}d]`);
+    console.log(`  earnings fetch: ${start}..${earnTo}, ${chunkLog.length} leaf request(s) (${bisected} needed cap/error bisection)`);
+    console.log(`  coverage: ${earningsCoverage.coveredSymbolCount}/${earningsCoverage.universeSize} universe names have >=1 earnings date on file` +
+      (earningsCoverage.earliestDate ? `, spanning ${earningsCoverage.earliestDate}..${earningsCoverage.latestDate} (${earningsCoverage.totalEarningsRows} rows)` : " (NO earnings rows at all — blackout is a no-op)"));
+    if (earningsCoverage.uncoveredSymbols.length) {
+      console.log(`  ${earningsCoverage.uncoveredSymbols.length} universe name(s) with ZERO earnings rows on file: ${earningsCoverage.uncoveredSymbols.join(", ")}`);
+    }
+    if (errored.length) {
+      console.log(`  ${errored.length} leaf request(s) FAILED outright (plan/date-range limit) — gaps: ${errored.map((c) => `${c.from}..${c.to}`).join(", ")}`);
+    }
+  } else {
+    console.log(`earnings blackout: OFF (--no-blackout)`);
+  }
+
+  // sym -> sorted earnings dates lookup; dates sorted ascending lets the scan
+  // below break out early once it passes the blackout window's end.
+  function inEarningsBlackout(sym, entryDateStr) {
+    const dates = earningsBySymbol.get(sym);
+    if (!dates || dates.length === 0) return false;
+    const entryMs = Date.parse(`${entryDateStr}T00:00:00Z`);
+    const windowEndMs = entryMs + THRESH.mrEarningsBlackoutDays * 86_400_000;
+    for (const e of dates) {
+      const eMs = Date.parse(`${e}T00:00:00Z`);
+      if (eMs > windowEndMs) break; // sorted ascending — no later date can match either
+      if (eMs >= entryMs) return true;
+    }
+    return false;
+  }
+
   for (const sym of UNIVERSE) {
     const raw = bars.get(sym);
     // need THRESH.smaRegime (200) prior closes for SMA200 to warm up, plus the
@@ -243,12 +307,25 @@ if (lane === "meanrev") {
 
       const entryOpen = b[i + 1].o; // FILL at open[d+1] — no leak
       if (!(entryOpen > 0)) continue;
+      const candidateEntryDate = b[i + 1].t.slice(0, 10); // entry date = open[d+1]'s date, per spec
+      // EARNINGS BLACKOUT — see the fetch/leak-free writeup above. Applied last,
+      // after every other gate (RSI2/regime/liquidity/price) has already passed
+      // and the entry date is known.
+      if (useBlackout && inEarningsBlackout(sym, candidateEntryDate)) continue;
       inPosition = true;
       entryIdx = i + 1; // the fill bar's index — also the mrMaxHold reference point
       entryPrice = entryOpen;
-      entryDate = b[i + 1].t.slice(0, 10); // entry date = open[d+1]'s date, per spec
+      entryDate = candidateEntryDate;
     }
   }
+
+  // ---- sanity check: TXN earnings-week exclusion proof ------------------------
+  // The forensic finding that motivated this filter: TXN entered 2026-07-21,
+  // reported Q2 earnings 2026-07-22, gapped -5.7%. With blackout ON this entry
+  // must be ABSENT from the trade log; with --no-blackout it should reappear.
+  const txnEntries = trades.filter((t) => t.sym === "TXN" && t.date >= "2026-07-14" && t.date <= "2026-07-28");
+  console.log(`\nsanity check — TXN entries 2026-07-14..2026-07-28 in the trade log (blackout ${useBlackout ? "ON" : "OFF (--no-blackout)"}): ` +
+    (txnEntries.length ? txnEntries.map((t) => `${t.date} (ret=${(t.ret * 100).toFixed(2)}%)`).join(", ") : "(none)"));
 } else {
   // Thesis under test: "a large gap-up continues intraday" (long, same-day only).
   // The gate threshold (gateThresh) is the ONLY lane-specific input below — Momentum
@@ -331,6 +408,7 @@ const line = (r) =>
 if (lane === "meanrev") {
   console.log(`gate: RSI(${THRESH.mrRsiPeriod})[d] < ${THRESH.mrRsiEntry}  ·  close[d] > SMA${THRESH.smaRegime}[d]  ·  avgDollarVol(d-20..d-1) >= $${THRESH.minDollarVolM}M  ·  close[d] >= $${THRESH.minPrice}` +
     (useRegime ? `  ·  SPY.close[d] > SPY.SMA${THRESH.mrRegimeSMA}[d]` : `  ·  regime filter OFF (--no-regime)`) +
+    (useBlackout ? `  ·  no earnings in [entryDate, entryDate+${THRESH.mrEarningsBlackoutDays}d]` : `  ·  earnings blackout OFF (--no-blackout)`) +
     `  ·  exit close[e] > SMA${THRESH.mrExitSma}[e] or hold>=${THRESH.mrMaxHold}d  ·  cost ${(COST * 100).toFixed(2)}% round-trip`);
 } else {
   console.log(`gate: gapPct[d] >= ${gateThresh}%  ·  close[d-1] >= $${THRESH.minPrice}  ·  avgDollarVol(d-20..d-1) >= $${THRESH.minDollarVolM}M  ·  cost ${(COST * 100).toFixed(2)}% round-trip`);
@@ -376,6 +454,9 @@ const report = {
     regimeFilterEnabled: useRegime,
     mrRegimeSMA: THRESH.mrRegimeSMA,
     regimeFilterSymbol: "SPY",
+    earningsBlackoutEnabled: useBlackout,
+    mrEarningsBlackoutDays: THRESH.mrEarningsBlackoutDays,
+    earningsCoverage,
   } : {
     [gateThreshKey]: gateThresh,
     minPrice: THRESH.minPrice,
@@ -391,6 +472,9 @@ const report = {
     useRegime
       ? "REGIME FILTER (default ON, --no-regime to disable): entry additionally requires SPY.close[d] > SPY.SMA(mrRegimeSMA)[d] — SPY's own SMA is built from SPY closes[0..d] only, known the instant SPY's bar d closes; dates with no SPY bar are treated as regime-NOT-ok (entry skipped) — no look-ahead, added to neutralize the 2022 bear-market fragility found in stress.mjs"
       : "REGIME FILTER: disabled via --no-regime for this run — entries are NOT gated on SPY's trend (A/B comparison mode)",
+    useBlackout
+      ? "EARNINGS BLACKOUT (default ON, --no-blackout to disable): entry additionally requires NO scheduled earnings date E with entryDate<=E<=entryDate+mrEarningsBlackoutDays — earnings report DATES are announced weeks ahead, so the date is public information on the entry date; this is not look-ahead, it is the harness modeling knowledge a live trader would actually have. Coverage is limited to whatever the FMP earnings-calendar plan actually returned — see earningsCoverage above; symbols/periods with zero rows on file cannot be protected by this filter and should be read as 'blackout could not apply here', not 'no earnings occurred here'."
+      : "EARNINGS BLACKOUT: disabled via --no-blackout for this run — entries are NOT gated on scheduled earnings dates (A/B comparison mode)",
     "SCOPE: this validates the daily-bar Connors RSI2 mean-reversion proxy only. The production MeanRev lane currently routes on a crude ADX<20/above-200SMA flag, and the true Super-1 thesis is intraday VWAP+RSI2 — a PROMOTE here validates the mean-reversion THESIS, not the router's current entry rule. Wiring the router's MeanRev entry to this exact rule is a separate follow-up.",
   ] : [
     "gate = gapPct[d] = (open[d]-close[d-1])/close[d-1], known at open[d] — the only day-d field used for entry",

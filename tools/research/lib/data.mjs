@@ -92,6 +92,102 @@ export function fmpEarnings(from, to) {
   }).then((arr) => new Set(arr));
 }
 
+// ---- earnings blackout support (Phase 4e) ---------------------------------
+// Empirically verified (2026-07-26) against this plan's stable/earnings-calendar
+// endpoint over the router's actual ~5y backtest window:
+//   1. ROLLING 5-YEAR LOOKBACK — the endpoint 402s (Payment Required) for any
+//      date more than ~1825-1826 days before the real "today", even for a
+//      single-day request. It is NOT a range-width limit: a 400-day request
+//      anchored in a covered period succeeds fine, but a 1-day request for an
+//      uncovered (too-old) date still 402s.
+//   2. ~4000-ROW SOFT CAP — for a covered period, if the TRUE row count for the
+//      requested range exceeds roughly 4000, the endpoint returns ~200 (no
+//      error) but SILENTLY TRUNCATES to ~3980-4000 rows clustered at the END
+//      of the range (nearest `to`), dropping the earlier days with no signal
+//      that anything was cut. Confirmed with a 180-day 2021 request that came
+//      back with all 3998 rows dated in just the LAST 24 days of that window.
+// fmpEarningsChunked() below defends against both failure modes by fetching in
+// small `sliceDays` windows and adaptively bisecting (down to a 1-day floor)
+// any window that either errors or returns a suspiciously large row count —
+// so the caller gets either real data or an honestly-logged gap, never a
+// silent hole. Every leaf request still goes through fmpEarnings()'s own
+// 30-day cache, so repeat runs (validate.mjs then stress.mjs, or reruns same
+// day) are cheap.
+const EARNINGS_CAP_GUARD = 3000; // safety margin below the observed ~3980-4000 ceiling
+
+export async function fmpEarningsChunked(from, to, sliceDays = 14) {
+  const merged = new Set();
+  const chunkLog = []; // every LEAF fetch actually made: {from,to,n,capGuardHit,error?}
+
+  async function bisect(cf, ct, depth) {
+    const fMs = Date.parse(`${cf}T00:00:00Z`), tMs = Date.parse(`${ct}T00:00:00Z`);
+    const midMs = fMs + Math.floor((tMs - fMs) / 2 / 86_400_000) * 86_400_000;
+    const mid = new Date(midMs).toISOString().slice(0, 10);
+    const next = new Date(midMs + 86_400_000).toISOString().slice(0, 10);
+    if (!(mid >= cf && next <= ct)) return false; // already at a 1-day floor — can't split further
+    await fetchLeaf(cf, mid, depth + 1);
+    await fetchLeaf(next, ct, depth + 1);
+    return true;
+  }
+
+  async function fetchLeaf(cf, ct, depth) {
+    let s;
+    try {
+      s = await fmpEarnings(cf, ct);
+    } catch (err) {
+      if (cf !== ct && depth < 14 && (await bisect(cf, ct, depth))) return;
+      chunkLog.push({ from: cf, to: ct, n: 0, capGuardHit: false, error: err.message });
+      return;
+    }
+    const capGuardHit = s.size >= EARNINGS_CAP_GUARD;
+    if (capGuardHit && cf !== ct && depth < 14 && (await bisect(cf, ct, depth))) return;
+    chunkLog.push({ from: cf, to: ct, n: s.size, capGuardHit });
+    for (const rec of s) merged.add(rec);
+  }
+
+  let cur = new Date(`${from}T00:00:00Z`);
+  const endD = new Date(`${to}T00:00:00Z`);
+  while (cur <= endD) {
+    const cf = cur.toISOString().slice(0, 10);
+    const probe = new Date(cur);
+    probe.setUTCDate(probe.getUTCDate() + sliceDays - 1);
+    const ct = (probe > endD ? endD : probe).toISOString().slice(0, 10);
+    await fetchLeaf(cf, ct, 0);
+    cur.setUTCDate(cur.getUTCDate() + sliceDays);
+  }
+  return { set: merged, chunkLog };
+}
+
+/** Build a per-symbol sorted earnings-date map restricted to `universe` from
+ * the raw "YYYY-MM-DD|SYMBOL" rows returned by fmpEarnings/fmpEarningsChunked,
+ * plus an honest coverage summary (which universe symbols have ANY earnings
+ * row in range, and the actual date span returned) so the caller can report
+ * — never silently assume — how complete the blackout data is. */
+export function earningsMapForUniverse(rows, universe) {
+  const uniSet = new Set(universe);
+  const bySymbol = new Map();
+  for (const rec of rows) {
+    const i = rec.lastIndexOf("|");
+    const date = rec.slice(0, i), sym = rec.slice(i + 1);
+    if (!uniSet.has(sym)) continue;
+    if (!bySymbol.has(sym)) bySymbol.set(sym, []);
+    bySymbol.get(sym).push(date);
+  }
+  for (const [, dates] of bySymbol) dates.sort();
+  const allDates = [...bySymbol.values()].flat().sort();
+  return {
+    bySymbol,
+    coverage: {
+      universeSize: universe.length,
+      coveredSymbolCount: bySymbol.size,
+      uncoveredSymbols: universe.filter((s) => !bySymbol.has(s)),
+      earliestDate: allDates[0] ?? null,
+      latestDate: allDates[allDates.length - 1] ?? null,
+      totalEarningsRows: allDates.length,
+    },
+  };
+}
+
 /** Alpaca SIP multi-symbol bars. Chunked, paginated, cached. HARD-FAILS if any
  * chunk errors — partial data would silently corrupt every downstream number.
  * The cache key includes a digest of the EXACT request (symbol set + timeframe +
