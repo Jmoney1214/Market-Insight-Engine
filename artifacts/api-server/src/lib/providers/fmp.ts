@@ -369,3 +369,116 @@ export async function getEconomicCalendar(from: string, to: string): Promise<Fmp
   }
   return out.length > 0 ? out : null;
 }
+
+export type UniverseScreenerRow = {
+  symbol: string; name: string; price: number; volume: number; marketCap: number;
+  sector: string | null; industry: string | null; exchange: string | null;
+  isEtf: boolean; isFund: boolean; isAdr: boolean;
+};
+
+/** Pure: normalize one FMP company-screener row; null if unusable. */
+export function mapScreenerRow(r: Record<string, unknown>): UniverseScreenerRow | null {
+  const symbol = String(r["symbol"] ?? "");
+  const price = Number(r["price"] ?? NaN);
+  if (!symbol || !Number.isFinite(price)) return null;
+  return {
+    symbol,
+    name: String(r["companyName"] ?? ""),
+    price,
+    volume: Number(r["volume"] ?? 0),
+    marketCap: Number(r["marketCap"] ?? 0),
+    sector: (r["sector"] as string) ?? null,
+    industry: (r["industry"] as string) ?? null,
+    exchange: (r["exchangeShortName"] as string) ?? (r["exchange"] as string) ?? null,
+    isEtf: r["isEtf"] === true,
+    isFund: r["isFund"] === true,
+    isAdr: r["isAdr"] === true,
+  };
+}
+
+/**
+ * Full in-band universe from the company-screener (one bulk call).
+ * ETFs/funds are excluded at the API (`isEtf`/`isFund` = false) — they are
+ * dropped downstream anyway, and filtering here frees the result budget so the
+ * small-cap tail (FMP orders by market cap DESC) isn't silently truncated —
+ * that tail is exactly the low-float names the desk trades.
+ */
+export async function getUniverseScreener(
+  minPrice: number, maxPrice: number, exchanges = "NASDAQ,NYSE,AMEX", limit = 15000,
+): Promise<UniverseScreenerRow[] | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("company-screener", {
+    priceMoreThan: minPrice, priceLowerThan: maxPrice,
+    isEtf: "false", isFund: "false",
+    isActivelyTrading: "true", exchange: exchanges, limit,
+  });
+  if (!Array.isArray(rows)) return null;
+  if (rows.length >= limit)
+    logger.warn({ limit, rows: rows.length }, "FMP universe screener hit the safety limit — small-caps may be truncated, raise it");
+  return rows.map(mapScreenerRow).filter((r): r is UniverseScreenerRow => r !== null);
+}
+
+/** Per-symbol free float / shares outstanding. Null on failure. */
+export async function getSharesFloat(
+  symbol: string,
+): Promise<{ floatShares: number; sharesOutstanding: number } | null> {
+  const row = await fmpGet<Array<Record<string, unknown>>>("shares-float", { symbol }).then(first);
+  if (!row) return null;
+  const floatShares = Number(row["floatShares"] ?? NaN);
+  const sharesOutstanding = Number(row["outstandingShares"] ?? NaN);
+  if (!Number.isFinite(floatShares) || !Number.isFinite(sharesOutstanding)) return null;
+  return { floatShares, sharesOutstanding };
+}
+
+export type FloatBySymbol = Map<string, { floatShares: number; sharesOutstanding: number }>;
+
+/**
+ * Pure, injectable pagination accumulator for the whole-market float feed.
+ *
+ * `fetchPage` returns a page of rows, or `null` on FAILURE (rate limit, non-2xx,
+ * `Error Message` payload, fetch/JSON error — every failure class `fmpGet`
+ * collapses to null). A real end-of-data is a short/empty ARRAY, never null.
+ * So a mid-pagination null must fail closed — returning the partial map would
+ * silently drop the small-cap (low-float) tail while looking like success.
+ */
+export async function accumulateFloatPages(
+  fetchPage: (page: number) => Promise<Array<Record<string, unknown>> | null>,
+  pageSize = 1000,
+  maxPages = 60,
+): Promise<FloatBySymbol | null> {
+  const out: FloatBySymbol = new Map();
+  for (let page = 0; page < maxPages; page++) {
+    const rows = await fetchPage(page);
+    if (rows === null) return null; // FAILURE → fail closed (discard partial)
+    for (const r of rows) {
+      const symbol = String(r["symbol"] ?? "");
+      const floatShares = Number(r["floatShares"] ?? NaN);
+      const sharesOutstanding = Number(r["outstandingShares"] ?? NaN);
+      if (symbol && Number.isFinite(floatShares) && Number.isFinite(sharesOutstanding)) {
+        out.set(symbol, { floatShares, sharesOutstanding });
+      }
+    }
+    if (rows.length < pageSize) break; // real end-of-data (short/empty page)
+  }
+  return out.size > 0 ? out : null;
+}
+
+/**
+ * Whole-market free float / shares outstanding in one paginated pass — used to
+ * enrich the universe without firing thousands of per-symbol calls (which FMP
+ * rate-limits). Returns a symbol→float map, or null if any page failed (fail
+ * closed) or not a single row loaded.
+ */
+export function getAllSharesFloat(pageSize = 1000, maxPages = 60): Promise<FloatBySymbol | null> {
+  return accumulateFloatPages(
+    (page) => fmpGet<Array<Record<string, unknown>>>("shares-float-all", { page, limit: pageSize }),
+    pageSize,
+    maxPages,
+  );
+}
+
+/** Symbols with an IPO in [from, to] (YYYY-MM-DD). Bulk. Null on failure. */
+export async function getRecentIpoSymbols(from: string, to: string): Promise<Set<string> | null> {
+  const rows = await fmpGet<Array<Record<string, unknown>>>("ipos-calendar", { from, to });
+  if (!Array.isArray(rows)) return null;
+  return new Set(rows.map((r) => String(r["symbol"] ?? "")).filter(Boolean));
+}

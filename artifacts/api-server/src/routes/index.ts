@@ -9,6 +9,7 @@ import memoryRouter from "./memory";
 import kronosRouter from "./kronos";
 import accuracyRouter from "./accuracy";
 import backtestRouter from "./backtest";
+import universeRouter from "./universe";
 
 const router: IRouter = Router();
 
@@ -21,6 +22,7 @@ router.use(memoryRouter);
 router.use(kronosRouter);
 router.use(accuracyRouter);
 router.use(backtestRouter);
+router.use(universeRouter);
 router.use("/copilot", copilotRouter);
 
 export default router;
