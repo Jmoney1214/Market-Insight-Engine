@@ -26,14 +26,23 @@ export function gradeRow(
   gapPct: number,
   priceAtScan: number,
   bar: { high: number; low: number; close: number },
+  promotedPrice?: number | null,
 ): { changePct: number; rangePct: number; hit: boolean } {
   const refClose = priceAtScan / (1 + gapPct / 100);
   const changePct = round(((bar.close - refClose) / refClose) * 100);
   const rangePct = round(((bar.high - bar.low) / bar.close) * 100);
   // LONG-ONLY (invert bearish to buy): the "fall" list is gap-down names taken
-  // as inverted long dip-buys, so a hit is UPSIDE (changePct > 0), same as the
-  // jump list — never the old short-side changePct < 0.
-  const hit = list === "intraday" ? rangePct >= 2 : changePct > 0;
+  // as inverted long dip-buys, so a hit is UPSIDE — never the old short-side.
+  // A reclaim-PROMOTED fall row anchors to its actual promotion entry: for a
+  // shallow gap the promotion line sits ABOVE the reference close, and grading
+  // vs refClose would stamp HIT on a losing entry. Watch-only rows keep the
+  // refClose anchor — they measure the raw-inversion counterfactual.
+  const hit =
+    list === "intraday"
+      ? rangePct >= 2
+      : list === "fall" && promotedPrice != null && promotedPrice > 0
+        ? bar.close > promotedPrice
+        : changePct > 0;
   return { changePct, rangePct, hit };
 }
 
@@ -87,11 +96,14 @@ export async function recordScanPicks(result: ScanResult, scanDate: string): Pro
  * its first-seen premarket price becomes a real pick, stamped with promotion
  * time and price. One-way and idempotent — a later fade never demotes it
  * (the grade will tell that story honestly).
+ *
+ * Prices are fetched HERE, for exactly the watching symbols — never from the
+ * scan's ranked lists. A reclaiming name is structurally invisible to those at
+ * the crossing: at +2% off a -1.5..-3.4% recorded gap its live gap sits inside
+ * (-1.5, +1.5) — outside both gap lists — and the shrunken |gap| sinks its
+ * prelim rank out of the finalists, so topIntraday can't be relied on either.
  */
-export async function promoteFallReclaims(
-  livePrices: Map<string, number>,
-  scanDate: string,
-): Promise<number> {
+export async function promoteFallReclaims(scanDate: string): Promise<number> {
   let watching: ScanScorecardRow[] = [];
   try {
     watching = await db
@@ -108,9 +120,11 @@ export async function promoteFallReclaims(
     logger.warn({ err: String(err) }, "Fall watch read failed (non-fatal)");
     return 0;
   }
+  if (watching.length === 0) return 0;
+  const snaps = (await alpaca.getSnapshots(watching.map((r) => r.symbol))) ?? new Map();
   let promoted = 0;
   for (const row of watching) {
-    const price = livePrices.get(row.symbol);
+    const price = snaps.get(row.symbol)?.price;
     if (price == null || !fallReclaimReady(row.priceAtScan, price)) continue;
     try {
       await db
@@ -143,7 +157,7 @@ export async function gradePending(maxDate: string): Promise<number> {
   for (const row of pending) {
     const bar = await alpaca.getSessionBar(row.symbol, row.scanDate);
     if (!bar) continue; // holiday/halt/no data yet — retry next pass
-    const g = gradeRow(row.list as ScanList, row.gapPct, row.priceAtScan, bar);
+    const g = gradeRow(row.list as ScanList, row.gapPct, row.priceAtScan, bar, row.promotedPrice);
     try {
       await db
         .update(scanScorecardTable)

@@ -11,7 +11,8 @@ import { toneBadge, toneText, signedPct } from "@/lib/finance";
 const LIST_LABEL: Record<string, string> = {
   intraday: "Top Intraday",
   jump: "Likely Jump",
-  fall: "Likely Fall",
+  fall: "Fall (Reclaimed)",
+  "fall-watch": "Fall Watch",
 };
 
 /** Measured accountability for the Morning Scan: hit rates + recent graded picks. */
@@ -39,7 +40,7 @@ export function ScanScorecard() {
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {data!.lists.map((l) => (
                   <div key={l.list} className="rounded-md border border-border bg-background/40 p-3 text-center">
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
@@ -59,11 +60,19 @@ export function ScanScorecard() {
                   {graded.map((r, i) => (
                     <div key={i} className="py-2 flex items-center justify-between text-sm font-mono-numbers">
                       <span className="flex items-center gap-2">
-                        <Badge className={cn("text-[10px] px-1.5 py-0", r.hit ? toneBadge.bullish : toneBadge.bearish)}>
+                        <Badge
+                          className={cn(
+                            "text-[10px] px-1.5 py-0",
+                            r.watchOnly ? "opacity-60" : "",
+                            r.hit ? toneBadge.bullish : toneBadge.bearish,
+                          )}
+                        >
                           {r.hit ? "HIT" : "MISS"}
                         </Badge>
-                        <span className="font-bold">{r.symbol}</span>
-                        <span className="text-xs text-muted-foreground">{LIST_LABEL[r.list] ?? r.list} · {r.scanDate}</span>
+                        <span className={cn("font-bold", r.watchOnly ? "text-muted-foreground" : "")}>{r.symbol}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {r.watchOnly ? "Fall Watch (not a pick)" : LIST_LABEL[r.list] ?? r.list} · {r.scanDate}
+                        </span>
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {r.changePct != null ? `close ${signedPct(r.changePct)}` : ""}
@@ -76,8 +85,10 @@ export function ScanScorecard() {
             </>
           )}
           <p className="text-[11px] text-muted-foreground/70">
-            Hit = intraday pick ranged ≥2% · jump closed up · fall closed down, vs the pre-market
-            reference close. Honest measurement, not marketing.
+            Hit = intraday ranged ≥2% · jump closed up vs the pre-market reference · fall
+            (reclaim-promoted long) closed above its promotion entry. Fall Watch rows are
+            gap-downs that never reclaimed — tracked for learning, never picks. Honest
+            measurement, not marketing.
           </p>
         </CardContent>
       </Card>

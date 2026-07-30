@@ -127,15 +127,12 @@ export function startScanScheduler(): void {
         if (minutes >= RECORD_START && minutes <= RECORD_END) {
           await recordScanPicks(result, todayNYDate());
         }
-        // Reclaim check on every refresh in the window. Prices come from ALL
-        // three lists, not just likelyFall: a hard reclaimer shrinks its gap
-        // past the -1.5% threshold and falls OUT of likelyFall while climbing
-        // into topIntraday — exactly the promotion we must not miss.
+        // Reclaim check on every refresh in the window. promoteFallReclaims
+        // fetches live snapshots for the watching symbols itself — a reclaimer
+        // at the crossing sits in a gap dead-zone invisible to every ranked
+        // scan list, so list prices must never be the promotion source.
         if (minutes >= RECORD_START && minutes <= PROMOTE_END) {
-          const livePrices = new Map(
-            [...result.topIntraday, ...result.likelyJump, ...result.likelyFall].map((c) => [c.symbol, c.price]),
-          );
-          await promoteFallReclaims(livePrices, todayNYDate());
+          await promoteFallReclaims(todayNYDate());
         }
       } catch (err) {
         logger.warn({ err: String(err) }, "Scheduled scan failed");
