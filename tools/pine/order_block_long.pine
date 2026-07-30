@@ -1,0 +1,72 @@
+//@version=6
+// Order Block Long [Copilot] — LONG-ONLY mechanical order-block scalp for $15-and-below
+// names on 5s–1min. NO SHORTING. Buy the demand block on the retrace, sell at target/stop.
+// PAPER/EXPERIMENTAL: this logic backtested NEGATIVE (−0.30% in-sample on 5-min); a finer
+// 5s–1min timeframe is noisier/costlier, so treat every fill as forward-test data, not edge.
+// The real edge is SELECTION — only run this on the STRONGEST $15-and-below runner of the day.
+strategy("Order Block Long [Copilot]", overlay=true, initial_capital=25000,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=20, pyramiding=0,
+     commission_type=strategy.commission.percent, commission_value=0.05, slippage=2, calc_on_every_tick=false)
+
+grpS = "Order block"
+brk      = input.int(10, "Swing-high lookback (bars)", minval=2, group=grpS, tooltip="Displacement must break the high of this many prior bars.")
+atrLen   = input.int(14, "ATR length", minval=1, group=grpS)
+dispMult = input.float(0.25, "Displacement: break high by ATR ×", step=0.05, group=grpS, tooltip="How decisively the up-move must clear the prior swing high.")
+tgtR     = input.float(2.0, "Target (R multiple)", step=0.5, group=grpS)
+reqVwap  = input.bool(true, "Require close > VWAP (uptrend only)", group=grpS)
+maxPrice = input.float(15.0, "Max price ($15-and-below tool)", group=grpS)
+
+grpT = "Session (RTH, flat by close)"
+noEntryBeforeMin = input.int(35, "No entries before 9:__ (ET min)", group=grpT, tooltip="Skip the first few minutes of chaos.")
+flatByHour = input.int(15, "Flatten hour (ET)", group=grpT)
+flatByMin  = input.int(55, "Flatten minute (ET)", group=grpT)
+
+vwapV = ta.vwap
+atrV  = ta.atr(atrLen)
+priorHigh = ta.highest(high, brk)[1]                 // prior swing high (no look-ahead)
+
+// remember the last DOWN candle — that is the demand block feeding the next displacement
+var float ldH = na, ldL = na
+if close < open
+    ldH := high
+    ldL := low
+
+etH = hour(time, "America/New_York"), etM = minute(time, "America/New_York")
+inSess = (etH > 9 or (etH == 9 and etM >= noEntryBeforeMin)) and (etH < flatByHour or (etH == flatByHour and etM < flatByMin))
+eod    = etH == flatByHour and etM >= flatByMin
+
+// DISPLACEMENT: bullish bar closes above the prior swing high by >= dispMult*ATR, in an uptrend
+disp = close > priorHigh and close > open and (close - priorHigh) >= dispMult * atrV and (not reqVwap or close > vwapV) and not na(ldL) and close <= maxPrice
+
+// arm the demand block when a displacement prints (only while flat)
+var float obH = na, obL = na
+var bool armed = false
+if disp and strategy.position_size == 0 and inSess
+    obH := ldH
+    obL := ldL
+    armed := true
+if armed and close < obL                              // closed below the block -> invalidated
+    armed := false
+
+// ENTRY: price retraces back into the block and holds -> BUY (fills next bar)
+enterLong = armed and strategy.position_size == 0 and inSess and low <= obH and close >= obL
+if enterLong
+    strategy.entry("OB", strategy.long)
+    armed := false
+
+// EXIT: stop just below the block, target = tgtR × risk; flat by the close
+if strategy.position_size > 0
+    risk = strategy.position_avg_price - obL
+    strategy.exit("x", from_entry="OB", stop=obL, limit=strategy.position_avg_price + tgtR * risk)
+if eod and strategy.position_size > 0
+    strategy.close("OB", comment="EOD flat")
+
+// visuals + live alert
+plot(vwapV, "VWAP", color=color.new(color.blue, 0), linewidth=2)
+bgcolor(armed ? color.new(color.green, 90) : na, title="Armed order block")
+plot(armed ? obH : na, "OB top", color=color.new(color.green, 30), style=plot.style_linebr)
+plot(armed ? obL : na, "OB bottom", color=color.new(color.green, 30), style=plot.style_linebr)
+plotshape(enterLong, "OB long", shape.triangleup, location.belowbar, color.new(color.green, 0), text="BUY", textcolor=color.white, size=size.small)
+alertcondition(enterLong, "OB Long — BUY", "Order-block long entry")
+if enterLong
+    alert("OB LONG " + syminfo.ticker + " @ " + str.tostring(close, format.mintick) + " · stop " + str.tostring(obL, format.mintick), alert.freq_once_per_bar_close)

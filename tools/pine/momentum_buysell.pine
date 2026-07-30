@@ -1,0 +1,64 @@
+//@version=6
+// Momentum Buy/Sell [Copilot] — LONG-ONLY buy/sell for intraday momentum on $20-and-under
+// movers. BUY a volume-backed break above VWAP; SELL on VWAP/EMA loss, hard stop, or EOD.
+// NO SHORTING. PAPER/EXPERIMENTAL: mechanical intraday entries backtested breakeven-to-negative
+// in this space — the edge is picking a STRONG catalyst name (e.g. LCID/OPK), not the trigger.
+strategy("Momentum Buy/Sell [Copilot]", overlay=true, initial_capital=25000,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=20, pyramiding=0,
+     commission_type=strategy.commission.percent, commission_value=0.05, slippage=2, calc_on_every_tick=false)
+
+grpE = "Entry"
+brkLen   = input.int(10, "Breakout lookback (bars)", minval=2, group=grpE, tooltip="BUY needs a new high over this many bars.")
+rvolLen  = input.int(20, "RVOL length", minval=2, group=grpE)
+rvolMin  = input.float(1.5, "Volume surge — RVOL ≥", step=0.1, group=grpE)
+reqVwap  = input.bool(true, "BUY only above VWAP", group=grpE)
+maxPrice = input.float(20.0, "Max price ($20-and-under)", group=grpE)
+
+grpX = "Exit"
+emaLen   = input.int(9, "Trail EMA (SELL if close drops below)", minval=1, group=grpX)
+atrLen   = input.int(14, "ATR length", minval=1, group=grpX)
+stopMult = input.float(1.5, "Hard stop = ATR ×", step=0.1, group=grpX)
+
+grpT = "Session (RTH, flat by close)"
+noEntryBeforeMin = input.int(35, "No entries before 9:__ (ET)", group=grpT)
+flatH = input.int(15, "Flatten hour (ET)", group=grpT)
+flatM = input.int(55, "Flatten minute (ET)", group=grpT)
+
+vwapV = ta.vwap
+emaV  = ta.ema(close, emaLen)
+atrV  = ta.atr(atrLen)
+rvol  = volume / ta.sma(volume, rvolLen)
+priorHigh = ta.highest(high, brkLen)[1]
+
+etH = hour(time, "America/New_York"), etM = minute(time, "America/New_York")
+inSess = (etH > 9 or (etH == 9 and etM >= noEntryBeforeMin)) and (etH < flatH or (etH == flatH and etM < flatM))
+eod    = etH == flatH and etM >= flatM
+
+// BUY: new-high breakout, above VWAP, volume surge, in session, flat, in price band
+buy = close > priorHigh and (not reqVwap or close > vwapV) and rvol >= rvolMin and inSess and strategy.position_size == 0 and close <= maxPrice
+
+var float hardStop = na
+if buy
+    strategy.entry("BUY", strategy.long)
+    hardStop := close - stopMult * atrV
+
+// SELL: protective hard stop, plus trend-break (lose EMA or VWAP), plus EOD flatten
+if strategy.position_size > 0
+    strategy.exit("stop", from_entry="BUY", stop=hardStop)
+    if close < emaV or (reqVwap and close < vwapV)
+        strategy.close("BUY", comment="SELL")
+if eod and strategy.position_size > 0
+    strategy.close("BUY", comment="SELL EOD")
+
+justSold = strategy.position_size == 0 and strategy.position_size[1] > 0
+
+plot(vwapV, "VWAP", color=color.new(color.blue, 0), linewidth=2)
+plot(emaV, "Trail EMA", color=color.new(color.orange, 0))
+plotshape(buy, "BUY", shape.labelup, location.belowbar, color.new(color.green, 0), text="BUY", textcolor=color.white, size=size.small)
+plotshape(justSold, "SELL", shape.labeldown, location.abovebar, color.new(color.red, 0), text="SELL", textcolor=color.white, size=size.small)
+alertcondition(buy, "Momentum BUY", "BUY momentum breakout above VWAP")
+alertcondition(justSold, "Momentum SELL", "SELL — trend/VWAP loss or stop")
+if buy
+    alert("BUY " + syminfo.ticker + " @ " + str.tostring(close, format.mintick) + " · stop " + str.tostring(hardStop, format.mintick), alert.freq_once_per_bar_close)
+if justSold
+    alert("SELL " + syminfo.ticker + " @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
