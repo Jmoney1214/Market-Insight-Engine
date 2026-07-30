@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gradeRow } from "./scorecard.js";
+import { gradeRow, fallReclaimReady, FALL_RECLAIM_BUFFER_PCT } from "./scorecard.js";
 
 // gradeRow reconstructs the pre-market reference close from (priceAtScan, gapPct):
 // refClose = priceAtScan / (1 + gapPct/100).
@@ -43,5 +43,39 @@ describe("gradeRow", () => {
     const g = gradeRow("fall", -5, 95, { high: 103, low: 94, close: 102 });
     expect(g.changePct).toBeCloseTo(2, 6);
     expect(g.hit).toBe(true);
+  });
+});
+
+// Fall-list reform: gap-downs are watch-only until a reclaim promotion — live
+// price back above the first-seen premarket price by the reclaim buffer.
+describe("fallReclaimReady", () => {
+  it("promotes exactly at the buffer boundary", () => {
+    // First seen at 100; buffer 2% -> 102 is the promotion line.
+    expect(fallReclaimReady(100, 102)).toBe(true);
+    expect(fallReclaimReady(100, 101.99)).toBe(false);
+  });
+
+  it("does not promote a name still at or below its first-seen price", () => {
+    expect(fallReclaimReady(100, 100)).toBe(false);
+    expect(fallReclaimReady(100, 95)).toBe(false);
+  });
+
+  it("promotes a strong reclaim well above the buffer", () => {
+    expect(fallReclaimReady(50, 53)).toBe(true); // +6%
+  });
+
+  it("rejects degenerate recorded prices instead of promoting on garbage", () => {
+    expect(fallReclaimReady(0, 10)).toBe(false);
+    expect(fallReclaimReady(-5, 10)).toBe(false);
+  });
+
+  it("honors a custom buffer", () => {
+    expect(fallReclaimReady(100, 103, 3)).toBe(true);
+    expect(fallReclaimReady(100, 102.9, 3)).toBe(false);
+  });
+
+  it("default buffer is the shipped constant", () => {
+    const line = 100 * (1 + FALL_RECLAIM_BUFFER_PCT / 100);
+    expect(fallReclaimReady(100, line)).toBe(true);
   });
 });

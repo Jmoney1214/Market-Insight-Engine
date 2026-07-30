@@ -87,6 +87,9 @@ const WINDOW_START = 7 * 60; // 7:00 ET — research is ready well before 8:30
 const WINDOW_END = 16 * 60; // 4:00 ET — keep movers fresh through the close
 const RECORD_START = 8 * 60 + 15; // record the actionable pre-open picks (8:15-9:30)
 const RECORD_END = 9 * 60 + 30;
+// Fall-list reclaim window: watch-only gap-downs can be promoted to picks until
+// the engine's entry window closes (11:00 ET) — never later in the day.
+const PROMOTE_END = 11 * 60;
 const GRADE_AFTER = 16 * 60 + 15; // grade once the session bar is final
 
 function todayNYDate(): string {
@@ -115,7 +118,7 @@ export function startScanScheduler(): void {
   const tick = async () => {
     const { minutes, isWeekday } = nyClock();
     if (!isWeekday) return;
-    const { recordScanPicks, gradePending } = await import("./scorecard.js");
+    const { recordScanPicks, gradePending, promoteFallReclaims } = await import("./scorecard.js");
 
     if (minutes >= WINDOW_START && minutes < WINDOW_END) {
       try {
@@ -123,6 +126,16 @@ export function startScanScheduler(): void {
         logger.info("Scheduled scan refreshed");
         if (minutes >= RECORD_START && minutes <= RECORD_END) {
           await recordScanPicks(result, todayNYDate());
+        }
+        // Reclaim check on every refresh in the window. Prices come from ALL
+        // three lists, not just likelyFall: a hard reclaimer shrinks its gap
+        // past the -1.5% threshold and falls OUT of likelyFall while climbing
+        // into topIntraday — exactly the promotion we must not miss.
+        if (minutes >= RECORD_START && minutes <= PROMOTE_END) {
+          const livePrices = new Map(
+            [...result.topIntraday, ...result.likelyJump, ...result.likelyFall].map((c) => [c.symbol, c.price]),
+          );
+          await promoteFallReclaims(livePrices, todayNYDate());
         }
       } catch (err) {
         logger.warn({ err: String(err) }, "Scheduled scan failed");
@@ -349,7 +362,7 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     generatedAt: new Date().toISOString(),
     universeSize: universe.length,
     priceCeiling: PRICE_CEILING,
-    note: "Long-only evidence-ranked scan (gap, range, liquidity, catalysts) over a liquid under-$150 universe. likelyJump = gap-up longs; likelyFall = gap-down names inverted into long dip-buys. Research input, not a guarantee.",
+    note: "Long-only evidence-ranked scan (gap, range, liquidity, catalysts) over a liquid under-$150 universe. likelyJump = gap-up longs. likelyFall = gap-down names recorded WATCH-ONLY; one becomes a pick only after a reclaim promotion (live price back above first-seen premarket price by the reclaim buffer, before 11:00 ET). Research input, not a guarantee.",
     topIntraday,
     likelyJump,
     likelyFall,
