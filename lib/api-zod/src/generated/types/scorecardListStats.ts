@@ -7,7 +7,7 @@
  */
 
 export interface ScorecardListStats {
-  /** intraday | jump | fall */
+  /** intraday | jump | fall (reclaim-promoted picks) | fall-watch (watch-only, not picks) */
   list: string;
   graded: number;
   hits: number;

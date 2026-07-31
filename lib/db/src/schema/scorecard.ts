@@ -16,6 +16,12 @@ export const scanScorecardTable = pgTable(
     gapPct: real("gap_pct").notNull(),
     priceAtScan: real("price_at_scan").notNull(),
     recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+    // Fall-list reform (2026-07-30): gap-down names record as WATCH-ONLY and are
+    // excluded from pick stats until a reclaim confirmation promotes them —
+    // live price back above first-seen premarket price by the reclaim buffer.
+    watchOnly: boolean("watch_only").notNull().default(false),
+    promotedAt: timestamp("promoted_at", { withTimezone: true }),
+    promotedPrice: real("promoted_price"),
     // Outcome (filled by the after-close grader)
     sessionClose: real("session_close"),
     sessionHigh: real("session_high"),

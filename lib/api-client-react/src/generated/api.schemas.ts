@@ -385,7 +385,7 @@ export interface ScanResult {
 }
 
 export interface ScorecardListStats {
-  /** intraday | jump | fall */
+  /** intraday | jump | fall (reclaim-promoted picks) | fall-watch (watch-only, not picks) */
   list: string;
   graded: number;
   hits: number;
@@ -406,6 +406,8 @@ export interface ScorecardEntry {
   rangePct?: number | null;
   /** @nullable */
   hit?: boolean | null;
+  /** Fall-list rows record watch-only and are excluded from pick stats until a reclaim promotion (live price back above first-seen premarket price by the reclaim buffer before 11:00 ET). */
+  watchOnly?: boolean;
 }
 
 export interface ScorecardSummary {

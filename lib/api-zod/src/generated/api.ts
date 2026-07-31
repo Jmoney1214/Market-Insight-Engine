@@ -78,7 +78,7 @@ export const GetPremarketScanResponse = zod.object({
 export const GetScanScorecardResponse = zod.object({
   "asOf": zod.string(),
   "lists": zod.array(zod.object({
-  "list": zod.string().describe('intraday | jump | fall'),
+  "list": zod.string().describe('intraday | jump | fall (reclaim-promoted picks) | fall-watch (watch-only, not picks)'),
   "graded": zod.number(),
   "hits": zod.number(),
   "hitRate": zod.number().describe('percent of graded picks that hit')
@@ -92,7 +92,8 @@ export const GetScanScorecardResponse = zod.object({
   "priceAtScan": zod.number(),
   "changePct": zod.number().nullish(),
   "rangePct": zod.number().nullish(),
-  "hit": zod.boolean().nullish()
+  "hit": zod.boolean().nullish(),
+  "watchOnly": zod.boolean().optional().describe('Fall-list rows record watch-only and are excluded from pick stats until a reclaim promotion (live price back above first-seen premarket price by the reclaim buffer before 11:00 ET).')
 }))
 })
 
