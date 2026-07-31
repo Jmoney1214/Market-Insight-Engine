@@ -10,9 +10,10 @@ import { fileURLToPath } from "node:url";
 
 const SYM = (process.argv[2] || "AVTR").toUpperCase();
 const DAY = process.argv[3] || new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
-const COST = 0.0007, BRK = 10, RVOL_MIN = 1.5, EMA_LEN = 9, ATR_LEN = 14, STOP_MULT = 1.5, MAXP = 20;
+const TF = process.argv[4] || "5Min";
+const COST = Number(process.argv[5] || 0.0007), BRK = 10, RVOL_MIN = 1.5, EMA_LEN = 9, ATR_LEN = 14, STOP_MULT = 1.5, MAXP = 20;
 
-const intr = await alpacaBars([SYM], "5Min", DAY, "2026-08-01", "paperlog_5m", 0.02);
+const intr = await alpacaBars([SYM], TF, DAY, "2026-08-01", `paperlog_${TF}`, 0.02);
 const daily = await alpacaBars([SYM], "1Day", "2026-06-01", "2026-08-01", "paperlog_1d", 6);
 const sortB = (r) => [...r].sort((a, b) => (a.t < b.t ? -1 : 1));
 const raw = intr.get(SYM);
