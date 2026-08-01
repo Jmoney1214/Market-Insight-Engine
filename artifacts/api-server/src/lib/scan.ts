@@ -64,7 +64,9 @@ function todayNY(offsetDays = 0): string {
 }
 
 export function scanAvailable(): boolean {
-  return hasFmp && hasAlpaca;
+  // FMP owns the scanner universe and can also supply batch quotes, news, and
+  // EOD bars. Alpaca/SIP remains preferred when configured, but is optional.
+  return hasFmp;
 }
 
 /** Minutes since midnight in New York, plus weekday flag. */
@@ -221,8 +223,12 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
     ))
     .catch(() => {});
 
-  // 2. Live gaps for the whole universe (batched SIP snapshots).
-  const snaps = (await alpaca.getSnapshots(universe.map((u) => u.symbol))) ?? new Map();
+  // 2. Live gaps for the whole universe. Prefer Alpaca SIP, then fall back to
+  // FMP batch quotes without inventing or carrying stale fixture values.
+  const symbols = universe.map((u) => u.symbol);
+  const snaps = (hasAlpaca ? await alpaca.getSnapshots(symbols) : null)
+    ?? await fmp.getBatchSnapshots(symbols)
+    ?? new Map();
 
   // 3. Catalyst overlays — three cheap market-wide calls.
   const [earnings, grades] = await Promise.all([
@@ -262,12 +268,18 @@ export async function runPremarketScan(refresh = false): Promise<ScanResult> {
   }
 
   // News overlay only for finalists (single multi-symbol call).
-  const newsMap = (await alpaca.getNewsMulti(finalists.map((f) => f.symbol))) ?? new Map();
+  const finalistSymbols = finalists.map((f) => f.symbol);
+  const newsMap = (hasAlpaca ? await alpaca.getNewsMulti(finalistSymbols) : null)
+    ?? await fmp.getNewsMulti(finalistSymbols)
+    ?? new Map();
 
   // 4. Bar enrichment (parallel; ~45 days is enough for ATR14 + RSI14).
-  const barsList = await Promise.all(
-    finalists.map((f) => alpaca.getDailyBars(f.symbol, 60).catch(() => null)),
-  );
+  const barsList = await Promise.all(finalists.map(async (finalist) => {
+    const alpacaBars = hasAlpaca
+      ? await alpaca.getDailyBars(finalist.symbol, 60).catch(() => null)
+      : null;
+    return alpacaBars ?? fmp.getDailyBars(finalist.symbol, 60).catch(() => null);
+  }));
 
   const candidates: ScanCandidate[] = finalists.map((f, i) => {
     const u = bySymbol.get(f.symbol);

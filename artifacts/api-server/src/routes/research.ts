@@ -3,6 +3,7 @@ import { runResearch } from "../lib/researchRunner.js";
 import { persistLeadRun } from "../lib/researchStore.js";
 import { judgeLeadRun } from "../lib/judgeStore.js";
 import { recordResearchEpisode } from "../lib/memoryStore.js";
+import { isRankableResearchSymbol } from "../lib/researchSymbols.js";
 
 const router: IRouter = Router();
 
@@ -14,10 +15,14 @@ const router: IRouter = Router();
  * PARTIAL/BLOCKED outcome, never invented research; a storage failure is
  * reported via `persisted: false`, never a lost response.
  */
-router.get("/research/:symbol", async (req, res) => {
+router.get("/research/:symbol", async (req, res, next) => {
   const symbol = String(req.params.symbol ?? "").toUpperCase().trim();
   if (!/^[A-Z0-9.\-]{1,12}$/.test(symbol)) {
     res.status(400).json({ error: "Invalid symbol" });
+    return;
+  }
+  if (!isRankableResearchSymbol(symbol)) {
+    next();
     return;
   }
   const modeRaw = String(req.query["mode"] ?? "STANDARD").toUpperCase();

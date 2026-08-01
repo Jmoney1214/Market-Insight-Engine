@@ -11,6 +11,7 @@ import { and, eq, gte, inArray, isNotNull, like, notLike } from "drizzle-orm";
 import { db, findingGradesTable, researchObjectsTable } from "@workspace/db";
 import { rankAgents, type AgentAccuracy, type GradedFindingRow } from "@workspace/research-agents";
 import { logger } from "./logger.js";
+import { isRankableResearchSymbol } from "./researchSymbols.js";
 
 const ROLLING_DAYS = 30;
 
@@ -46,13 +47,15 @@ export async function computeAgentAccuracy(opts: AccuracyOptions = {}): Promise<
         findingRef: findingGradesTable.findingRef,
         judgeMedianScore: findingGradesTable.judgeMedianScore,
         eventSignificant: findingGradesTable.eventSignificant,
+        symbol: findingGradesTable.symbol,
       })
       .from(findingGradesTable)
       .where(and(...conditions))
       .limit(2000);
-    if (graded.length === 0) return [];
+    const rankableGrades = graded.filter((grade) => isRankableResearchSymbol(grade.symbol ?? ""));
+    if (rankableGrades.length === 0) return [];
 
-    const refs = graded.map((g) => g.findingRef!) ;
+    const refs = rankableGrades.map((g) => g.findingRef!);
 
     const catalysts = await db
       .select({ objectId: researchObjectsTable.objectId, payload: researchObjectsTable.payload })
@@ -81,7 +84,7 @@ export async function computeAgentAccuracy(opts: AccuracyOptions = {}): Promise<
     );
 
     const byAgent = new Map<string, GradedFindingRow[]>();
-    for (const g of graded) {
+    for (const g of rankableGrades) {
       const ref = g.findingRef!;
       const agent = agentForCatalystId(ref);
       const row: GradedFindingRow = {

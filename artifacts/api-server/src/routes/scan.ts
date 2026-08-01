@@ -6,7 +6,7 @@ const router = Router();
 
 router.get("/scan/premarket", async (req, res) => {
   if (!scanAvailable()) {
-    res.status(503).json({ error: "Market data providers not configured (FMP + Alpaca keys required)" });
+    res.status(503).json({ error: "FMP market data provider not configured" });
     return;
   }
   try {

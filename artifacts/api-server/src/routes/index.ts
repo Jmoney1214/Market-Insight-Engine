@@ -16,10 +16,12 @@ router.use(healthRouter);
 router.use(analysisRouter);
 router.use(watchlistRouter);
 router.use(scanRouter);
+// Static research endpoints must be registered before /research/:symbol or
+// Express will interpret words such as "accuracy" as ticker symbols.
+router.use(accuracyRouter);
 router.use(researchRouter);
 router.use(memoryRouter);
 router.use(kronosRouter);
-router.use(accuracyRouter);
 router.use(backtestRouter);
 router.use("/copilot", copilotRouter);
 

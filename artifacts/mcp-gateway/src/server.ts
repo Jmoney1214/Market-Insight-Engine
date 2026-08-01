@@ -10,7 +10,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-const API_BASE = process.env["MIE_API_BASE"] ?? "http://127.0.0.1:8080";
 /** Optional bearer token, forwarded so the server can enforce it once auth lands. */
 const API_TOKEN = process.env["MIE_API_TOKEN"];
 
@@ -20,7 +19,10 @@ const SYMBOL = z
   .describe("Ticker symbol, e.g. AAPL or BRK-B");
 
 async function apiGet(path: string, params?: Record<string, string | undefined>) {
-  const url = new URL(`/api${path}`, API_BASE);
+  // Resolve at request time so tests, process supervisors, and agent runtimes
+  // can safely switch the upstream without re-importing this module.
+  const apiBase = process.env["MIE_API_BASE"] ?? "http://127.0.0.1:8080";
+  const url = new URL(`/api${path}`, apiBase);
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined && v !== "") url.searchParams.set(k, v);
   }

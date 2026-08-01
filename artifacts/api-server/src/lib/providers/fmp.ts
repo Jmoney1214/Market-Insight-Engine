@@ -155,6 +155,98 @@ export async function getStockNews(symbol: string, limit = 6): Promise<FmpNewsIt
   return Array.isArray(rows) ? rows : null;
 }
 
+export type FmpBatchSnapshot = {
+  symbol: string;
+  price: number;
+  refClose: number;
+  gapPct: number;
+  lastTradeAt: string;
+};
+
+/** FMP fallback for the scanner when Alpaca/SIP is unavailable. */
+export async function getBatchSnapshots(symbols: string[]): Promise<Map<string, FmpBatchSnapshot> | null> {
+  const out = new Map<string, FmpBatchSnapshot>();
+  for (let i = 0; i < symbols.length; i += 100) {
+    const rows = await fmpGet<Array<Record<string, unknown>>>("batch-quote", {
+      symbols: symbols.slice(i, i + 100).join(","),
+    });
+    if (!Array.isArray(rows)) continue;
+    for (const row of rows) {
+      const symbol = String(row["symbol"] ?? "").toUpperCase();
+      const price = Number(row["price"] ?? 0);
+      const refClose = Number(row["previousClose"] ?? 0);
+      if (!symbol || !Number.isFinite(price) || price <= 0 || !Number.isFinite(refClose) || refClose <= 0) continue;
+      const rawTimestamp = Number(row["timestamp"] ?? 0);
+      const timestampMs = rawTimestamp > 0 && rawTimestamp < 1_000_000_000_000 ? rawTimestamp * 1000 : rawTimestamp;
+      out.set(symbol, {
+        symbol,
+        price,
+        refClose,
+        gapPct: ((price - refClose) / refClose) * 100,
+        lastTradeAt: timestampMs > 0 ? new Date(timestampMs).toISOString() : "",
+      });
+    }
+  }
+  return out.size > 0 ? out : null;
+}
+
+/** One FMP news call covering the scanner finalists. */
+export async function getNewsMulti(symbols: string[], limit = 100): Promise<Map<string, string> | null> {
+  if (symbols.length === 0) return null;
+  const rows = await fmpGet<Array<Record<string, unknown>>>("news/stock", {
+    symbols: symbols.slice(0, 100).join(","),
+    limit,
+  });
+  if (!Array.isArray(rows)) return null;
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    const symbol = String(row["symbol"] ?? "").toUpperCase();
+    const title = String(row["title"] ?? "").trim();
+    if (symbol && title && !out.has(symbol)) out.set(symbol, title);
+  }
+  return out.size > 0 ? out : null;
+}
+
+export type FmpDailyBars = {
+  closes: number[];
+  highs: number[];
+  lows: number[];
+  volumes: number[];
+};
+
+/** FMP EOD bars normalized oldest-to-newest for indicator calculations. */
+export async function getDailyBars(symbol: string, days = 500): Promise<FmpDailyBars | null> {
+  const from = new Date();
+  from.setUTCDate(from.getUTCDate() - days);
+  const rows = await fmpGet<Array<Record<string, unknown>>>("historical-price-eod/full", {
+    symbol,
+    from: from.toISOString().slice(0, 10),
+    to: new Date().toISOString().slice(0, 10),
+  });
+  if (!Array.isArray(rows)) return null;
+  const normalized = rows
+    .map((row) => ({
+      date: String(row["date"] ?? ""),
+      close: Number(row["close"]),
+      high: Number(row["high"]),
+      low: Number(row["low"]),
+      volume: Number(row["volume"]),
+    }))
+    .filter((row) => row.date.length >= 10
+      && Number.isFinite(row.close)
+      && Number.isFinite(row.high)
+      && Number.isFinite(row.low)
+      && Number.isFinite(row.volume))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (normalized.length === 0) return null;
+  return {
+    closes: normalized.map((row) => row.close),
+    highs: normalized.map((row) => row.high),
+    lows: normalized.map((row) => row.low),
+    volumes: normalized.map((row) => row.volume),
+  };
+}
+
 export type FmpBalanceSheet = {
   fiscalYear: string;
   totalAssets: number;
