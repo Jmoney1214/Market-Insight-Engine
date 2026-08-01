@@ -1,0 +1,73 @@
+//@version=6
+strategy("Penny Pro Long v2 [Copilot]", overlay=true, initial_capital=25000, default_qty_type=strategy.percent_of_equity, default_qty_value=20, pyramiding=0, commission_type=strategy.commission.percent, commission_value=0.05, slippage=2, calc_on_every_tick=false)
+// LONG-ONLY, tuned for 30s-1min. THROTTLED so it can't machine-gun (the 10-sec run did
+// 1714 trades / -92%): cooldown after each exit + max trades/day + stricter 5/6 score +
+// longer lookbacks. HTF 15m+1H confluence, ATR exits. Unvalidated -> paper first.
+emaHtf = input.int(50, "1H trend EMA")
+ema15in = input.int(20, "15m support EMA")
+rsiLen = input.int(14, "RSI length")
+rvolMin = input.float(1.5, "Volume spike x")
+scoreMin = input.int(5, "Min score of 6")
+hiLook = input.int(20, "New-high lookback bars")
+volLen = input.int(30, "Volume avg length")
+atrLen = input.int(14, "ATR length")
+cooldown = input.int(20, "Cooldown bars after exit")
+maxDay = input.int(8, "Max trades per day")
+maxPrice = input.float(20.0, "Max price")
+
+htfE = request.security(syminfo.tickerid, "60", ta.ema(close, emaHtf)[1], lookahead=barmerge.lookahead_on)
+e15 = request.security(syminfo.tickerid, "15", ta.ema(close, ema15in)[1], lookahead=barmerge.lookahead_on)
+rsi = ta.rsi(close, rsiLen)
+vw = ta.vwap
+atrV = ta.atr(atrLen)
+rvol = volume / ta.sma(volume, volLen)
+newHi = close >= ta.highest(close, hiLook)[1]
+
+f1 = close > htfE
+f2 = close > vw
+f3 = close > e15
+f4 = rsi >= 40 and rsi <= 72
+f5 = rvol >= rvolMin
+f6 = close > close[1] and newHi
+score = (f1 ? 1 : 0) + (f2 ? 1 : 0) + (f3 ? 1 : 0) + (f4 ? 1 : 0) + (f5 ? 1 : 0) + (f6 ? 1 : 0)
+
+etH = hour(time, "America/New_York")
+etM = minute(time, "America/New_York")
+eod = etH == 15 and etM >= 55
+justSold = strategy.position_size == 0 and strategy.position_size[1] > 0
+var int dayTr = 0
+var int lastExit = -10000
+if ta.change(time("D")) != 0
+    dayTr := 0
+if justSold
+    lastExit := bar_index
+canEnter = strategy.position_size == 0 and (bar_index - lastExit) >= cooldown and dayTr < maxDay and not eod
+buy = score >= scoreMin and canEnter and close <= maxPrice
+if buy
+    strategy.entry("L", strategy.long)
+    dayTr := dayTr + 1
+
+var float atrE = na
+var bool tp1hit = false
+if strategy.position_size == 0
+    atrE := na
+    tp1hit := false
+if strategy.position_size > 0
+    if na(atrE)
+        atrE := atrV
+    avg = strategy.position_avg_price
+    if high >= avg + atrE
+        tp1hit := true
+    beStop = tp1hit ? avg : (avg - 1.5 * atrE)
+    strategy.exit("T1", "L", qty_percent=50, limit=avg + atrE, stop=avg - 1.5 * atrE)
+    strategy.exit("T2", "L", limit=avg + 2 * atrE, stop=beStop)
+if eod and strategy.position_size > 0
+    strategy.close("L", comment="EOD")
+
+plot(vw, "VWAP", color=color.new(color.blue, 0), linewidth=2)
+plotshape(buy, "BUY", shape.labelup, location.belowbar, color.new(color.green, 0), text="BUY", textcolor=color.white, size=size.small)
+plotshape(justSold, "SELL", shape.labeldown, location.abovebar, color.new(color.red, 0), text="SELL", textcolor=color.white, size=size.small)
+if buy
+    alert("BUY " + syminfo.ticker + " @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
+if justSold
+    alert("SELL " + syminfo.ticker + " @ " + str.tostring(close, format.mintick), alert.freq_once_per_bar_close)
