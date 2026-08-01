@@ -54,3 +54,12 @@ launchctl kickstart -k gui/$(id -u)/com.findesk.api-server
 - The scan scheduler inside the server is already time-of-day aware
   (07:00–16:00 ET refresh, 08:15–09:30 record, after-close grading), so a
   boot at any hour does the right thing.
+- The wrapper rebuilds `dist/` on **every** start — including crash restarts.
+  A `git pull` without re-running the installer therefore gets silently
+  deployed on the next restart; pull only when you intend the code to go live,
+  and prefer `git pull && bash ops/launchd/install.sh` as the deploy ritual.
+- Permanent failures (missing node/.env, broken build) post a **macOS
+  notification** ("FinDesk desk server DOWN") in addition to the error log,
+  and logs self-truncate at ~10MB so unattended months can't fill the disk.
+- If you ever delete `~/Library/Logs/findesk/`, re-run the installer — launchd
+  loses the job's output files until they're recreated.
