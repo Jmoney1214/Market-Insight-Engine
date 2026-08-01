@@ -46,7 +46,7 @@ import {
   getSecondNarrator,
   getSentimentProvider,
 } from "./researchProviders.js";
-import { claimFromCatalyst, MATERIAL_FORMS } from "./researchRunner.js";
+import { claimFromCatalyst, pickAuditFiling } from "./researchRunner.js";
 import { persistLeadRun } from "./researchStore.js";
 import { judgeLeadRun } from "./judgeStore.js";
 import { gradeEventStudyByRef, type MarketSeries } from "./eventStudyGrader.js";
@@ -207,11 +207,12 @@ async function runCandidate(
       const edgar = new EdgarClient({ cacheDir: join(tmpdir(), "mie-edgar-cache") });
       cik = await edgar.lookupCik(symbol);
       if (cik) {
+        // PIT: only filings accepted before the cutoff. Then the SAME audit
+        // selection as the live runner — fresh (within the freshness window of
+        // the cutoff) + material — so a historical catalyst is never
+        // substantiated by a filing that was already stale as of the cutoff.
         filingRefs = filingsAsOf((await edgar.getSubmissions(cik)) ?? [], cutoff);
-        // Same rule as the live runner: a Form 144 can't substantiate a catalyst.
-        const latest =
-          filingRefs.find((f) => f.primaryDocument && MATERIAL_FORMS.has(f.form)) ??
-          filingRefs.find((f) => f.primaryDocument);
+        const latest = pickAuditFiling(filingRefs, cutoff);
         if (latest) {
           const filing = await edgar.getFiling(latest, { symbols: [symbol], now: cutoff });
           if (filing) {
