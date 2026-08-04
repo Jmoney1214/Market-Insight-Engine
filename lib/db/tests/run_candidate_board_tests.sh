@@ -333,7 +333,7 @@ SQL
     exit 1
   fi
   docker exec "$container" psql -At -U postgres -d "$acl_database" -c "
-    SELECT count(*) FROM pg_default_acl defaults
+    SELECT count(DISTINCT defaults.oid) FROM pg_default_acl defaults
     CROSS JOIN LATERAL aclexplode(defaults.defaclacl) acl
     JOIN pg_roles grantee ON grantee.oid=acl.grantee
     WHERE defaults.defaclrole='candidate_board_foreign_default_owner'::regrole
