@@ -1,0 +1,44 @@
+name: Candidate board database proof
+
+on:
+  pull_request:
+    paths:
+      - lib/db/migrations/0002_immutable_pine_candidate_boards.sql
+      - lib/db/src/schema/candidateBoards.ts
+      - lib/db/src/schema/index.ts
+      - lib/db/drizzle.config.ts
+      - lib/db/tests/candidate_boards.pgtap.sql
+      - lib/db/tests/candidate_boards_concurrency.sh
+      - lib/db/tests/run_candidate_board_tests.sh
+      - lib/db/package.json
+      - .github/workflows/candidate-board-database-proof.yml
+  push:
+    branches: [main]
+    paths:
+      - lib/db/migrations/0002_immutable_pine_candidate_boards.sql
+      - lib/db/src/schema/candidateBoards.ts
+      - lib/db/src/schema/index.ts
+      - lib/db/drizzle.config.ts
+      - lib/db/tests/**
+      - lib/db/package.json
+      - .github/workflows/candidate-board-database-proof.yml
+
+permissions:
+  contents: read
+
+jobs:
+  database-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.17.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run isolated PostgreSQL candidate-board proof
+        run: pnpm --filter @workspace/db test:candidate-boards
