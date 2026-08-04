@@ -3,6 +3,110 @@
 
 BEGIN;
 
+-- These objects are a new security authority, not an idempotent replacement
+-- for arbitrary pre-existing objects. Fail before touching legacy public
+-- drift so a partial/manual/attacker-owned authority is preserved for review.
+DO $authority_preflight$
+BEGIN
+  IF to_regclass('private.candidate_boards') IS NOT NULL
+    OR to_regclass('private.candidate_board_entries') IS NOT NULL
+    OR to_regclass('app.pine_candidate_boards_v1') IS NOT NULL
+    OR EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_proc procedure
+      JOIN pg_catalog.pg_namespace namespace ON namespace.oid = procedure.pronamespace
+      WHERE namespace.nspname IN ('app', 'private')
+        AND procedure.proname = ANY (ARRAY[
+          'canonical_date_in_range_v1', 'canonical_date_v1',
+          'canonical_timestamp_in_range_v1', 'canonical_timestamp_v1',
+          'ecmascript_trim_v1', 'utf16_code_unit_length_v1',
+          'text_array_is_canonical_v1', 'canonical_json_string_v1',
+          'canonical_float8_v1', 'canonical_text_array_v1',
+          'canonical_candidate_entry_json_v1',
+          'compute_candidate_board_entry_hash_v1',
+          'compute_candidate_board_payload_hash_v1',
+          'compute_candidate_board_hash_v1',
+          'guard_candidate_board_mutation_v1',
+          'guard_candidate_board_entry_v1',
+          'reject_candidate_board_truncate_v1',
+          'read_pine_candidate_boards_v1',
+          'create_candidate_board_v1',
+          'append_candidate_board_entry_v1',
+          'freeze_candidate_board_v1'
+        ]::text[])
+    )
+  THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_PRIVATE_TARGET_PRESENT' USING ERRCODE = '55000';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace namespace
+    JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = namespace.nspowner
+    WHERE namespace.nspname IN ('app', 'private')
+      AND owner_role.rolname IN ('findesk_candidate_board_publisher', 'pine_candidate_reader')
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_class relation
+    JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = relation.relowner
+    WHERE namespace.nspname IN ('app', 'private')
+      AND owner_role.rolname IN ('findesk_candidate_board_publisher', 'pine_candidate_reader')
+  ) OR EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_proc procedure
+    JOIN pg_catalog.pg_namespace namespace ON namespace.oid = procedure.pronamespace
+    JOIN pg_catalog.pg_roles owner_role ON owner_role.oid = procedure.proowner
+    WHERE namespace.nspname IN ('app', 'private')
+      AND owner_role.rolname IN ('findesk_candidate_board_publisher', 'pine_candidate_reader')
+  )
+  THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_ROLE_OWNERSHIP_PRESENT' USING ERRCODE = '55000';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace namespace
+    WHERE namespace.nspname IN ('app', 'private')
+      AND namespace.nspowner <> current_user::regrole::oid
+  )
+  THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_SCHEMA_OWNER_UNTRUSTED' USING ERRCODE = '55000';
+  END IF;
+
+  -- PUBLIC CREATE cannot be subtracted from either dedicated role. Refuse a
+  -- shared-schema policy that would let the reader or publisher plant new
+  -- objects after their narrow grants are installed.
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace namespace
+    CROSS JOIN LATERAL pg_catalog.aclexplode(
+      COALESCE(namespace.nspacl, pg_catalog.acldefault('n', namespace.nspowner))
+    ) acl
+    WHERE namespace.nspname IN ('app', 'private')
+      AND acl.grantee = 0
+      AND acl.privilege_type = 'CREATE'
+  )
+  THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_PUBLIC_SCHEMA_CREATE_PRESENT' USING ERRCODE = '55000';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_default_acl defaults
+    CROSS JOIN LATERAL pg_catalog.aclexplode(defaults.defaclacl) acl
+    JOIN pg_catalog.pg_roles grantee ON grantee.oid = acl.grantee
+    LEFT JOIN pg_catalog.pg_namespace namespace ON namespace.oid = defaults.defaclnamespace
+    WHERE grantee.rolname IN ('findesk_candidate_board_publisher', 'pine_candidate_reader')
+      AND (defaults.defaclnamespace = 0 OR namespace.nspname IN ('app', 'private'))
+      AND defaults.defaclrole <> current_user::regrole::oid
+  )
+  THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_ROLE_DEFAULT_ACL_PRESENT' USING ERRCODE = '55000';
+  END IF;
+END
+$authority_preflight$;
+
 DO $drift$
 DECLARE
   board_rows bigint := 0;
@@ -46,21 +150,148 @@ DROP FUNCTION IF EXISTS public.prevent_frozen_candidate_board_mutation();
 
 CREATE SCHEMA IF NOT EXISTS private;
 CREATE SCHEMA IF NOT EXISTS app;
-REVOKE ALL ON SCHEMA private FROM PUBLIC;
-REVOKE ALL ON SCHEMA app FROM PUBLIC;
+DO $schema_owner_postcheck$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace namespace
+    WHERE namespace.nspname IN ('app', 'private')
+      AND namespace.nspowner <> current_user::regrole::oid
+  ) THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_SCHEMA_OWNER_UNTRUSTED' USING ERRCODE = '55000';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_namespace namespace
+    CROSS JOIN LATERAL pg_catalog.aclexplode(
+      COALESCE(namespace.nspacl, pg_catalog.acldefault('n', namespace.nspowner))
+    ) acl
+    WHERE namespace.nspname IN ('app', 'private')
+      AND acl.grantee = 0
+      AND acl.privilege_type = 'CREATE'
+  ) THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_PUBLIC_SCHEMA_CREATE_PRESENT' USING ERRCODE = '55000';
+  END IF;
+END
+$schema_owner_postcheck$;
+-- The app/private namespaces are shared. Preserve harmless PUBLIC USAGE, but
+-- PUBLIC CREATE was refused above because it would defeat least privilege.
 
 DO $roles$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'findesk_candidate_board_publisher') THEN
-    CREATE ROLE findesk_candidate_board_publisher NOLOGIN NOINHERIT;
+    CREATE ROLE findesk_candidate_board_publisher;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'pine_candidate_reader') THEN
-    CREATE ROLE pine_candidate_reader NOLOGIN NOINHERIT;
+    CREATE ROLE pine_candidate_reader;
   END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_catalog.pg_auth_members memberships
+    WHERE memberships.member IN (
+      SELECT oid FROM pg_catalog.pg_roles
+      WHERE rolname IN ('findesk_candidate_board_publisher', 'pine_candidate_reader')
+    ) OR memberships.roleid IN (
+      SELECT oid FROM pg_catalog.pg_roles
+      WHERE rolname IN ('findesk_candidate_board_publisher', 'pine_candidate_reader')
+    )
+  ) THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_ROLE_MEMBERSHIP_PRESENT' USING ERRCODE = '55000';
+  END IF;
+  ALTER ROLE findesk_candidate_board_publisher
+    NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+  ALTER ROLE pine_candidate_reader
+    NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE EXCEPTION 'PINE_CANDIDATE_BOARD_ROLE_HARDENING_FAILED' USING ERRCODE = '42501';
 END
 $roles$;
 
-CREATE TABLE IF NOT EXISTS private.candidate_boards (
+-- Global and schema-specific default privileges are additive. Remove only
+-- grants to the two dedicated roles for the migration owner; generic/public
+-- defaults remain untouched. Foreign-owned defaults were refused above.
+ALTER DEFAULT PRIVILEGES REVOKE ALL PRIVILEGES ON TABLES
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES REVOKE ALL PRIVILEGES ON SEQUENCES
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES REVOKE ALL PRIVILEGES ON FUNCTIONS
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES REVOKE ALL PRIVILEGES ON TYPES
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES REVOKE ALL PRIVILEGES ON SCHEMAS
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA app, private REVOKE ALL PRIVILEGES ON TABLES
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA app, private REVOKE ALL PRIVILEGES ON SEQUENCES
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA app, private REVOKE ALL PRIVILEGES ON FUNCTIONS
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+ALTER DEFAULT PRIVILEGES IN SCHEMA app, private REVOKE ALL PRIVILEGES ON TYPES
+  FROM findesk_candidate_board_publisher, pine_candidate_reader;
+
+CREATE FUNCTION private.canonical_date_in_range_v1(value date)
+RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog
+AS $$ SELECT extract(year FROM value) BETWEEN 1 AND 9999 $$;
+REVOKE ALL ON FUNCTION private.canonical_date_in_range_v1(date) FROM PUBLIC;
+
+CREATE FUNCTION private.canonical_date_v1(value date)
+RETURNS text LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog, private
+AS $fn$
+BEGIN
+  IF NOT private.canonical_date_in_range_v1(value) THEN
+    RAISE EXCEPTION 'CANDIDATE_BOARD_CANONICAL_DATE_RANGE' USING ERRCODE = '22008';
+  END IF;
+  RETURN to_char(value, 'YYYY-MM-DD');
+END
+$fn$;
+REVOKE ALL ON FUNCTION private.canonical_date_v1(date) FROM PUBLIC;
+
+CREATE FUNCTION private.canonical_timestamp_in_range_v1(value timestamptz)
+RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog
+AS $$ SELECT extract(year FROM value AT TIME ZONE 'UTC') BETWEEN 1 AND 9999 $$;
+REVOKE ALL ON FUNCTION private.canonical_timestamp_in_range_v1(timestamptz) FROM PUBLIC;
+
+CREATE FUNCTION private.ecmascript_trim_v1(value text)
+RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog
+AS $$
+  SELECT btrim(value, U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF')
+$$;
+REVOKE ALL ON FUNCTION private.ecmascript_trim_v1(text) FROM PUBLIC;
+
+CREATE FUNCTION private.utf16_code_unit_length_v1(value text)
+RETURNS integer LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog
+AS $$
+  SELECT COALESCE(sum(
+    CASE WHEN octet_length(character) = 4 THEN 2 ELSE 1 END
+  ), 0)::integer
+  FROM regexp_split_to_table(value, '') AS characters(character)
+$$;
+REVOKE ALL ON FUNCTION private.utf16_code_unit_length_v1(text) FROM PUBLIC;
+
+CREATE FUNCTION private.text_array_is_canonical_v1(value text[], reason_codes boolean)
+RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog
+AS $$
+  SELECT array_ndims(value) = 1
+    AND array_lower(value, 1) = 1
+    AND cardinality(value) > 0
+    AND cardinality(value) = (SELECT count(DISTINCT item) FROM unnest(value) AS item)
+    AND NOT EXISTS (
+      SELECT 1 FROM unnest(value) WITH ORDINALITY AS current(item, ordinal)
+      WHERE (reason_codes AND item !~ '^[A-Z][A-Z0-9_]{0,127}$')
+         OR (NOT reason_codes AND item !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')
+         OR (ordinal > 1 AND item COLLATE "C" <= value[ordinal - 1] COLLATE "C")
+    )
+$$;
+REVOKE ALL ON FUNCTION private.text_array_is_canonical_v1(text[], boolean) FROM PUBLIC;
+
+CREATE TABLE private.candidate_boards (
   schema_version integer NOT NULL DEFAULT 1 CHECK (schema_version = 1),
   source_board_id uuid PRIMARY KEY,
   source_project_ref text NOT NULL CHECK (source_project_ref ~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$'),
@@ -80,7 +311,6 @@ CREATE TABLE IF NOT EXISTS private.candidate_boards (
   candidate_count integer NOT NULL DEFAULT 0 CHECK (candidate_count BETWEEN 0 AND 20),
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   CHECK (parent_board_id IS NULL OR parent_board_id <> source_board_id),
-  CHECK (started_at <= stage_scheduled_at),
   CHECK (decision_cutoff_at <= stage_scheduled_at),
   CHECK (completed_at IS NULL OR started_at <= completed_at),
   CHECK (frozen_at IS NULL OR completed_at IS NULL OR completed_at <= frozen_at),
@@ -89,6 +319,14 @@ CREATE TABLE IF NOT EXISTS private.candidate_boards (
     OR (status <> 'FROZEN' AND board_hash IS NULL)
   ),
   CHECK ((stage_scheduled_at AT TIME ZONE 'America/New_York')::date = trade_date),
+  CONSTRAINT candidate_boards_canonical_date_range_v1 CHECK (
+    private.canonical_date_in_range_v1(trade_date)
+    AND private.canonical_timestamp_in_range_v1(stage_scheduled_at)
+    AND private.canonical_timestamp_in_range_v1(started_at)
+    AND private.canonical_timestamp_in_range_v1(decision_cutoff_at)
+    AND (completed_at IS NULL OR private.canonical_timestamp_in_range_v1(completed_at))
+    AND (frozen_at IS NULL OR private.canonical_timestamp_in_range_v1(frozen_at))
+  ),
   CHECK (date_trunc('milliseconds', stage_scheduled_at) = stage_scheduled_at),
   CHECK (date_trunc('milliseconds', started_at) = started_at),
   CHECK (date_trunc('milliseconds', decision_cutoff_at) = decision_cutoff_at),
@@ -100,7 +338,7 @@ CREATE TABLE IF NOT EXISTS private.candidate_boards (
   )
 );
 
-CREATE TABLE IF NOT EXISTS private.candidate_board_entries (
+CREATE TABLE private.candidate_board_entries (
   source_board_id uuid NOT NULL REFERENCES private.candidate_boards(source_board_id),
   symbol text NOT NULL CHECK (symbol ~ '^[A-Z][A-Z0-9.-]{0,9}$'),
   source_rank integer NOT NULL CHECK (source_rank BETWEEN 1 AND 20),
@@ -111,11 +349,17 @@ CREATE TABLE IF NOT EXISTS private.candidate_board_entries (
   first_seen_board_id uuid REFERENCES private.candidate_boards(source_board_id),
   first_seen_at timestamptz,
   evidence_cutoff_at timestamptz NOT NULL,
-  evidence_reference_ids text[] NOT NULL CHECK (cardinality(evidence_reference_ids) BETWEEN 1 AND 64),
-  reason_codes text[] NOT NULL CHECK (cardinality(reason_codes) BETWEEN 1 AND 32),
-  source_reason_summary text NOT NULL CHECK (
-    char_length(source_reason_summary) BETWEEN 1 AND 1000
-    AND source_reason_summary = btrim(source_reason_summary)
+  evidence_reference_ids text[] NOT NULL CONSTRAINT candidate_board_entries_evidence_array_shape_v1 CHECK (
+    private.text_array_is_canonical_v1(evidence_reference_ids, false)
+    AND cardinality(evidence_reference_ids) BETWEEN 1 AND 64
+  ),
+  reason_codes text[] NOT NULL CONSTRAINT candidate_board_entries_reason_array_shape_v1 CHECK (
+    private.text_array_is_canonical_v1(reason_codes, true)
+    AND cardinality(reason_codes) BETWEEN 1 AND 32
+  ),
+  source_reason_summary text NOT NULL CONSTRAINT candidate_board_entries_summary_domain_v1 CHECK (
+    private.utf16_code_unit_length_v1(source_reason_summary) BETWEEN 1 AND 1000
+    AND source_reason_summary = private.ecmascript_trim_v1(source_reason_summary)
     AND source_reason_summary = normalize(source_reason_summary, NFC)
   ),
   entry_hash text NOT NULL CHECK (entry_hash ~ '^[a-f0-9]{64}$'),
@@ -124,6 +368,10 @@ CREATE TABLE IF NOT EXISTS private.candidate_board_entries (
   UNIQUE (source_board_id, source_rank),
   CHECK ((first_seen_board_id IS NULL) = (first_seen_at IS NULL)),
   CHECK (first_seen_at IS NULL OR first_seen_at <= evidence_cutoff_at),
+  CONSTRAINT candidate_board_entries_canonical_date_range_v1 CHECK (
+    private.canonical_timestamp_in_range_v1(evidence_cutoff_at)
+    AND (first_seen_at IS NULL OR private.canonical_timestamp_in_range_v1(first_seen_at))
+  ),
   CHECK (date_trunc('milliseconds', evidence_cutoff_at) = evidence_cutoff_at),
   CHECK (first_seen_at IS NULL OR date_trunc('milliseconds', first_seen_at) = first_seen_at)
 );
@@ -132,23 +380,32 @@ ALTER TABLE private.candidate_boards ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private.candidate_boards FORCE ROW LEVEL SECURITY;
 ALTER TABLE private.candidate_board_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE private.candidate_board_entries FORCE ROW LEVEL SECURITY;
-REVOKE ALL ON ALL TABLES IN SCHEMA private FROM PUBLIC, findesk_candidate_board_publisher, pine_candidate_reader;
+REVOKE ALL ON TABLE private.candidate_boards, private.candidate_board_entries
+  FROM PUBLIC, findesk_candidate_board_publisher, pine_candidate_reader;
 
-CREATE OR REPLACE FUNCTION private.canonical_json_string_v1(value text)
+CREATE FUNCTION private.canonical_json_string_v1(value text)
 RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
 SET search_path = pg_catalog
 AS $$ SELECT to_json(value)::text $$;
 REVOKE ALL ON FUNCTION private.canonical_json_string_v1(text) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.canonical_timestamp_v1(value timestamptz)
-RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
-SET search_path = pg_catalog
-AS $$ SELECT to_char(value AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') $$;
+CREATE FUNCTION private.canonical_timestamp_v1(value timestamptz)
+RETURNS text LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE
+SET search_path = pg_catalog, private
+AS $fn$
+BEGIN
+  IF NOT private.canonical_timestamp_in_range_v1(value) THEN
+    RAISE EXCEPTION 'CANDIDATE_BOARD_CANONICAL_DATE_RANGE' USING ERRCODE = '22008';
+  END IF;
+  RETURN to_char(value AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"');
+END
+$fn$;
 REVOKE ALL ON FUNCTION private.canonical_timestamp_v1(timestamptz) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.canonical_float8_v1(value double precision)
+CREATE FUNCTION private.canonical_float8_v1(value double precision)
 RETURNS text LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE
 SET search_path = pg_catalog
+SET extra_float_digits = 3
 AS $fn$
 DECLARE
   raw text;
@@ -188,7 +445,7 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION private.canonical_float8_v1(double precision) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.canonical_text_array_v1(value text[])
+CREATE FUNCTION private.canonical_text_array_v1(value text[])
 RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
 SET search_path = pg_catalog
 AS $$
@@ -197,24 +454,10 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION private.canonical_text_array_v1(text[]) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.text_array_is_canonical_v1(value text[], reason_codes boolean)
-RETURNS boolean LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
-SET search_path = pg_catalog
-AS $$
-  SELECT cardinality(value) > 0
-    AND cardinality(value) = (SELECT count(DISTINCT item) FROM unnest(value) AS item)
-    AND NOT EXISTS (
-      SELECT 1 FROM unnest(value) WITH ORDINALITY AS current(item, ordinal)
-      WHERE (reason_codes AND item !~ '^[A-Z][A-Z0-9_]{0,127}$')
-         OR (NOT reason_codes AND item !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$')
-         OR (ordinal > 1 AND item COLLATE "C" <= value[ordinal - 1] COLLATE "C")
-    )
-$$;
-REVOKE ALL ON FUNCTION private.text_array_is_canonical_v1(text[], boolean) FROM PUBLIC;
-
-CREATE OR REPLACE FUNCTION private.canonical_candidate_entry_json_v1(entry jsonb)
+CREATE FUNCTION private.canonical_candidate_entry_json_v1(entry jsonb)
 RETURNS text LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
 SET search_path = pg_catalog, private
+SET extra_float_digits = 3
 AS $fn$
   SELECT '{'
     || '"entryHash":' || CASE WHEN entry ? 'entryHash' THEN private.canonical_json_string_v1(entry->>'entryHash') ELSE NULL END || ','
@@ -233,12 +476,13 @@ AS $fn$
 $fn$;
 REVOKE ALL ON FUNCTION private.canonical_candidate_entry_json_v1(jsonb) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.compute_candidate_board_entry_hash_v1(
+CREATE FUNCTION private.compute_candidate_board_entry_hash_v1(
   p_source_board_id uuid, p_symbol text, p_source_rank integer, p_source_score double precision,
   p_first_seen_board_id uuid, p_first_seen_at timestamptz, p_evidence_cutoff_at timestamptz,
   p_evidence_reference_ids text[], p_reason_codes text[], p_source_reason_summary text
 ) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
 SET search_path = pg_catalog, private, extensions
+SET extra_float_digits = 3
 AS $fn$
   SELECT encode(extensions.digest(convert_to(
     '{'
@@ -257,13 +501,14 @@ AS $fn$
 $fn$;
 REVOKE ALL ON FUNCTION private.compute_candidate_board_entry_hash_v1(uuid,text,integer,double precision,uuid,timestamptz,timestamptz,text[],text[],text) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.compute_candidate_board_payload_hash_v1(
+CREATE FUNCTION private.compute_candidate_board_payload_hash_v1(
   p_source_board_id uuid, p_source_project_ref text, p_source_system_version text, p_source_run_id text,
   p_trade_date date, p_board_type text, p_stage_scheduled_at timestamptz, p_started_at timestamptz,
   p_completed_at timestamptz, p_decision_cutoff_at timestamptz, p_frozen_at timestamptz,
   p_parent_board_id uuid, p_candidate_count integer, p_entries jsonb
 ) RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE
 SET search_path = pg_catalog, private, extensions
+SET extra_float_digits = 3
 AS $fn$
   SELECT encode(extensions.digest(convert_to(
     '{'
@@ -283,14 +528,15 @@ AS $fn$
     || '"stageScheduledAt":' || private.canonical_json_string_v1(private.canonical_timestamp_v1(p_stage_scheduled_at)) || ','
     || '"startedAt":' || private.canonical_json_string_v1(private.canonical_timestamp_v1(p_started_at)) || ','
     || '"status":"FROZEN",'
-    || '"tradeDate":' || private.canonical_json_string_v1(to_char(p_trade_date, 'YYYY-MM-DD'))
+    || '"tradeDate":' || private.canonical_json_string_v1(private.canonical_date_v1(p_trade_date))
     || '}', 'UTF8'), 'sha256'), 'hex')
 $fn$;
 REVOKE ALL ON FUNCTION private.compute_candidate_board_payload_hash_v1(uuid,text,text,text,date,text,timestamptz,timestamptz,timestamptz,timestamptz,timestamptz,uuid,integer,jsonb) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.compute_candidate_board_hash_v1(p_source_board_id uuid, p_completed_at timestamptz, p_frozen_at timestamptz)
+CREATE FUNCTION private.compute_candidate_board_hash_v1(p_source_board_id uuid, p_completed_at timestamptz, p_frozen_at timestamptz)
 RETURNS text LANGUAGE sql STABLE PARALLEL RESTRICTED
 SET search_path = pg_catalog, private
+SET extra_float_digits = 3
 AS $fn$
   SELECT private.compute_candidate_board_payload_hash_v1(
     board.source_board_id, board.source_project_ref, board.source_system_version, board.source_run_id,
@@ -313,7 +559,7 @@ AS $fn$
 $fn$;
 REVOKE ALL ON FUNCTION private.compute_candidate_board_hash_v1(uuid,timestamptz,timestamptz) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.guard_candidate_board_mutation_v1()
+CREATE FUNCTION private.guard_candidate_board_mutation_v1()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, private
 AS $fn$
@@ -330,7 +576,7 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION private.guard_candidate_board_mutation_v1() FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.guard_candidate_board_entry_v1()
+CREATE FUNCTION private.guard_candidate_board_entry_v1()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, private
 AS $fn$
@@ -345,7 +591,7 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION private.guard_candidate_board_entry_v1() FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.reject_candidate_board_truncate_v1()
+CREATE FUNCTION private.reject_candidate_board_truncate_v1()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog
 AS $fn$ BEGIN RAISE EXCEPTION 'CANDIDATE_BOARD_TRUNCATE_FORBIDDEN' USING ERRCODE='55000'; END $fn$;
@@ -364,7 +610,7 @@ DROP TRIGGER IF EXISTS candidate_board_entries_no_truncate_v1 ON private.candida
 CREATE TRIGGER candidate_board_entries_no_truncate_v1 BEFORE TRUNCATE ON private.candidate_board_entries
 FOR EACH STATEMENT EXECUTE FUNCTION private.reject_candidate_board_truncate_v1();
 
-CREATE OR REPLACE FUNCTION app.create_candidate_board_v1(
+CREATE FUNCTION app.create_candidate_board_v1(
   p_source_board_id uuid, p_source_project_ref text, p_source_system_version text, p_source_run_id text,
   p_trade_date date, p_board_type text, p_stage_scheduled_at timestamptz, p_started_at timestamptz,
   p_decision_cutoff_at timestamptz, p_parent_board_id uuid
@@ -373,6 +619,11 @@ SET search_path = pg_catalog, private
 AS $fn$
 DECLARE parent private.candidate_boards%ROWTYPE;
 BEGIN
+  IF private.canonical_date_in_range_v1(p_trade_date) IS NOT TRUE
+    OR private.canonical_timestamp_in_range_v1(p_stage_scheduled_at) IS NOT TRUE
+    OR private.canonical_timestamp_in_range_v1(p_started_at) IS NOT TRUE
+    OR private.canonical_timestamp_in_range_v1(p_decision_cutoff_at) IS NOT TRUE
+  THEN RAISE EXCEPTION 'CANDIDATE_BOARD_CANONICAL_DATE_RANGE' USING ERRCODE='22008'; END IF;
   IF date_trunc('milliseconds',p_stage_scheduled_at) <> p_stage_scheduled_at
     OR (p_stage_scheduled_at AT TIME ZONE 'America/New_York')::date <> p_trade_date
     OR NOT ((p_board_type='DISCOVERY_0800' AND (p_stage_scheduled_at AT TIME ZONE 'America/New_York')::time=TIME '08:00')
@@ -380,7 +631,7 @@ BEGIN
       OR (p_board_type='PREMARKET_OFFICIAL' AND (p_stage_scheduled_at AT TIME ZONE 'America/New_York')::time=TIME '09:28')
       OR (p_board_type='OPENING_MOVERS' AND (p_stage_scheduled_at AT TIME ZONE 'America/New_York')::time=TIME '09:40'))
   THEN RAISE EXCEPTION 'CANDIDATE_BOARD_SCHEDULE_MISMATCH' USING ERRCODE='22007'; END IF;
-  IF p_started_at > p_stage_scheduled_at OR p_decision_cutoff_at > p_stage_scheduled_at THEN
+  IF p_decision_cutoff_at > p_stage_scheduled_at THEN
     RAISE EXCEPTION 'CANDIDATE_BOARD_TIMING_INVALID' USING ERRCODE='22007';
   END IF;
   IF date_trunc('milliseconds',p_started_at)<>p_started_at OR date_trunc('milliseconds',p_decision_cutoff_at)<>p_decision_cutoff_at THEN
@@ -400,7 +651,7 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION app.create_candidate_board_v1(uuid,text,text,text,date,text,timestamptz,timestamptz,timestamptz,uuid) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION app.append_candidate_board_entry_v1(
+CREATE FUNCTION app.append_candidate_board_entry_v1(
   p_source_board_id uuid, p_symbol text, p_source_rank integer, p_source_score double precision,
   p_first_seen_board_id uuid, p_first_seen_at timestamptz, p_evidence_cutoff_at timestamptz,
   p_evidence_reference_ids text[], p_reason_codes text[], p_source_reason_summary text, p_expected_entry_hash text
@@ -411,6 +662,9 @@ DECLARE board private.candidate_boards%ROWTYPE; first_board private.candidate_bo
 BEGIN
   SELECT * INTO board FROM private.candidate_boards WHERE source_board_id=p_source_board_id FOR UPDATE;
   IF NOT FOUND OR board.status<>'DRAFT' THEN RAISE EXCEPTION 'CANDIDATE_BOARD_NOT_DRAFT' USING ERRCODE='55000'; END IF;
+  IF private.canonical_timestamp_in_range_v1(p_evidence_cutoff_at) IS NOT TRUE
+    OR (p_first_seen_at IS NOT NULL AND private.canonical_timestamp_in_range_v1(p_first_seen_at) IS NOT TRUE)
+  THEN RAISE EXCEPTION 'CANDIDATE_BOARD_CANONICAL_DATE_RANGE' USING ERRCODE='22008'; END IF;
   IF p_source_rank NOT BETWEEN 1 AND 20 OR (SELECT count(*) FROM private.candidate_board_entries WHERE source_board_id=p_source_board_id)>=20 THEN
     RAISE EXCEPTION 'CANDIDATE_BOARD_ENTRY_LIMIT' USING ERRCODE='22003'; END IF;
   IF p_evidence_cutoff_at>board.decision_cutoff_at THEN RAISE EXCEPTION 'CANDIDATE_BOARD_EVIDENCE_AFTER_CUTOFF' USING ERRCODE='22007'; END IF;
@@ -421,10 +675,27 @@ BEGIN
     IF NOT FOUND OR first_board.source_project_ref<>board.source_project_ref OR first_board.trade_date<>board.trade_date THEN
       RAISE EXCEPTION 'CANDIDATE_BOARD_LINEAGE_INVALID' USING ERRCODE='23514'; END IF;
   END IF;
-  IF NOT private.text_array_is_canonical_v1(p_evidence_reference_ids,false) OR cardinality(p_evidence_reference_ids)>64
-    OR NOT private.text_array_is_canonical_v1(p_reason_codes,true) OR cardinality(p_reason_codes)>32
-    OR p_source_reason_summary<>btrim(p_source_reason_summary) OR p_source_reason_summary<>normalize(p_source_reason_summary,NFC)
-    OR char_length(p_source_reason_summary) NOT BETWEEN 1 AND 1000
+  IF p_source_reason_summary IS NULL OR octet_length(p_source_reason_summary)>3000 THEN
+    RAISE EXCEPTION 'CANDIDATE_BOARD_ENTRY_PUBLICATION_INVALID' USING ERRCODE='23514'; END IF;
+  -- Reject hostile shapes and sizes before DISTINCT, regex, or array
+  -- subscripting. The expensive canonical validator now sees at most 64/32
+  -- short ASCII-safe candidates.
+  IF p_evidence_reference_ids IS NULL
+    OR array_ndims(p_evidence_reference_ids) IS DISTINCT FROM 1
+    OR array_lower(p_evidence_reference_ids,1) IS DISTINCT FROM 1
+    OR cardinality(p_evidence_reference_ids) NOT BETWEEN 1 AND 64
+    OR p_reason_codes IS NULL
+    OR array_ndims(p_reason_codes) IS DISTINCT FROM 1
+    OR array_lower(p_reason_codes,1) IS DISTINCT FROM 1
+    OR cardinality(p_reason_codes) NOT BETWEEN 1 AND 32
+  THEN RAISE EXCEPTION 'CANDIDATE_BOARD_ENTRY_PUBLICATION_INVALID' USING ERRCODE='23514'; END IF;
+  IF EXISTS (SELECT 1 FROM unnest(p_evidence_reference_ids) item WHERE item IS NULL OR octet_length(item)>128)
+    OR EXISTS (SELECT 1 FROM unnest(p_reason_codes) item WHERE item IS NULL OR octet_length(item)>128)
+  THEN RAISE EXCEPTION 'CANDIDATE_BOARD_ENTRY_PUBLICATION_INVALID' USING ERRCODE='23514'; END IF;
+  IF NOT private.text_array_is_canonical_v1(p_evidence_reference_ids,false)
+    OR NOT private.text_array_is_canonical_v1(p_reason_codes,true)
+    OR p_source_reason_summary<>private.ecmascript_trim_v1(p_source_reason_summary) OR p_source_reason_summary<>normalize(p_source_reason_summary,NFC)
+    OR private.utf16_code_unit_length_v1(p_source_reason_summary) NOT BETWEEN 1 AND 1000
   THEN RAISE EXCEPTION 'CANDIDATE_BOARD_ENTRY_PUBLICATION_INVALID' USING ERRCODE='23514'; END IF;
   actual_hash:=private.compute_candidate_board_entry_hash_v1(p_source_board_id,p_symbol,p_source_rank,p_source_score,p_first_seen_board_id,p_first_seen_at,p_evidence_cutoff_at,p_evidence_reference_ids,p_reason_codes,p_source_reason_summary);
   IF p_expected_entry_hash IS NULL OR p_expected_entry_hash !~ '^[a-f0-9]{64}$' OR actual_hash IS DISTINCT FROM p_expected_entry_hash THEN RAISE EXCEPTION 'CANDIDATE_BOARD_ENTRY_HASH_MISMATCH' USING ERRCODE='22000'; END IF;
@@ -434,7 +705,7 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION app.append_candidate_board_entry_v1(uuid,text,integer,double precision,uuid,timestamptz,timestamptz,text[],text[],text,text) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION app.freeze_candidate_board_v1(p_source_board_id uuid,p_completed_at timestamptz,p_frozen_at timestamptz,p_expected_board_hash text)
+CREATE FUNCTION app.freeze_candidate_board_v1(p_source_board_id uuid,p_completed_at timestamptz,p_frozen_at timestamptz,p_expected_board_hash text)
 RETURNS text LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = pg_catalog, private
 AS $fn$
@@ -442,8 +713,14 @@ DECLARE board private.candidate_boards%ROWTYPE; actual_hash text; actual_count i
 BEGIN
   SELECT * INTO board FROM private.candidate_boards WHERE source_board_id=p_source_board_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'CANDIDATE_BOARD_NOT_FOUND' USING ERRCODE='P0002'; END IF;
+  IF private.canonical_timestamp_in_range_v1(p_completed_at) IS NOT TRUE
+    OR private.canonical_timestamp_in_range_v1(p_frozen_at) IS NOT TRUE
+  THEN RAISE EXCEPTION 'CANDIDATE_BOARD_CANONICAL_DATE_RANGE' USING ERRCODE='22008'; END IF;
   IF board.status='FROZEN' THEN
-    IF p_expected_board_hash IS NOT NULL AND board.board_hash=p_expected_board_hash THEN RETURN board.board_hash; END IF;
+    IF p_expected_board_hash IS NOT NULL AND board.board_hash=p_expected_board_hash
+      AND board.completed_at IS NOT DISTINCT FROM p_completed_at
+      AND board.frozen_at IS NOT DISTINCT FROM p_frozen_at
+    THEN RETURN board.board_hash; END IF;
     RAISE EXCEPTION 'CANDIDATE_BOARD_HASH_CONFLICT' USING ERRCODE='40001';
   END IF;
   IF board.status<>'DRAFT' OR board.board_type NOT IN ('PREMARKET_OFFICIAL','OPENING_MOVERS') THEN RAISE EXCEPTION 'CANDIDATE_BOARD_NOT_ACTIONABLE_DRAFT' USING ERRCODE='55000'; END IF;
@@ -461,13 +738,14 @@ END
 $fn$;
 REVOKE ALL ON FUNCTION app.freeze_candidate_board_v1(uuid,timestamptz,timestamptz,text) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION private.read_pine_candidate_boards_v1()
+CREATE FUNCTION private.read_pine_candidate_boards_v1()
 RETURNS TABLE(
   "schemaVersion" integer,"sourceBoardId" uuid,"sourceProjectRef" text,"sourceSystemVersion" text,"sourceRunId" text,
   "tradeDate" date,"boardType" text,"stageScheduledAt" text,"startedAt" text,"completedAt" text,"decisionCutoffAt" text,
   "frozenAt" text,status text,"exceptionCode" text,"parentBoardId" uuid,"boardHash" text,"candidateCount" integer,entries jsonb
 ) LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, private
+SET extra_float_digits = 3
 AS $fn$
   SELECT board.schema_version,board.source_board_id,board.source_project_ref,board.source_system_version,board.source_run_id,
     board.trade_date,board.board_type,private.canonical_timestamp_v1(board.stage_scheduled_at),private.canonical_timestamp_v1(board.started_at),
@@ -485,9 +763,54 @@ AS $fn$
 $fn$;
 REVOKE ALL ON FUNCTION private.read_pine_candidate_boards_v1() FROM PUBLIC;
 
-CREATE OR REPLACE VIEW app.pine_candidate_boards_v1 WITH (security_invoker=true) AS
+CREATE VIEW app.pine_candidate_boards_v1 WITH (security_invoker=true) AS
 SELECT * FROM private.read_pine_candidate_boards_v1();
 REVOKE ALL ON app.pine_candidate_boards_v1 FROM PUBLIC;
+
+DO $candidate_acl_reset$
+DECLARE
+  acl_role text;
+BEGIN
+  FOREACH acl_role IN ARRAY ARRAY[
+    'anon', 'authenticated', 'service_role',
+    'findesk_candidate_board_publisher', 'pine_candidate_reader'
+  ] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = acl_role) THEN
+      IF acl_role IN ('findesk_candidate_board_publisher', 'pine_candidate_reader') THEN
+        EXECUTE format('REVOKE ALL PRIVILEGES ON SCHEMA private FROM %I', acl_role);
+        EXECUTE format('REVOKE ALL PRIVILEGES ON SCHEMA app FROM %I', acl_role);
+        EXECUTE format('REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA private, app FROM %I', acl_role);
+        EXECUTE format('REVOKE ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA private, app FROM %I', acl_role);
+        EXECUTE format('REVOKE ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA private, app FROM %I', acl_role);
+      END IF;
+      EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE private.candidate_boards FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE private.candidate_board_entries FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON TABLE app.pine_candidate_boards_v1 FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_date_in_range_v1(date) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_date_v1(date) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_timestamp_in_range_v1(timestamptz) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.ecmascript_trim_v1(text) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.utf16_code_unit_length_v1(text) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.text_array_is_canonical_v1(text[],boolean) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_json_string_v1(text) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_timestamp_v1(timestamptz) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_float8_v1(double precision) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_text_array_v1(text[]) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.canonical_candidate_entry_json_v1(jsonb) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.compute_candidate_board_entry_hash_v1(uuid,text,integer,double precision,uuid,timestamptz,timestamptz,text[],text[],text) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.compute_candidate_board_payload_hash_v1(uuid,text,text,text,date,text,timestamptz,timestamptz,timestamptz,timestamptz,timestamptz,uuid,integer,jsonb) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.compute_candidate_board_hash_v1(uuid,timestamptz,timestamptz) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.guard_candidate_board_mutation_v1() FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.guard_candidate_board_entry_v1() FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.reject_candidate_board_truncate_v1() FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION private.read_pine_candidate_boards_v1() FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION app.create_candidate_board_v1(uuid,text,text,text,date,text,timestamptz,timestamptz,timestamptz,uuid) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION app.append_candidate_board_entry_v1(uuid,text,integer,double precision,uuid,timestamptz,timestamptz,text[],text[],text,text) FROM %I', acl_role);
+      EXECUTE format('REVOKE ALL PRIVILEGES ON FUNCTION app.freeze_candidate_board_v1(uuid,timestamptz,timestamptz,text) FROM %I', acl_role);
+    END IF;
+  END LOOP;
+END
+$candidate_acl_reset$;
 
 GRANT USAGE ON SCHEMA app TO findesk_candidate_board_publisher, pine_candidate_reader;
 GRANT USAGE ON SCHEMA private TO pine_candidate_reader;
